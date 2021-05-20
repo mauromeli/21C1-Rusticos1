@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -33,7 +32,7 @@ impl Redis {
             }
             Command::Key(ref command) if command == "set" => {
                 match self.db.insert(key.to_string(), value.to_string()) {
-                    Some(_) => Ok("Se guardo".to_string()),
+                    Some(_) => Ok("Saved".to_string()),
                     None => Err("Not Found".to_string())
                 }
             }
