@@ -7,25 +7,31 @@ pub struct Redis {
 
 #[derive(Debug)]
 pub enum Command {
+    #[allow(dead_code)]
     Key(String),
 }
 
 impl Redis {
+    //TODO: Consultar porque sale esto aunque este usado en los test.
+
+    #[allow(dead_code)]
     pub fn new() -> Self {
         let map: HashMap<String, String> = HashMap::new();
 
-        return Self { db: map };
+        Self { db: map }
     }
 
+    #[allow(dead_code)]
     pub fn execute(&mut self, command: &Command, params: Vec<&String>) -> Result<String, String> {
         match command {
             Command::Key(ref command) if command == "PING" => Ok("PONG".to_string()),
             Command::Key(ref command) if command == "get" => self.get_method(params),
             Command::Key(ref command) if command == "set" => self.set_method(params),
-            _ => return Err("Command not valid".to_string()),
+            _ => Err("Command not valid".to_string()),
         }
     }
 
+    #[allow(dead_code)]
     fn get_method(&mut self, params: Vec<&String>) -> Result<String, String> {
         if params.len() != 1 {
             return Err("ERR wrong number of arguments for 'get' command".to_string());
@@ -36,6 +42,7 @@ impl Redis {
         }
     }
 
+    #[allow(dead_code)]
     fn set_method(&mut self, params: Vec<&String>) -> Result<String, String> {
         if params.len() != 2 {
             return Err("ERR syntax error".to_string());
