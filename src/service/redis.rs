@@ -7,29 +7,21 @@ pub struct Redis {
 
 #[derive(Debug)]
 pub enum Command {
-    Key(String)
+    Key(String),
 }
 
 impl Redis {
     pub fn new() -> Self {
         let map: HashMap<String, String> = HashMap::new();
 
-        return Self {
-            db: map
-        };
+        return Self { db: map };
     }
 
     pub fn execute(&mut self, command: &Command, params: Vec<&String>) -> Result<String, String> {
         match command {
-            Command::Key(ref command) if command == "PING" => {
-                Ok("PONG".to_string())
-            }
-            Command::Key(ref command) if command == "get" => {
-                self.get_method(params)
-            }
-            Command::Key(ref command) if command == "set" => {
-                self.set_method(params)
-            }
+            Command::Key(ref command) if command == "PING" => Ok("PONG".to_string()),
+            Command::Key(ref command) if command == "get" => self.get_method(params),
+            Command::Key(ref command) if command == "set" => self.set_method(params),
             _ => return Err("Command not valid".to_string()),
         }
     }
@@ -40,7 +32,7 @@ impl Redis {
         }
         match self.db.get(params[0].as_str()) {
             Some(return_value) => Ok(return_value.to_string()),
-            None => Err("Not Found".to_string())
+            None => Err("Not Found".to_string()),
         }
     }
 
@@ -50,7 +42,7 @@ impl Redis {
         }
         match self.db.insert(params[0].to_string(), params[1].to_string()) {
             Some(_) => Ok("Ok".to_string()),
-            None => Err("Not Found".to_string())
+            None => Err("Not Found".to_string()),
         }
     }
 }
@@ -154,7 +146,8 @@ fn test_method_not_found() {
     let key: String = "hola".to_string();
     let params = vec![&key];
 
-    let method_not_valid: Result<String, String> = redis.execute(&Command::Key("method".to_string()), params);
+    let method_not_valid: Result<String, String> =
+        redis.execute(&Command::Key("method".to_string()), params);
     assert!(method_not_valid.is_err());
 }
 
