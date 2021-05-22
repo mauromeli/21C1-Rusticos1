@@ -27,6 +27,7 @@ impl Redis {
             Command::Key(ref command) if command == "PING" => Ok("PONG".to_string()),
             Command::Key(ref command) if command == "get" => self.get_method(params),
             Command::Key(ref command) if command == "set" => self.set_method(params),
+            Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
             _ => Err("Command not valid".to_string()),
         }
     }
@@ -50,6 +51,29 @@ impl Redis {
         match self.db.insert(params[0].to_string(), params[1].to_string()) {
             Some(_) => Ok("Ok".to_string()),
             None => Err("Not Found".to_string()),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn incrby_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        let incr_value: Result<u32, _> = params[1].to_string().parse();
+
+        if params.len() != 2 || incr_value.is_err() {
+            return Err("ERR syntax error".to_string());
+        }
+        match self.db.get(params[0].as_str()) {
+            Some(return_value) => {
+                let my_int: Result<u32, _> = return_value.parse();
+                if my_int.is_err() {
+                    return Err("ERR value is not an integer or out of range".to_string());
+                }
+
+                self.set_method(vec![
+                    params[0],
+                    &(my_int.unwrap() + incr_value.unwrap()).to_string(),
+                ])
+            }
+            None => self.set_method(params),
         }
     }
 }
@@ -166,4 +190,72 @@ fn test_ping_retunrs_pong() {
 
     let ping: Result<String, String> = redis.execute(&Command::Key("PING".to_string()), vec![]);
     assert_eq!(pong, ping.unwrap().to_string());
+}
+
+#[test]
+fn test_incrby_with_2_as_value() {
+    let mut redis: Redis = Redis::new();
+
+    let key: String = "key".to_string();
+    let value: String = "1".to_string();
+    let increment: String = "1".to_string();
+    let second_increment: String = "2".to_string();
+
+    let params_set = vec![&key, &value];
+    let params_incrby = vec![&key, &increment];
+    let params_second_incrby = vec![&key, &second_increment];
+
+    let params_get = vec![&key];
+
+    let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+    let _incrby = redis.execute(&Command::Key("incrby".to_string()), params_incrby);
+
+    let get: Result<String, String> =
+        redis.execute(&Command::Key("get".to_string()), params_get.clone());
+
+    let _incrby = redis.execute(&Command::Key("incrby".to_string()), params_second_incrby);
+    let second_get: Result<String, String> =
+        redis.execute(&Command::Key("get".to_string()), params_get);
+
+    assert_eq!("2".to_string(), get.unwrap().to_string());
+    assert_eq!("4".to_string(), second_get.clone().unwrap().to_string());
+    assert_ne!("10".to_string(), second_get.unwrap().to_string());
+}
+
+#[test]
+fn test_incrby_value_err_initial_value_string() {
+    let mut redis: Redis = Redis::new();
+
+    let key: String = "key".to_string();
+    let value: String = "hola".to_string();
+    let increment: String = "1".to_string();
+
+    let params_set = vec![&key, &value];
+    let params_incrby = vec![&key, &increment];
+
+    let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+    let incrby = redis.execute(&Command::Key("incrby".to_string()), params_incrby);
+
+    assert!(incrby.is_err());
+}
+
+#[test]
+fn test_incrby_not_saved_value() {
+    let mut redis: Redis = Redis::new();
+
+    let key: String = "key".to_string();
+    let increment: String = "1".to_string();
+
+    let params_incrby = vec![&key, &increment];
+    let params_get = vec![&key];
+
+    let _incrby = redis.execute(&Command::Key("incrby".to_string()), params_incrby);
+
+    let get: Result<String, String> =
+        redis.execute(&Command::Key("get".to_string()), params_get.clone());
+    let second_get: Result<String, String> =
+        redis.execute(&Command::Key("get".to_string()), params_get);
+
+    assert_eq!("1".to_string(), get.unwrap().to_string());
+    assert_ne!("10".to_string(), second_get.unwrap().to_string());
 }
