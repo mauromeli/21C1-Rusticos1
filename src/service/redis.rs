@@ -29,7 +29,7 @@ impl Redis {
             Command::Key(ref command) if command == "set" => self.set_method(params),
             Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
             Command::Key(ref command) if command == "getdel" => self.getdel_method(params),
-            Command::Key(ref command) if command == "dbsize" => self.dbsize_method(),
+            Command::Key(ref command) if command == "dbsize" => Ok(self.db.len().to_string()),
             _ => Err("Command not valid".to_string()),
         }
     }
@@ -91,11 +91,6 @@ impl Redis {
             }
             Err(_) => Err("Not Found".to_string()),
         }
-    }
-
-    #[allow(dead_code)]
-    fn dbsize_method(&mut self) -> Result<String, String> {
-        Ok(self.db.len().to_string())
     }
 }
 
@@ -331,8 +326,7 @@ fn test_getdel_without_previews_saving_err() {
 fn test_dbsize() {
     let mut redis: Redis = Redis::new();
 
-    let dbsize: Result<String, String> =
-        redis.execute(&Command::Key("dbsize".to_string()), vec![]);
+    let dbsize: Result<String, String> = redis.execute(&Command::Key("dbsize".to_string()), vec![]);
 
     assert_eq!("0".to_string(), dbsize.unwrap().to_string());
 
@@ -341,8 +335,7 @@ fn test_dbsize() {
     let params_set = vec![&key, &value];
 
     let _set = redis.execute(&Command::Key("set".to_string()), params_set);
-    let dbsize: Result<String, String> =
-        redis.execute(&Command::Key("dbsize".to_string()), vec![]);
+    let dbsize: Result<String, String> = redis.execute(&Command::Key("dbsize".to_string()), vec![]);
 
     assert_eq!("1".to_string(), dbsize.unwrap().to_string());
 
@@ -350,8 +343,7 @@ fn test_dbsize() {
     let _getdel: Result<String, String> =
         redis.execute(&Command::Key("getdel".to_string()), params_get);
 
-    let dbsize: Result<String, String> =
-        redis.execute(&Command::Key("dbsize".to_string()), vec![]);
+    let dbsize: Result<String, String> = redis.execute(&Command::Key("dbsize".to_string()), vec![]);
 
     assert_eq!("0".to_string(), dbsize.unwrap().to_string());
 }
