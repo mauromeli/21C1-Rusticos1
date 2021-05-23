@@ -86,7 +86,7 @@ impl Redis {
         match self.get_method(params.clone()) {
             Ok(return_value) => {
                 self.db.remove(params[0].as_str());
-                Ok(return_value.to_string())
+                Ok(return_value)
             }
             Err(_) => Err("Not Found".to_string()),
         }
@@ -286,8 +286,10 @@ fn test_set_element_and_getdel() {
 
     let _set = redis.execute(&Command::Key("set".to_string()), params_set);
 
-    let get: Result<String, String> = redis.execute(&Command::Key("get".to_string()), params_get.clone());
-    let getdel: Result<String, String> = redis.execute(&Command::Key("getdel".to_string()), params_get.clone());
+    let get: Result<String, String> =
+        redis.execute(&Command::Key("get".to_string()), params_get.clone());
+    let getdel: Result<String, String> =
+        redis.execute(&Command::Key("getdel".to_string()), params_get.clone());
 
     assert_eq!(value, get.unwrap().to_string());
     assert_eq!(value, getdel.unwrap().to_string());
@@ -302,7 +304,8 @@ fn test_getdel_without_params_err() {
 
     let params_getdel = vec![];
 
-    let getdel: Result<String, String> = redis.execute(&Command::Key("getdel".to_string()), params_getdel);
+    let getdel: Result<String, String> =
+        redis.execute(&Command::Key("getdel".to_string()), params_getdel);
     assert!(getdel.is_err());
 }
 
@@ -313,6 +316,7 @@ fn test_getdel_without_previews_saving_err() {
     let key: String = "key".to_string();
     let params_getdel = vec![&key];
 
-    let getdel: Result<String, String> = redis.execute(&Command::Key("getdel".to_string()), params_getdel);
+    let getdel: Result<String, String> =
+        redis.execute(&Command::Key("getdel".to_string()), params_getdel);
     assert!(getdel.is_err());
 }
