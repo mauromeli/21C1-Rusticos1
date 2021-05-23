@@ -28,6 +28,7 @@ impl Redis {
             Command::Key(ref command) if command == "get" => self.get_method(params),
             Command::Key(ref command) if command == "set" => self.set_method(params),
             Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
+            Command::Key(ref command) if command == "getdel" => self.getdel_method(params),
             _ => Err("Command not valid".to_string()),
         }
     }
@@ -74,6 +75,20 @@ impl Redis {
                 ])
             }
             Err(_) => self.set_method(params),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn getdel_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        if params.len() != 1 {
+            return Err("ERR wrong number of arguments for 'getdel' command".to_string());
+        }
+        match self.get_method(params.clone()) {
+            Ok(return_value) => {
+                self.db.remove(params[0].as_str());
+                Ok(return_value.to_string())
+            }
+            Err(_) => Err("Not Found".to_string()),
         }
     }
 }
@@ -258,4 +273,46 @@ fn test_incrby_not_saved_value() {
 
     assert_eq!("1".to_string(), get.unwrap().to_string());
     assert_ne!("10".to_string(), second_get.unwrap().to_string());
+}
+
+#[test]
+fn test_set_element_and_getdel() {
+    let mut redis: Redis = Redis::new();
+
+    let value: String = "value".to_string();
+    let key: String = "key".to_string();
+    let params_set = vec![&key, &value];
+    let params_get = vec![&key];
+
+    let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+
+    let get: Result<String, String> = redis.execute(&Command::Key("get".to_string()), params_get.clone());
+    let getdel: Result<String, String> = redis.execute(&Command::Key("getdel".to_string()), params_get.clone());
+
+    assert_eq!(value, get.unwrap().to_string());
+    assert_eq!(value, getdel.unwrap().to_string());
+
+    let get: Result<String, String> = redis.execute(&Command::Key("get".to_string()), params_get);
+    assert!(get.is_err());
+}
+
+#[test]
+fn test_getdel_without_params_err() {
+    let mut redis: Redis = Redis::new();
+
+    let params_getdel = vec![];
+
+    let getdel: Result<String, String> = redis.execute(&Command::Key("getdel".to_string()), params_getdel);
+    assert!(getdel.is_err());
+}
+
+#[test]
+fn test_getdel_without_previews_saving_err() {
+    let mut redis: Redis = Redis::new();
+
+    let key: String = "key".to_string();
+    let params_getdel = vec![&key];
+
+    let getdel: Result<String, String> = redis.execute(&Command::Key("getdel".to_string()), params_getdel);
+    assert!(getdel.is_err());
 }
