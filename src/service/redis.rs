@@ -94,10 +94,9 @@ impl Redis {
     }
 }
 
-
 mod test {
     #[allow(unused_imports)]
-    use crate::service::redis::{Redis, Command};
+    use crate::service::redis::{Command, Redis};
 
     #[test]
     fn test_set_element_and_get_the_same() {
