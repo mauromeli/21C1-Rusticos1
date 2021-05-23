@@ -61,8 +61,8 @@ impl Redis {
         if params.len() != 2 || incr_value.is_err() {
             return Err("ERR syntax error".to_string());
         }
-        match self.db.get(params[0].as_str()) {
-            Some(return_value) => {
+        match self.get_method(vec![params[0]]) {
+            Ok(return_value) => {
                 let my_int: Result<u32, _> = return_value.parse();
                 if my_int.is_err() {
                     return Err("ERR value is not an integer or out of range".to_string());
@@ -73,7 +73,7 @@ impl Redis {
                     &(my_int.unwrap() + incr_value.unwrap()).to_string(),
                 ])
             }
-            None => self.set_method(params),
+            Err(_) => self.set_method(params),
         }
     }
 }
