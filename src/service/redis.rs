@@ -22,7 +22,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    pub fn execute(&mut self, command: &Command, params: Vec<&String>) -> Result<String, String> {
+    pub fn execute(&mut self, command: Command, params: Vec<&String>) -> Result<String, String> {
         match command {
             Command::Key(ref command) if command == "PING" => Ok("PONG".to_string()),
             Command::Key(ref command) if command == "copy" => self.copy_method(params),
@@ -32,6 +32,7 @@ impl Redis {
             Command::Key(ref command) if command == "exists" => self.exists_method(params),
             Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
             Command::Key(ref command) if command == "getdel" => self.getdel_method(params),
+            Command::Key(ref command) if command == "append" => self.append_method(params),
             Command::Key(ref command) if command == "dbsize" => Ok(self.db.len().to_string()),
             _ => Err("Command not valid".to_string()),
         }
@@ -122,6 +123,20 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    fn append_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        //TODO: chequar si el valor es string antes de hacer el append
+        if params.len() != 2 {
+            return Err("ERR wrong number of arguments for 'append' command".to_string());
+        }
+        match self.get_method(vec![params[0]]) {
+            Ok(return_value) => {
+                let value = return_value + params[1];
+                self.set_method(vec![params[0], &value])
+            }
+            Err(_) => self.set_method(params),
+        }
+    }
+
     fn exists_method(&mut self, params: Vec<&String>) -> Result<String, String> {
         if params.is_empty() {
             return Err("ERR wrong number of arguments for 'exists' command".to_string());
@@ -150,10 +165,10 @@ mod test {
         let params_set = vec![&key, &value];
         let params_get = vec![&key];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set);
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
 
         assert_eq!(value, get.unwrap().to_string());
     }
@@ -170,11 +185,11 @@ mod test {
         let params_second_set = vec![&key, &second_value];
         let params_get = vec![&key];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_first_set);
-        let _set = redis.execute(&Command::Key("set".to_string()), params_second_set);
+        let _set = redis.execute(Command::Key("set".to_string()), params_first_set);
+        let _set = redis.execute(Command::Key("set".to_string()), params_second_set);
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
 
         assert_eq!(second_value, get.unwrap().to_string());
     }
@@ -187,7 +202,7 @@ mod test {
         let params_get = vec![&key];
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
         assert!(get.is_err());
     }
 
@@ -200,7 +215,7 @@ mod test {
         let params_get = vec![&key, &another_param];
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
         assert!(get.is_err());
     }
 
@@ -211,7 +226,7 @@ mod test {
         let params_get = vec![];
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
         assert!(get.is_err());
     }
 
@@ -225,7 +240,7 @@ mod test {
         let params_set = vec![&key, &value, &another_param];
 
         let set: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_set);
+            redis.execute(Command::Key("get".to_string()), params_set);
         assert!(set.is_err());
     }
 
@@ -236,7 +251,7 @@ mod test {
         let params_set = vec![];
 
         let set: Result<String, String> =
-            redis.execute(&Command::Key("set".to_string()), params_set);
+            redis.execute(Command::Key("set".to_string()), params_set);
         assert!(set.is_err());
     }
 
@@ -248,7 +263,7 @@ mod test {
         let params = vec![&key];
 
         let method_not_valid: Result<String, String> =
-            redis.execute(&Command::Key("method".to_string()), params);
+            redis.execute(Command::Key("method".to_string()), params);
         assert!(method_not_valid.is_err());
     }
 
@@ -258,7 +273,7 @@ mod test {
 
         let pong: String = "PONG".to_string();
 
-        let ping: Result<String, String> = redis.execute(&Command::Key("PING".to_string()), vec![]);
+        let ping: Result<String, String> = redis.execute(Command::Key("PING".to_string()), vec![]);
         assert_eq!(pong, ping.unwrap().to_string());
     }
 
@@ -277,15 +292,15 @@ mod test {
 
         let params_get = vec![&key];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
-        let _incrby = redis.execute(&Command::Key("incrby".to_string()), params_incrby);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set);
+        let _incrby = redis.execute(Command::Key("incrby".to_string()), params_incrby);
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get.clone());
+            redis.execute(Command::Key("get".to_string()), params_get.clone());
 
-        let _incrby = redis.execute(&Command::Key("incrby".to_string()), params_second_incrby);
+        let _incrby = redis.execute(Command::Key("incrby".to_string()), params_second_incrby);
         let second_get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
 
         assert_eq!("2".to_string(), get.unwrap().to_string());
         assert_eq!("4".to_string(), second_get.clone().unwrap().to_string());
@@ -303,8 +318,8 @@ mod test {
         let params_set = vec![&key, &value];
         let params_incrby = vec![&key, &increment];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
-        let incrby = redis.execute(&Command::Key("incrby".to_string()), params_incrby);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set);
+        let incrby = redis.execute(Command::Key("incrby".to_string()), params_incrby);
 
         assert!(incrby.is_err());
     }
@@ -319,12 +334,12 @@ mod test {
         let params_incrby = vec![&key, &increment];
         let params_get = vec![&key];
 
-        let _incrby = redis.execute(&Command::Key("incrby".to_string()), params_incrby);
+        let _incrby = redis.execute(Command::Key("incrby".to_string()), params_incrby);
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get.clone());
+            redis.execute(Command::Key("get".to_string()), params_get.clone());
         let second_get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
 
         assert_eq!("1".to_string(), get.unwrap().to_string());
         assert_ne!("10".to_string(), second_get.unwrap().to_string());
@@ -339,18 +354,18 @@ mod test {
         let params_set = vec![&key, &value];
         let params_get = vec![&key];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set);
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get.clone());
+            redis.execute(Command::Key("get".to_string()), params_get.clone());
         let getdel: Result<String, String> =
-            redis.execute(&Command::Key("getdel".to_string()), params_get.clone());
+            redis.execute(Command::Key("getdel".to_string()), params_get.clone());
 
         assert_eq!(value, get.unwrap().to_string());
         assert_eq!(value, getdel.unwrap().to_string());
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
         assert!(get.is_err());
     }
 
@@ -361,7 +376,7 @@ mod test {
         let params_getdel = vec![];
 
         let getdel: Result<String, String> =
-            redis.execute(&Command::Key("getdel".to_string()), params_getdel);
+            redis.execute(Command::Key("getdel".to_string()), params_getdel);
         assert!(getdel.is_err());
     }
 
@@ -373,7 +388,7 @@ mod test {
         let params_getdel = vec![&key];
 
         let getdel: Result<String, String> =
-            redis.execute(&Command::Key("getdel".to_string()), params_getdel);
+            redis.execute(Command::Key("getdel".to_string()), params_getdel);
         assert!(getdel.is_err());
     }
 
@@ -382,7 +397,7 @@ mod test {
         let mut redis: Redis = Redis::new();
 
         let dbsize: Result<String, String> =
-            redis.execute(&Command::Key("dbsize".to_string()), vec![]);
+            redis.execute(Command::Key("dbsize".to_string()), vec![]);
 
         assert_eq!("0".to_string(), dbsize.unwrap().to_string());
 
@@ -390,18 +405,18 @@ mod test {
         let key: String = "key".to_string();
         let params_set = vec![&key, &value];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set);
         let dbsize: Result<String, String> =
-            redis.execute(&Command::Key("dbsize".to_string()), vec![]);
+            redis.execute(Command::Key("dbsize".to_string()), vec![]);
 
         assert_eq!("1".to_string(), dbsize.unwrap().to_string());
 
         let params_get = vec![&key];
         let _getdel: Result<String, String> =
-            redis.execute(&Command::Key("getdel".to_string()), params_get);
+            redis.execute(Command::Key("getdel".to_string()), params_get);
 
         let dbsize: Result<String, String> =
-            redis.execute(&Command::Key("dbsize".to_string()), vec![]);
+            redis.execute(Command::Key("dbsize".to_string()), vec![]);
 
         assert_eq!("0".to_string(), dbsize.unwrap().to_string());
     }
@@ -416,14 +431,14 @@ mod test {
         let params_del = vec![&key];
         let params_get = vec![&key];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set);
         let del: Result<String, String> =
-            redis.execute(&Command::Key("del".to_string()), params_del);
+            redis.execute(Command::Key("del".to_string()), params_del);
 
         assert_eq!("1".to_string(), del.unwrap().to_string());
 
         let get: Result<String, String> =
-            redis.execute(&Command::Key("get".to_string()), params_get);
+            redis.execute(Command::Key("get".to_string()), params_get);
         assert!(get.is_err());
     }
 
@@ -438,11 +453,11 @@ mod test {
         let params_set2 = vec![&key2, &value];
         let params_del = vec![&key1, &key2];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set1);
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set2);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set1);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set2);
 
         let del: Result<String, String> =
-            redis.execute(&Command::Key("del".to_string()), params_del);
+            redis.execute(Command::Key("del".to_string()), params_del);
 
         assert_eq!("2".to_string(), del.unwrap().to_string());
     }
@@ -454,8 +469,61 @@ mod test {
         let params_del = vec![];
 
         let del: Result<String, String> =
-            redis.execute(&Command::Key("del".to_string()), params_del);
+            redis.execute(Command::Key("del".to_string()), params_del);
         assert!(del.is_err());
+    }
+
+    #[test]
+    fn test_append_adds_word() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let value_append: String = " appended".to_string();
+        let key: String = "key".to_string();
+        let params_set = vec![&key, &value];
+        let params_append = vec![&key, &value_append];
+        let params_get = vec![&key];
+
+        let _set = redis.execute(Command::Key("set".to_string()), params_set);
+        let _append = redis.execute(Command::Key("append".to_string()), params_append);
+
+        let get: Result<String, String> =
+            redis.execute(Command::Key("get".to_string()), params_get);
+
+        assert_eq!("value appended".to_string(), get.unwrap());
+    }
+
+    #[test]
+    fn test_append_on_non_existent_key() {
+        let mut redis: Redis = Redis::new();
+
+        let value_append: String = "appended".to_string();
+        let key: String = "key".to_string();
+        let params_append = vec![&key, &value_append];
+        let params_get = vec![&key];
+
+        let _append = redis.execute(Command::Key("append".to_string()), params_append);
+
+        let get: Result<String, String> =
+            redis.execute(Command::Key("get".to_string()), params_get);
+
+        assert_eq!("appended".to_string(), get.unwrap());
+    }
+
+    #[test]
+    fn test_append_whithout_params_err() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let params_append = vec![&key];
+        let params_get = vec![&key];
+
+        let _append = redis.execute(Command::Key("append".to_string()), params_append);
+
+        let get: Result<String, String> =
+            redis.execute(Command::Key("get".to_string()), params_get);
+
+        assert!(get.is_err());
     }
 
     #[test]
@@ -472,16 +540,16 @@ mod test {
         let params_exists = vec![&key1, &key2];
         let params_exists_2 = vec![&key1, &key2, &key3];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set1);
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set2);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set1);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set2);
 
         let exists: Result<String, String> =
-            redis.execute(&Command::Key("exists".to_string()), params_exists);
+            redis.execute(Command::Key("exists".to_string()), params_exists);
 
         assert_eq!("2".to_string(), exists.unwrap().to_string());
 
         let exists: Result<String, String> =
-            redis.execute(&Command::Key("exists".to_string()), params_exists_2);
+            redis.execute(Command::Key("exists".to_string()), params_exists_2);
 
         assert_eq!("2".to_string(), exists.unwrap().to_string());
     }
@@ -493,7 +561,7 @@ mod test {
         let params_exists = vec![];
 
         let exists: Result<String, String> =
-            redis.execute(&Command::Key("exists".to_string()), params_exists);
+            redis.execute(Command::Key("exists".to_string()), params_exists);
         assert!(exists.is_err());
     }
 
@@ -504,7 +572,7 @@ mod test {
         let params_copy = vec![];
 
         let del: Result<String, String> =
-            redis.execute(&Command::Key("copy".to_string()), params_copy);
+            redis.execute(Command::Key("copy".to_string()), params_copy);
         assert!(del.is_err());
     }
 
@@ -521,14 +589,14 @@ mod test {
         let params_copy = vec![&key1, &key2];
         let params_get = vec![&key2];
 
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set1);
-        let _set = redis.execute(&Command::Key("set".to_string()), params_set2);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set1);
+        let _set = redis.execute(Command::Key("set".to_string()), params_set2);
 
-        let get = redis.execute(&Command::Key("get".to_string()), params_get.clone());
+        let get = redis.execute(Command::Key("get".to_string()), params_get.clone());
 
         assert_eq!("value2".to_string(), get.unwrap().to_string());
-        let _copy = redis.execute(&Command::Key("copy".to_string()), params_copy);
-        let get = redis.execute(&Command::Key("get".to_string()), params_get);
+        let _copy = redis.execute(Command::Key("copy".to_string()), params_copy);
+        let get = redis.execute(Command::Key("get".to_string()), params_get);
         assert_eq!("value1".to_string(), get.unwrap().to_string());
     }
 }
