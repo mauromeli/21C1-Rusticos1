@@ -29,6 +29,7 @@ impl Redis {
             Command::Key(ref command) if command == "get" => self.get_method(params),
             Command::Key(ref command) if command == "set" => self.set_method(params),
             Command::Key(ref command) if command == "del" => self.del_method(params),
+            Command::Key(ref command) if command == "exists" => self.exists_method(params),
             Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
             Command::Key(ref command) if command == "getdel" => self.getdel_method(params),
             Command::Key(ref command) if command == "dbsize" => Ok(self.db.len().to_string()),
@@ -114,6 +115,21 @@ impl Redis {
         let mut count = 0;
         for param in params.iter() {
             if self.db.remove(param.as_str()).is_some() {
+                count += 1;
+            }
+        }
+        Ok(count.to_string())
+    }
+
+    #[allow(dead_code)]
+    fn exists_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        if params.is_empty() {
+            return Err("ERR wrong number of arguments for 'exists' command".to_string());
+        }
+
+        let mut count = 0;
+        for param in params.iter() {
+            if self.db.contains_key(param.as_str()) {
                 count += 1;
             }
         }
@@ -440,6 +456,45 @@ mod test {
         let del: Result<String, String> =
             redis.execute(&Command::Key("del".to_string()), params_del);
         assert!(del.is_err());
+    }
+
+    #[test]
+    fn test_set_two_elements_and_check_exists_equal_2() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let key1: String = "key1".to_string();
+        let key2: String = "key2".to_string();
+        let key3: String = "key3".to_string();
+
+        let params_set1 = vec![&key1, &value];
+        let params_set2 = vec![&key2, &value];
+        let params_exists = vec![&key1, &key2];
+        let params_exists_2 = vec![&key1, &key2, &key3];
+
+        let _set = redis.execute(&Command::Key("set".to_string()), params_set1);
+        let _set = redis.execute(&Command::Key("set".to_string()), params_set2);
+
+        let exists: Result<String, String> =
+            redis.execute(&Command::Key("exists".to_string()), params_exists);
+
+        assert_eq!("2".to_string(), exists.unwrap().to_string());
+
+        let exists: Result<String, String> =
+            redis.execute(&Command::Key("exists".to_string()), params_exists_2);
+
+        assert_eq!("2".to_string(), exists.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_exists_without_params_err() {
+        let mut redis: Redis = Redis::new();
+
+        let params_exists = vec![];
+
+        let exists: Result<String, String> =
+            redis.execute(&Command::Key("exists".to_string()), params_exists);
+        assert!(exists.is_err());
     }
 
     #[test]
