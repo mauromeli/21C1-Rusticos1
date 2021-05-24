@@ -27,6 +27,7 @@ impl Redis {
             Command::Key(ref command) if command == "PING" => Ok("PONG".to_string()),
             Command::Key(ref command) if command == "get" => self.get_method(params),
             Command::Key(ref command) if command == "set" => self.set_method(params),
+            Command::Key(ref command) if command == "del" => self.del_method(params),
             Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
             Command::Key(ref command) if command == "getdel" => self.getdel_method(params),
             Command::Key(ref command) if command == "dbsize" => Ok(self.db.len().to_string()),
@@ -91,6 +92,20 @@ impl Redis {
             }
             Err(_) => Err("Not Found".to_string()),
         }
+    }
+
+    #[allow(dead_code)]
+    fn del_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        if params.is_empty() {
+            return Err("ERR wrong number of arguments for 'del' command".to_string());
+        }
+        let mut count = 0;
+        for param in params.iter() {
+            if self.db.remove(param.as_str()).is_some() {
+                count += 1;
+            }
+        }
+        Ok(count.to_string())
     }
 }
 
@@ -361,5 +376,57 @@ mod test {
             redis.execute(&Command::Key("dbsize".to_string()), vec![]);
 
         assert_eq!("0".to_string(), dbsize.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_set_element_and_del() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let key: String = "key".to_string();
+        let params_set = vec![&key, &value];
+        let params_del = vec![&key];
+        let params_get = vec![&key];
+
+        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+        let del: Result<String, String> =
+            redis.execute(&Command::Key("del".to_string()), params_del);
+
+        assert_eq!("1".to_string(), del.unwrap().to_string());
+
+        let get: Result<String, String> =
+            redis.execute(&Command::Key("get".to_string()), params_get);
+        assert!(get.is_err());
+    }
+
+    #[test]
+    fn test_set_two_elements_and_del_both() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let key1: String = "key1".to_string();
+        let key2: String = "key2".to_string();
+        let params_set1 = vec![&key1, &value];
+        let params_set2 = vec![&key2, &value];
+        let params_del = vec![&key1, &key2];
+
+        let _set = redis.execute(&Command::Key("set".to_string()), params_set1);
+        let _set = redis.execute(&Command::Key("set".to_string()), params_set2);
+
+        let del: Result<String, String> =
+            redis.execute(&Command::Key("del".to_string()), params_del);
+
+        assert_eq!("2".to_string(), del.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_del_without_params_err() {
+        let mut redis: Redis = Redis::new();
+
+        let params_del = vec![];
+
+        let del: Result<String, String> =
+            redis.execute(&Command::Key("del".to_string()), params_del);
+        assert!(del.is_err());
     }
 }
