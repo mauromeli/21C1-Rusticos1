@@ -496,7 +496,7 @@ mod test {
             redis.execute(&Command::Key("exists".to_string()), params_exists);
         assert!(exists.is_err());
     }
-  
+
     #[test]
     fn test_copy_without_params_err() {
         let mut redis: Redis = Redis::new();
