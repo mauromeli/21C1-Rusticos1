@@ -30,6 +30,7 @@ impl Redis {
             Command::Key(ref command) if command == "del" => self.del_method(params),
             Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
             Command::Key(ref command) if command == "getdel" => self.getdel_method(params),
+            Command::Key(ref command) if command == "append" => self.append_method(params),
             Command::Key(ref command) if command == "dbsize" => Ok(self.db.len().to_string()),
             _ => Err("Command not valid".to_string()),
         }
@@ -106,6 +107,20 @@ impl Redis {
             }
         }
         Ok(count.to_string())
+    }
+
+    #[allow(dead_code)]
+    fn append_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        if params.len() != 2 {
+            return Err("ERR wrong number of arguments for 'append' command".to_string());
+        }
+        match self.get_method(vec![params[0]]) {
+            Ok(return_value) => {
+                let value = return_value + params[1];
+                self.set_method(vec![params[0], &value])
+            }
+            Err(_) => Err("Not Found".to_string()),
+        }
     }
 }
 
@@ -428,5 +443,45 @@ mod test {
         let del: Result<String, String> =
             redis.execute(&Command::Key("del".to_string()), params_del);
         assert!(del.is_err());
+    }
+
+    #[test]
+    fn test_append_adds_character() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let value_append: String = "c".to_string();
+        let key: String = "key".to_string();
+        let params_set = vec![&key, &value];
+        let params_append = vec![&key, &value_append];
+        let params_get = vec![&key];
+
+        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+        let _append = redis.execute(&Command::Key("append".to_string()), params_append);
+
+        let get: Result<String, String> =
+            redis.execute(&Command::Key("get".to_string()), params_get);
+
+        assert_eq!("valuec".to_string(), get.unwrap());
+    }
+
+    #[test]
+    fn test_append_adds_word() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let value_append: String = " appended".to_string();
+        let key: String = "key".to_string();
+        let params_set = vec![&key, &value];
+        let params_append = vec![&key, &value_append];
+        let params_get = vec![&key];
+
+        let _set = redis.execute(&Command::Key("set".to_string()), params_set);
+        let _append = redis.execute(&Command::Key("append".to_string()), params_append);
+
+        let get: Result<String, String> =
+            redis.execute(&Command::Key("get".to_string()), params_get);
+
+        assert_eq!("value appended".to_string(), get.unwrap());
     }
 }
