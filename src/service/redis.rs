@@ -30,6 +30,7 @@ impl Redis {
             Command::Key(ref command) if command == "set" => self.set_method(params),
             Command::Key(ref command) if command == "del" => self.del_method(params),
             Command::Key(ref command) if command == "exists" => self.exists_method(params),
+            Command::Key(ref command) if command == "rename" => self.rename_method(params),
             Command::Key(ref command) if command == "incrby" => self.incrby_method(params),
             Command::Key(ref command) if command == "getdel" => self.getdel_method(params),
             Command::Key(ref command) if command == "append" => self.append_method(params),
@@ -149,6 +150,19 @@ impl Redis {
             }
         }
         Ok(count.to_string())
+    }
+
+    fn rename_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        if params.len() != 2 {
+            return Err("ERR wrong number of arguments for 'exists' command".to_string());
+        }
+
+        match self.getdel_method(vec![params[0]]) {
+            Ok(value) => {
+                self.set_method(vec![params[1], &value])
+            },
+            Err(msg) => Err(msg),
+        }
     }
 }
 
@@ -571,9 +585,9 @@ mod test {
 
         let params_copy = vec![];
 
-        let del: Result<String, String> =
+        let copy: Result<String, String> =
             redis.execute(Command::Key("copy".to_string()), params_copy);
-        assert!(del.is_err());
+        assert!(copy.is_err());
     }
 
     #[test]
@@ -597,6 +611,42 @@ mod test {
         assert_eq!("value2".to_string(), get.unwrap().to_string());
         let _copy = redis.execute(Command::Key("copy".to_string()), params_copy);
         let get = redis.execute(Command::Key("get".to_string()), params_get);
+        assert_eq!("value1".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_rename_without_params_err() {
+        let mut redis: Redis = Redis::new();
+
+        let params = vec![];
+
+        let rename: Result<String, String> =
+            redis.execute(Command::Key("rename".to_string()), params);
+        assert!(rename.is_err());
+    }
+
+    #[test]
+    fn test_set_and_rename() {
+        let mut redis: Redis = Redis::new();
+
+        let value1: String = "value1".to_string();
+        let key1: String = "key1".to_string();
+        let key2: String = "key2".to_string();
+        let params_set1 = vec![&key1, &value1];
+        let params_rename = vec![&key1, &key2];
+        let params_first_get = vec![&key1];
+        let params_second_get = vec![&key2];
+
+        let _set = redis.execute(Command::Key("set".to_string()), params_set1);
+        let rename = redis.execute(Command::Key("rename".to_string()), params_rename);
+        print!("{:?}", rename);
+        assert!(rename.is_ok());
+
+        let get = redis.execute(Command::Key("get".to_string()), params_first_get);
+        assert!(get.is_err());
+
+        let get = redis.execute(Command::Key("get".to_string()), params_second_get);
+        assert!(get.is_ok());
         assert_eq!("value1".to_string(), get.unwrap().to_string());
     }
 }
