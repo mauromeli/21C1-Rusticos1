@@ -156,9 +156,7 @@ impl Redis {
         }
 
         match self.getdel_method(vec![params[0]]) {
-            Ok(value) => {
-                self.set_method(vec![params[1], &value])
-            }
+            Ok(value) => self.set_method(vec![params[1], &value]),
             Err(msg) => Err(msg),
         }
     }
