@@ -66,10 +66,8 @@ impl Redis {
         if params.len() != 2 {
             return Err("ERR syntax error".to_string());
         }
-        match self.db.insert(params[0].to_string(), params[1].to_string()) {
-            Some(_) => Ok("Ok".to_string()),
-            None => Err("Not Found".to_string()),
-        }
+        self.db.insert(params[0].to_string(), params[1].to_string());
+        Ok("Ok".to_string())
     }
 
     #[allow(dead_code)]
@@ -638,13 +636,9 @@ mod test {
         let params_second_get = vec![&key2];
 
         let _set = redis.execute(Command::Key("set".to_string()), params_set1);
-        print!("{:?}", redis);
         let rename = redis.execute(Command::Key("rename".to_string()), params_rename);
 
-        //TODO: Falla el rename, pero si comentas el assert de la linea de abajo y descomentas
-        // el Print que esta 2 lineas mas abajo te das cuenta que esta ok.
-        //assert!(rename.is_ok());
-        //print!("{:?}", redis);
+        assert!(rename.is_ok());
         let get = redis.execute(Command::Key("get".to_string()), params_first_get);
         assert!(get.is_err());
 
