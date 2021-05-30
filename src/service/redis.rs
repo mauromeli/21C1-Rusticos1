@@ -87,7 +87,10 @@ impl Redis {
             return Err("ERR wrong number of arguments for 'get' command".to_string());
         }
         match self.db.get(params[0].as_str()) {
-            Some(return_value) => Ok(return_value.to_string()),
+            Some(return_value) => match return_value {
+                RedisElement::String(s) => Ok(return_value.to_string()),
+                _ => Err("Not string".to_string()),
+            },
             None => Err("Not Found".to_string()),
         }
     }
