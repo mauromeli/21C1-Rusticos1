@@ -71,15 +71,12 @@ impl Redis {
 
     #[allow(dead_code)]
     fn copy_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        // TODO: no debería usar el metodo SET, si se estan copiando valores deberia mantenerse el tipo de elemento (String, Set, List)
         if params.len() != 2 {
             return Err("ERR wrong number of arguments for 'copy' command".to_string());
         }
         match self.get_method(vec![params[0]]) {
-            Ok(value) => {
-                self.db
-                    .insert(params[1].to_string(), RedisElement::String(value));
-                Ok("Ok".to_string())
-            }
+            Ok(value) => self.set_method(vec![params[1], &value]),
             Err(_) => Err("Not Found".to_string()),
         }
     }
