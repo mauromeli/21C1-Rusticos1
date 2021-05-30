@@ -16,7 +16,7 @@ pub enum TypeData {
 
 #[allow(dead_code)]
 pub fn decode(bytes: &[u8], start: usize) -> Result<(TypeData, usize)> {
-    match bytes[start] as char{
+    match bytes[start] as char {
         '+' => {
             let (string, final_index) = parse(bytes, start+1);
             Ok((TypeData::String(string), final_index))
