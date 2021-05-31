@@ -1,46 +1,10 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt;
+use crate::entities::command::Command;
+use crate::entities::redis_element::RedisElement;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Redis {
     db: HashMap<String, RedisElement>,
-}
-
-#[derive(Debug)]
-pub enum Command {
-    #[allow(dead_code)]
-    Key(String),
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum RedisElement {
-    String(String),
-    Set(HashSet<String>),
-    List(Vec<String>),
-}
-
-impl fmt::Display for RedisElement {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RedisElement::String(string) => write!(fmt, "{}", string)?,
-            RedisElement::Set(set) => {
-                write!(fmt, "[")?;
-                for element in set.iter() {
-                    write!(fmt, " {}", element)?;
-                }
-                write!(fmt, " ]")?;
-            }
-            RedisElement::List(list) => {
-                write!(fmt, "[")?;
-                for element in list {
-                    write!(fmt, " {}", element)?;
-                }
-                write!(fmt, " ]")?;
-            }
-        }
-        Ok(())
-    }
 }
 
 impl Redis {
@@ -83,12 +47,13 @@ impl Redis {
 
     #[allow(dead_code)]
     fn get_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        // TODO: deberia devolver NIL si no existe el elemento
         if params.len() != 1 {
             return Err("ERR wrong number of arguments for 'get' command".to_string());
         }
         match self.db.get(params[0].as_str()) {
             Some(return_value) => match return_value {
-                RedisElement::String(s) => Ok(return_value.to_string()),
+                RedisElement::String(_) => Ok(return_value.to_string()),
                 _ => Err("Not string".to_string()),
             },
             None => Err("Not Found".to_string()),
@@ -199,9 +164,10 @@ impl Redis {
     }
 }
 
+#[allow(unused_imports)]
 mod test {
-    #[allow(unused_imports)]
-    use crate::service::redis::{Command, Redis, RedisElement};
+    use crate::entities::command::Command;
+    use crate::service::redis::Redis;
 
     #[test]
     fn test_set_element_and_get_the_same() {

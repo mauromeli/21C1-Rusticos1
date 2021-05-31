@@ -1,6 +1,5 @@
-//TODO: ver como mover esto a un mod
-
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Command {
-    Key(String)
+    Key(String),
 }
