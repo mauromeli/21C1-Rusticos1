@@ -19,27 +19,37 @@ impl Redis {
     pub fn execute(&mut self, command: Command) -> Result<String, String> {
         match command {
             Command::Ping => Ok("PONG".to_string()),
-            Command::Copy { key_origin, key_destination } => self.copy_method(key_origin, key_destination),
+            Command::Copy {
+                key_origin,
+                key_destination,
+            } => self.copy_method(key_origin, key_destination),
             Command::Get { key } => self.get_method(key),
-            Command::Set { key, value } => self.set_method(key, value),
-            Command::Del { keys } => self.del_method(keys),
-            Command::Exists { keys } => self.exists_method(keys),
-            Command::Rename { key_origin, key_destination } => self.rename_method(key_origin, key_destination),
+            Command::Set { key, value } => Ok(self.set_method(key, value)),
+            Command::Del { keys } => Ok(self.del_method(keys)),
+            Command::Exists { keys } => Ok(self.exists_method(keys)),
+            Command::Rename {
+                key_origin,
+                key_destination,
+            } => self.rename_method(key_origin, key_destination),
             Command::Incrby { key, increment } => self.incrby_method(key, increment),
             Command::Getdel { key } => self.getdel_method(key),
-            Command::Append { key, value } => self.append_method(key, value),
+            Command::Append { key, value } => Ok(self.append_method(key, value)),
             Command::Dbsize => Ok(self.db.len().to_string()),
         }
     }
 
     #[allow(dead_code)]
-    fn copy_method(&mut self, key_origin: String, key_destination: String) -> Result<String, String> {
+    fn copy_method(
+        &mut self,
+        key_origin: String,
+        key_destination: String,
+    ) -> Result<String, String> {
         // TODO: no debería usar el metodo SET, si se estan copiando valores deberia mantenerse el tipo de elemento (String, Set, List)
         /*if params.len() != 2 {
             return Err("ERR wrong number of arguments for 'copy' command".to_string());
         }*/
         match self.get_method(key_origin) {
-            Ok(value) => self.set_method(key_destination, value),
+            Ok(value) => Ok(self.set_method(key_destination, value)),
             Err(_) => Err("Not Found".to_string()),
         }
     }
@@ -61,16 +71,14 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    fn set_method(&mut self, key: String, value: String) -> Result<String, String> {
+    fn set_method(&mut self, key: String, value: String) -> String {
         /*
         if params.len() != 2 {
             return Err("ERR syntax error".to_string());
         }*/
-        self.db.insert(
-            key,
-            RedisElement::String(value),
-        );
-        Ok("Ok".to_string())
+        self.db.insert(key, RedisElement::String(value));
+
+        "Ok".to_string()
     }
 
     #[allow(dead_code)]
@@ -86,9 +94,9 @@ impl Redis {
                 }
 
                 let my_int = my_int.unwrap() + increment;
-                self.set_method(key, my_int.to_string())
+                Ok(self.set_method(key, my_int.to_string()))
             }
-            Err(_) => self.set_method(key, increment.to_string()),
+            Err(_) => Ok(self.set_method(key, increment.to_string())),
         }
     }
 
@@ -107,7 +115,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    fn del_method(&mut self, keys: Vec<String>) -> Result<String, String> {
+    fn del_method(&mut self, keys: Vec<String>) -> String {
         /*if params.is_empty() {
             return Err("ERR wrong number of arguments for 'del' command".to_string());
         }*/
@@ -118,11 +126,12 @@ impl Redis {
                 count += 1;
             }
         }
-        Ok(count.to_string())
+
+        count.to_string()
     }
 
     #[allow(dead_code)]
-    fn append_method(&mut self, key: String, value: String) -> Result<String, String> {
+    fn append_method(&mut self, key: String, value: String) -> String {
         //TODO: chequar si el valor es string antes de hacer el append
         /*if params.len() != 2 {
             return Err("ERR wrong number of arguments for 'append' command".to_string());
@@ -130,13 +139,14 @@ impl Redis {
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 let value = return_value + value.as_str();
+
                 self.set_method(key, value)
             }
             Err(_) => self.set_method(key, value),
         }
     }
 
-    fn exists_method(&mut self, keys: Vec<String>) -> Result<String, String> {
+    fn exists_method(&mut self, keys: Vec<String>) -> String {
         /*if params.is_empty() {
             return Err("ERR wrong number of arguments for 'exists' command".to_string());
         }*/
@@ -147,16 +157,20 @@ impl Redis {
                 count += 1;
             }
         }
-        Ok(count.to_string())
+        count.to_string()
     }
 
-    fn rename_method(&mut self, key_origin: String, key_destination: String) -> Result<String, String> {
+    fn rename_method(
+        &mut self,
+        key_origin: String,
+        key_destination: String,
+    ) -> Result<String, String> {
         /*if params.len() != 2 {
             return Err("ERR wrong number of arguments for 'exists' command".to_string());
         }*/
 
         match self.getdel_method(key_origin) {
-            Ok(value) => self.set_method(key_destination, value),
+            Ok(value) => Ok(self.set_method(key_destination, value)),
             Err(msg) => Err(msg),
         }
     }
@@ -288,7 +302,6 @@ mod test {
         let key: String = "key".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-
         let key: String = "key".to_string();
         let get: Result<String, String> = redis.execute(Command::Get { key });
 
@@ -389,7 +402,6 @@ mod test {
     fn test_append_on_non_existent_key() {
         let mut redis: Redis = Redis::new();
 
-
         let key: String = "key".to_string();
         let value: String = " appended".to_string();
         let _append = redis.execute(Command::Append { key, value });
@@ -439,7 +451,10 @@ mod test {
 
         let key_origin: String = "key1".to_string();
         let key_destination: String = "key2".to_string();
-        let _copy = redis.execute(Command::Copy { key_destination, key_origin });
+        let _copy = redis.execute(Command::Copy {
+            key_destination,
+            key_origin,
+        });
 
         let key: String = "key2".to_string();
         let get = redis.execute(Command::Get { key });
@@ -456,7 +471,10 @@ mod test {
 
         let key_origin: String = "key1".to_string();
         let key_destination: String = "key2".to_string();
-        let rename = redis.execute(Command::Rename { key_origin, key_destination });
+        let rename = redis.execute(Command::Rename {
+            key_origin,
+            key_destination,
+        });
         assert!(rename.is_ok());
 
         let key: String = "key1".to_string();
