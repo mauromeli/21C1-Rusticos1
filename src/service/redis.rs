@@ -1,22 +1,16 @@
+use crate::entities::command::Command;
+use crate::entities::redis_element::RedisElement;
 use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Redis {
-    db: HashMap<String, String>,
-}
-
-#[derive(Debug)]
-pub enum Command {
-    #[allow(dead_code)]
-    Key(String),
+    db: HashMap<String, RedisElement>,
 }
 
 impl Redis {
-    //TODO: Consultar porque sale esto aunque este usado en los test.
-
     #[allow(dead_code)]
     pub fn new() -> Self {
-        let map: HashMap<String, String> = HashMap::new();
+        let map = HashMap::new();
 
         Self { db: map }
     }
@@ -41,6 +35,7 @@ impl Redis {
 
     #[allow(dead_code)]
     fn copy_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        // TODO: no debería usar el metodo SET, si se estan copiando valores deberia mantenerse el tipo de elemento (String, Set, List)
         if params.len() != 2 {
             return Err("ERR wrong number of arguments for 'copy' command".to_string());
         }
@@ -52,11 +47,15 @@ impl Redis {
 
     #[allow(dead_code)]
     fn get_method(&mut self, params: Vec<&String>) -> Result<String, String> {
+        // TODO: deberia devolver NIL si no existe el elemento
         if params.len() != 1 {
             return Err("ERR wrong number of arguments for 'get' command".to_string());
         }
         match self.db.get(params[0].as_str()) {
-            Some(return_value) => Ok(return_value.to_string()),
+            Some(return_value) => match return_value {
+                RedisElement::String(_) => Ok(return_value.to_string()),
+                _ => Err("Not string".to_string()),
+            },
             None => Err("Not Found".to_string()),
         }
     }
@@ -66,7 +65,10 @@ impl Redis {
         if params.len() != 2 {
             return Err("ERR syntax error".to_string());
         }
-        self.db.insert(params[0].to_string(), params[1].to_string());
+        self.db.insert(
+            params[0].to_string(),
+            RedisElement::String(params[1].to_string()),
+        );
         Ok("Ok".to_string())
     }
 
@@ -162,9 +164,10 @@ impl Redis {
     }
 }
 
+#[allow(unused_imports)]
 mod test {
-    #[allow(unused_imports)]
-    use crate::service::redis::{Command, Redis};
+    use crate::entities::command::Command;
+    use crate::service::redis::Redis;
 
     #[test]
     fn test_set_element_and_get_the_same() {
