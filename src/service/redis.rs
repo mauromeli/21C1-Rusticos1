@@ -9,7 +9,20 @@ pub struct Redis {
 pub enum Command {
     #[allow(dead_code)]
     Key(String),
+    Set {key: String, value: String},
+    Get(String),
+    Ping,
+
 }
+
+/*
+pub enum Instruction {
+    Branch {op: u8, test_set: bool, offset: i8},
+match instruction {
+            Instruction::Nop => (),
+            Instruction::Branch { op, test_set, offset } => Alu::execute_branch(*op, *test_set, *offset, register_bank)
+ */
+
 
 impl Redis {
     //TODO: Consultar porque sale esto aunque este usado en los test.
@@ -21,9 +34,13 @@ impl Redis {
         Self { db: map }
     }
 
+    //TODO: mover a Command Pattern
     #[allow(dead_code)]
-    pub fn execute(&mut self, command: Command, params: Vec<&String>) -> Result<String, String> {
-        match command {
+    pub fn execute(&mut self, command: Command) -> Result<String, String> {
+        match method = param[0] {
+            method == "PING" => Command::PING()
+            method == "SET" => validate_set, Command::Set(param[1], params[2])
+
             Command::Key(ref command) if command == "PING" => Ok("PONG".to_string()),
             Command::Key(ref command) if command == "copy" => self.copy_method(params),
             Command::Key(ref command) if command == "get" => self.get_method(params),

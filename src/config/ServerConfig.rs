@@ -1,23 +1,3 @@
-mod service;
-
-/*
-fn main() {
-    println!("Hello, world!");
-}*/
-
-
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::iter::FromIterator;
-use std::path::Path;
-
-fn main() {
-    let path = String::from("src/file.conf");
-    let cfg = Config::new_from_file(path);
-    println!("{:?}", cfg);
-}
-
 
 #[derive(Clone, Debug)]
 struct Config {
@@ -45,6 +25,7 @@ impl Config {
         let content = BufReader::new(&file);
         let mut config = Config::new();
 
+        //TODO: Separar a que param = iterable
         for line in content.lines() {
             let line = line.expect("Could not read the line");
             // Remuevo espacios al principio y al final de la línea.
