@@ -2,6 +2,10 @@ use crate::entities::command::Command;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("Params can't be empty".to_string());
+    }
+
     let command = params.first().unwrap();
     let params = params.get(1..).unwrap();
     match command.to_lowercase().as_str() {
@@ -133,5 +137,180 @@ fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
 }
 
 mod test {
+    use crate::service::command_generator::generate;
+    use crate::entities::command::Command;
 
+    #[test]
+    fn generate_command_with_params_empty_err() {
+        let params = vec![];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_with_command_invalid_err() {
+        let params = vec!["metodo".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_with_command_ping() {
+        let params = vec!["ping".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_ok());
+        assert!(
+            match result.unwrap() {
+                Command::Ping => true,
+                _ => false
+            }
+        );
+    }
+
+    #[test]
+    fn generate_command_copy_without_params_err() {
+        let params = vec!["copy".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_copy_with_one_param_err() {
+        let params = vec!["copy".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_copy_ok() {
+        let params = vec!["copy".to_string(), "key".to_string(), "key1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _key2 = "key1".to_string();
+        assert!(result.is_ok());
+        assert!(
+            match result.unwrap() {
+                Command::Copy { key_origin: _key, key_destination: _key2 } => true,
+                _ => false
+            }
+        );
+    }
+
+    #[test]
+    fn generate_command_get_without_param_err() {
+        let params = vec!["get".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_get_ok() {
+        let params = vec!["get".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(
+            match result.unwrap() {
+                Command::Get { key: _key } => true,
+                _ => false
+            }
+        );
+    }
+
+    #[test]
+    fn generate_command_set_without_param_err() {
+        let params = vec!["set".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_set_with_one_param_err() {
+        let params = vec!["set".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_set_ok() {
+        let params = vec!["set".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = "value".to_string();
+        assert!(result.is_ok());
+        assert!(
+            match result.unwrap() {
+                Command::Set { key: _key, value: _value } => true,
+                _ => false
+            }
+        );
+    }
+
+    #[test]
+    fn generate_command_del_without_param_err() {
+        let params = vec!["del".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_del_ok() {
+        let params = vec!["del".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _keys = vec!["key".to_string()];
+        assert!(result.is_ok());
+        assert!(
+            match result.unwrap() {
+                Command::Del { keys: _keys } => true,
+                _ => false
+            }
+        );
+    }
+
+    #[test]
+    fn generate_command_exists_without_param_err() {
+        let params = vec!["exists".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_exists_ok() {
+        let params = vec!["exists".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _keys = vec!["key".to_string()];
+        assert!(result.is_ok());
+
+        assert!(
+            match result.unwrap() {
+                Command::Exists { keys: _keys } => true,
+                _ => false
+            }
+        );
+
+        let params = vec!["exists".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(
+            match result.unwrap() {
+                Command::Ping => false,
+                _ => true
+            }
+        );
+    }
 }
