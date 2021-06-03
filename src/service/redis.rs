@@ -45,9 +45,7 @@ impl Redis {
         key_destination: String,
     ) -> Result<String, String> {
         // TODO: no debería usar el metodo SET, si se estan copiando valores deberia mantenerse el tipo de elemento (String, Set, List)
-        /*if params.len() != 2 {
-            return Err("ERR wrong number of arguments for 'copy' command".to_string());
-        }*/
+
         match self.get_method(key_origin) {
             Ok(value) => Ok(self.set_method(key_destination, value)),
             Err(_) => Err("Not Found".to_string()),
@@ -57,10 +55,7 @@ impl Redis {
     #[allow(dead_code)]
     fn get_method(&mut self, key: String) -> Result<String, String> {
         // TODO: deberia devolver NIL si no existe el elemento
-        /*
-        if params.len() != 1 {
-            return Err("ERR wrong number of arguments for 'get' command".to_string());
-        }*/
+
         match self.db.get(key.as_str()) {
             Some(return_value) => match return_value {
                 RedisElement::String(_) => Ok(return_value.to_string()),
@@ -72,10 +67,6 @@ impl Redis {
 
     #[allow(dead_code)]
     fn set_method(&mut self, key: String, value: String) -> String {
-        /*
-        if params.len() != 2 {
-            return Err("ERR syntax error".to_string());
-        }*/
         self.db.insert(key, RedisElement::String(value));
 
         "Ok".to_string()
@@ -83,9 +74,6 @@ impl Redis {
 
     #[allow(dead_code)]
     fn incrby_method(&mut self, key: String, increment: u32) -> Result<String, String> {
-        /*if params.len() != 2 || incr_value.is_err() {
-            return Err("ERR syntax error".to_string());
-        }*/
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 let my_int: Result<u32, _> = return_value.parse();
@@ -102,9 +90,6 @@ impl Redis {
 
     #[allow(dead_code)]
     fn getdel_method(&mut self, key: String) -> Result<String, String> {
-        /*if params.len() != 1 {
-            return Err("ERR wrong number of arguments for 'getdel' command".to_string());
-        }*/
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 self.db.remove(key.as_str());
@@ -116,10 +101,6 @@ impl Redis {
 
     #[allow(dead_code)]
     fn del_method(&mut self, keys: Vec<String>) -> String {
-        /*if params.is_empty() {
-            return Err("ERR wrong number of arguments for 'del' command".to_string());
-        }*/
-
         let mut count = 0;
         for key in keys.iter() {
             if self.db.remove(key.as_str()).is_some() {
@@ -133,9 +114,7 @@ impl Redis {
     #[allow(dead_code)]
     fn append_method(&mut self, key: String, value: String) -> String {
         //TODO: chequar si el valor es string antes de hacer el append
-        /*if params.len() != 2 {
-            return Err("ERR wrong number of arguments for 'append' command".to_string());
-        }*/
+
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 let value = return_value + value.as_str();
@@ -147,10 +126,6 @@ impl Redis {
     }
 
     fn exists_method(&mut self, keys: Vec<String>) -> String {
-        /*if params.is_empty() {
-            return Err("ERR wrong number of arguments for 'exists' command".to_string());
-        }*/
-
         let mut count = 0;
         for key in keys.iter() {
             if self.db.contains_key(key.as_str()) {
@@ -165,10 +140,6 @@ impl Redis {
         key_origin: String,
         key_destination: String,
     ) -> Result<String, String> {
-        /*if params.len() != 2 {
-            return Err("ERR wrong number of arguments for 'exists' command".to_string());
-        }*/
-
         match self.getdel_method(key_origin) {
             Ok(value) => Ok(self.set_method(key_destination, value)),
             Err(msg) => Err(msg),
@@ -178,6 +149,7 @@ impl Redis {
 
 #[allow(unused_imports)]
 mod test {
+    #[allow(unused_imports)]
     use crate::entities::command::Command;
     use crate::service::redis::Redis;
 

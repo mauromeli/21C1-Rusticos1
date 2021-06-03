@@ -136,9 +136,11 @@ fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Dbsize)
 }
 
+#[allow(unused_imports)]
 mod test {
-    use crate::service::command_generator::generate;
+
     use crate::entities::command::Command;
+    use crate::service::command_generator::generate;
 
     #[test]
     fn generate_command_with_params_empty_err() {
@@ -162,12 +164,10 @@ mod test {
         let result = generate(params);
 
         assert!(result.is_ok());
-        assert!(
-            match result.unwrap() {
-                Command::Ping => true,
-                _ => false
-            }
-        );
+        assert!(match result.unwrap() {
+            Command::Ping => true,
+            _ => false,
+        });
     }
 
     #[test]
@@ -194,12 +194,13 @@ mod test {
         let _key = "key".to_string();
         let _key2 = "key1".to_string();
         assert!(result.is_ok());
-        assert!(
-            match result.unwrap() {
-                Command::Copy { key_origin: _key, key_destination: _key2 } => true,
-                _ => false
-            }
-        );
+        assert!(match result.unwrap() {
+            Command::Copy {
+                key_origin: _key,
+                key_destination: _key2,
+            } => true,
+            _ => false,
+        });
     }
 
     #[test]
@@ -217,12 +218,10 @@ mod test {
 
         let _key = "key".to_string();
         assert!(result.is_ok());
-        assert!(
-            match result.unwrap() {
-                Command::Get { key: _key } => true,
-                _ => false
-            }
-        );
+        assert!(match result.unwrap() {
+            Command::Get { key: _key } => true,
+            _ => false,
+        });
     }
 
     #[test]
@@ -249,12 +248,13 @@ mod test {
         let _key = "key".to_string();
         let _value = "value".to_string();
         assert!(result.is_ok());
-        assert!(
-            match result.unwrap() {
-                Command::Set { key: _key, value: _value } => true,
-                _ => false
-            }
-        );
+        assert!(match result.unwrap() {
+            Command::Set {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
     }
 
     #[test]
@@ -272,12 +272,10 @@ mod test {
 
         let _keys = vec!["key".to_string()];
         assert!(result.is_ok());
-        assert!(
-            match result.unwrap() {
-                Command::Del { keys: _keys } => true,
-                _ => false
-            }
-        );
+        assert!(match result.unwrap() {
+            Command::Del { keys: _keys } => true,
+            _ => false,
+        });
     }
 
     #[test]
@@ -296,21 +294,166 @@ mod test {
         let _keys = vec!["key".to_string()];
         assert!(result.is_ok());
 
-        assert!(
-            match result.unwrap() {
-                Command::Exists { keys: _keys } => true,
-                _ => false
-            }
-        );
+        assert!(match result.unwrap() {
+            Command::Exists { keys: _keys } => true,
+            _ => false,
+        });
 
         let params = vec!["exists".to_string(), "key".to_string()];
         let result = generate(params);
 
-        assert!(
-            match result.unwrap() {
-                Command::Ping => false,
-                _ => true
-            }
-        );
+        assert!(match result.unwrap() {
+            Command::Ping => false,
+            _ => true,
+        });
+    }
+
+    #[test]
+    fn generate_command_rename_without_param_err() {
+        let params = vec!["rename".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_rename_ok() {
+        let params = vec!["rename".to_string(), "key1".to_string(), "key2".to_string()];
+        let result = generate(params);
+
+        let _key_origin = "key1".to_string();
+        let _key_destination = "key2".to_string();
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Rename {
+                key_origin: _key_origin,
+                key_destination: _key_destination,
+            } => true,
+            _ => false,
+        });
+
+        let params = vec!["exists".to_string(), "key".to_string(), "key2".to_string()];
+        let result = generate(params);
+
+        assert!(match result.unwrap() {
+            Command::Ping => false,
+            _ => true,
+        });
+    }
+
+    #[test]
+    fn generate_command_incrby_without_param_err() {
+        let params = vec!["incrby".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["incrby".to_string(), "key".to_string(), "hola".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_incrby_ok() {
+        let params = vec!["incrby".to_string(), "key1".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key1".to_string();
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Incrby {
+                key: _key,
+                increment: 1,
+            } => true,
+            _ => false,
+        });
+
+        let params = vec!["exists".to_string(), "key".to_string(), "2".to_string()];
+        let result = generate(params);
+
+        assert!(match result.unwrap() {
+            Command::Ping => false,
+            _ => true,
+        });
+    }
+
+    #[test]
+    fn generate_command_getdel_without_param_err() {
+        let params = vec!["getdel".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_getdel_ok() {
+        let params = vec!["getdel".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Getdel { key: _key } => true,
+            _ => false,
+        });
+
+        let params = vec!["getdel".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(match result.unwrap() {
+            Command::Ping => false,
+            _ => true,
+        });
+    }
+
+    #[test]
+    fn generate_command_append_without_param_err() {
+        let params = vec!["append".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_append_ok() {
+        let params = vec!["append".to_string(), "key".to_string(), "Value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = "Value".to_string();
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Append {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+
+        let params = vec!["append".to_string(), "key".to_string(), "Value".to_string()];
+        let result = generate(params);
+
+        assert!(match result.unwrap() {
+            Command::Ping => false,
+            _ => true,
+        });
+    }
+
+    #[test]
+    fn generate_command_with_command_dbsize() {
+        let params = vec!["dbsize".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Dbsize => true,
+            _ => false,
+        });
     }
 }
