@@ -26,7 +26,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
 
 fn generate_ping(params: Vec<String>) -> Result<Command, String> {
     if params.len() > 1 {
-        return Err("ERR wrong number of arguments for 'copy' command".to_string());
+        return Err("ERR wrong number of arguments for 'ping' command".to_string());
     }
 
     Ok(Command::Ping)
@@ -117,7 +117,7 @@ fn generate_exists(params: Vec<String>) -> Result<Command, String> {
 
 fn generate_rename(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
-        return Err("ERR wrong number of arguments for 'exists' command".to_string());
+        return Err("ERR wrong number of arguments for 'rename' command".to_string());
     }
 
     let key_origin = params[0].clone();
