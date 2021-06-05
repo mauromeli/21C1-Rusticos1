@@ -35,4 +35,8 @@ pub enum Command {
         value: String,
     },
     Dbsize,
+    Lpush {
+        key: String,
+        value: Vec<String>,
+    },
 }

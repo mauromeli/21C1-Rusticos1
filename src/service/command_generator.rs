@@ -20,6 +20,8 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "getdel" => generate_getdel(Vec::from(params)),
         "append" => generate_append(Vec::from(params)),
         "dbsize" => generate_dbsize(Vec::from(params)),
+
+        "lpush" => generate_lpush(Vec::from(params)),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -136,9 +138,19 @@ fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Dbsize)
 }
 
+fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'lpush' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let values = Vec::from(params.get(1..).unwrap());
+
+    Ok(Command::Lpush { key, value: values })
+}
+
 #[allow(unused_imports)]
 mod test {
-
     use crate::entities::command::Command;
     use crate::service::command_generator::generate;
 
@@ -453,6 +465,36 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Dbsize => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lpush_incorrect_params_err() {
+        let params = vec!["lpush".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lpush".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lpush_ok() {
+        let params = vec!["lpush".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = vec!["value".to_string()];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lpush {
+                key: _key,
+                value: _value,
+            } => true,
             _ => false,
         });
     }

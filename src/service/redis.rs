@@ -1,6 +1,7 @@
 use crate::entities::command::Command;
 use crate::entities::redis_element::RedisElement;
 use std::collections::HashMap;
+use crate::entities::redis_element::RedisElement::List;
 
 #[derive(Debug)]
 pub struct Redis {
@@ -35,6 +36,7 @@ impl Redis {
             Command::Getdel { key } => self.getdel_method(key),
             Command::Append { key, value } => Ok(self.append_method(key, value)),
             Command::Dbsize => Ok(self.db.len().to_string()),
+            Command::Lpush { key, value } => self.lpush_method(key, value),
         }
     }
 
@@ -145,6 +147,18 @@ impl Redis {
             Err(msg) => Err(msg),
         }
     }
+
+    fn lpush_method(
+        &mut self,
+        key: String,
+        values: Vec<String>,
+    ) -> Result<String, String> {
+        let mut redis_element: Vec<String> = values;
+        redis_element.reverse();
+
+        self.db.insert(key, List(redis_element.clone()));
+        Ok(redis_element.len().to_string())
+    }
 }
 
 #[allow(unused_imports)]
@@ -192,6 +206,20 @@ mod test {
         let mut redis: Redis = Redis::new();
 
         let key = "hola".to_string();
+        let get: Result<String, String> = redis.execute(Command::Get { key });
+
+        assert!(get.is_err());
+    }
+
+    #[test]
+    fn test_get_element_fail_if_is_not_strinng() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
         let get: Result<String, String> = redis.execute(Command::Get { key });
 
         assert!(get.is_err());
@@ -457,5 +485,17 @@ mod test {
         let get = redis.execute(Command::Get { key });
         assert!(get.is_ok());
         assert_eq!("value1".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_lpush_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpush = redis.execute(Command::Lpush { key, value });
+
+        assert!(lpush.is_ok());
+        assert_eq!("2".to_string(), lpush.unwrap())
     }
 }
