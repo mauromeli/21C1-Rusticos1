@@ -1,7 +1,7 @@
 use crate::entities::command::Command;
 use crate::entities::redis_element::RedisElement;
-use std::collections::HashMap;
 use crate::entities::redis_element::RedisElement::List;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Redis {
@@ -36,7 +36,7 @@ impl Redis {
             Command::Getdel { key } => self.getdel_method(key),
             Command::Append { key, value } => Ok(self.append_method(key, value)),
             Command::Dbsize => Ok(self.db.len().to_string()),
-            Command::Lpush { key, value } => self.lpush_method(key, value),
+            Command::Lpush { key, value } => Ok(self.lpush_method(key, value)),
         }
     }
 
@@ -148,16 +148,13 @@ impl Redis {
         }
     }
 
-    fn lpush_method(
-        &mut self,
-        key: String,
-        values: Vec<String>,
-    ) -> Result<String, String> {
+    fn lpush_method(&mut self, key: String, values: Vec<String>) -> String {
         let mut redis_element: Vec<String> = values;
         redis_element.reverse();
 
         self.db.insert(key, List(redis_element.clone()));
-        Ok(redis_element.len().to_string())
+
+        redis_element.len().to_string()
     }
 }
 
