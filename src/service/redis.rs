@@ -36,7 +36,7 @@ impl Redis {
             Command::Getdel { key } => self.getdel_method(key),
             Command::Append { key, value } => Ok(self.append_method(key, value)),
             Command::Dbsize => Ok(self.db.len().to_string()),
-            Command::Lpush { key, value } => Ok(self.lpush_method(key, value)),
+            Command::Lpush { key, value } => self.lpush_method(key, value),
         }
     }
 
@@ -148,13 +148,30 @@ impl Redis {
         }
     }
 
-    fn lpush_method(&mut self, key: String, values: Vec<String>) -> String {
+    fn lpush_method(&mut self, key: String, values: Vec<String>) -> Result<String, String> {
         let mut redis_element: Vec<String> = values;
         redis_element.reverse();
 
-        self.db.insert(key, List(redis_element.clone()));
+        match self.db.get_mut(key.as_str()) {
+            Some(value) => match value {
+                RedisElement::List(value) => {
+                    let mut saved_vector = value.clone();
+                    saved_vector.extend(redis_element);
+                    self.db
+                        .insert(key, RedisElement::List(saved_vector.clone()));
 
-        redis_element.len().to_string()
+                    Ok(saved_vector.len().to_string())
+                }
+                _ => Err(
+                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+                ),
+            },
+            None => {
+                self.db.insert(key, List(redis_element.clone()));
+
+                Ok(redis_element.len().to_string())
+            }
+        }
     }
 }
 
@@ -494,5 +511,39 @@ mod test {
 
         assert!(lpush.is_ok());
         assert_eq!("2".to_string(), lpush.unwrap())
+    }
+
+    #[test]
+    fn test_lpush_with_key_used_err() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpush = redis.execute(Command::Lpush { key, value });
+
+        assert!(lpush.is_err());
+    }
+
+    #[test]
+    fn test_lpush_key_used_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpush = redis.execute(Command::Lpush { key, value });
+
+        assert!(lpush.is_ok());
+        assert_eq!("2".to_string(), lpush.unwrap());
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpush = redis.execute(Command::Lpush { key, value });
+
+        assert!(lpush.is_ok());
+        assert_eq!("4".to_string(), lpush.unwrap())
     }
 }
