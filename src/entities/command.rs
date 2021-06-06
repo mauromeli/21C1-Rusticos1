@@ -35,4 +35,15 @@ pub enum Command {
         value: String,
     },
     Dbsize,
+    Lpush {
+        key: String,
+        value: Vec<String>,
+    },
+    Lindex {
+        key: String,
+        index: i32,
+    },
+    Llen {
+        key: String,
+    },
 }
