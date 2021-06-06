@@ -22,8 +22,9 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "dbsize" => generate_dbsize(params),
 
         "lindex" => generate_lindex(params),
-        "lpush" => generate_lpush(params),
         "llen" => generate_llen(params),
+        "lpush" => generate_lpush(params),
+        "lpushx" => generate_lpushx(params),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -174,6 +175,17 @@ fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
     let values = Vec::from(params.get(1..).unwrap());
 
     Ok(Command::Lpush { key, value: values })
+}
+
+fn generate_lpushx(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'lpush' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let values = Vec::from(params.get(1..).unwrap());
+
+    Ok(Command::Lpushx { key, value: values })
 }
 
 #[allow(unused_imports)]
@@ -599,6 +611,36 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Lpush {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lpushx_incorrect_params_err() {
+        let params = vec!["lpushx".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lpushx".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lpushx_ok() {
+        let params = vec!["lpushx".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = vec!["value".to_string()];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lpushx {
                 key: _key,
                 value: _value,
             } => true,

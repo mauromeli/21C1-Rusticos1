@@ -40,6 +40,7 @@ impl Redis {
             Command::Lindex { key, index } => self.lindex_method(key, index),
             Command::Llen { key } => self.llen_method(key),
             Command::Lpush { key, value } => self.lpush_method(key, value),
+            Command::Lpushx { key, value } => self.lpushx_method(key, value),
         }
     }
 
@@ -210,6 +211,28 @@ impl Redis {
 
                 Ok(redis_element.len().to_string())
             }
+        }
+    }
+
+    fn lpushx_method(&mut self, key: String, values: Vec<String>) -> Result<String, String> {
+        let mut redis_element: Vec<String> = values;
+        redis_element.reverse();
+
+        match self.db.get_mut(key.as_str()) {
+            Some(value) => match value {
+                RedisElement::List(value) => {
+                    let saved_vector = value.clone();
+                    redis_element.extend(saved_vector);
+                    self.db
+                        .insert(key, RedisElement::List(redis_element.clone()));
+
+                    Ok(redis_element.len().to_string())
+                }
+                _ => Err(
+                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+                ),
+            },
+            None => Ok("0".to_string()),
         }
     }
 }
@@ -728,5 +751,51 @@ mod test {
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
         assert_eq!("4".to_string(), lindex.unwrap());
+    }
+
+    #[test]
+    fn test_lpushx_not_pre_save_return_0() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpushx = redis.execute(Command::Lpushx { key, value });
+
+        assert!(lpushx.is_ok());
+        assert_eq!("0".to_string(), lpushx.unwrap());
+    }
+
+    #[test]
+    fn test_lpushx_with_key_used_with_string_err() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpushx = redis.execute(Command::Lpushx { key, value });
+
+        assert!(lpushx.is_err());
+    }
+
+    #[test]
+    fn test_lpushx_after_lpush_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpush = redis.execute(Command::Lpush { key, value });
+
+        assert!(lpush.is_ok());
+        assert_eq!("2".to_string(), lpush.unwrap());
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let lpush = redis.execute(Command::Lpushx { key, value });
+
+        assert!(lpush.is_ok());
+        assert_eq!("4".to_string(), lpush.unwrap())
     }
 }
