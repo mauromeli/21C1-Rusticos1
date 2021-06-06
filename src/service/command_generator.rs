@@ -423,6 +423,49 @@ mod test {
     }
 
     #[test]
+    fn generate_command_mset_without_param_err() {
+        let params = vec!["mset".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_mset_with_missing_value_err() {
+        let params = vec![
+            "mset".to_string(),
+            "key1".to_string(),
+            "value1".to_string(),
+            "key2".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_mset_ok() {
+        let params = vec![
+            "mset".to_string(),
+            "key1".to_string(),
+            "value1".to_string(),
+            "key2".to_string(),
+            "value2".to_string(),
+        ];
+        let result = generate(params);
+
+        let pairs = vec![
+            ("key1".to_string(), "value1".to_string()),
+            ("key2".to_string(), "value2".to_string()),
+        ];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Mset { key_values: pairs } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
     fn generate_command_exists_without_param_err() {
         let params = vec!["exists".to_string()];
         let result = generate(params);
