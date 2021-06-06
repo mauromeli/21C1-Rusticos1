@@ -23,6 +23,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
 
         "lindex" => generate_lindex(params),
         "lpush" => generate_lpush(params),
+        "llen" => generate_llen(params),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -153,6 +154,15 @@ fn generate_lindex(params: Vec<String>) -> Result<Command, String> {
 
     let index = index.unwrap();
     Ok(Command::Lindex { key, index })
+}
+
+fn generate_llen(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'lindex' command".to_string());
+    }
+
+    let key = params[0].to_string();
+    Ok(Command::Llen { key })
 }
 
 fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
@@ -541,6 +551,27 @@ mod test {
                 key: _key,
                 index: _index,
             } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_llen_without_param_err() {
+        let params = vec!["llen".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_llen_ok() {
+        let params = vec!["llen".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Llen { key: _key } => true,
             _ => false,
         });
     }

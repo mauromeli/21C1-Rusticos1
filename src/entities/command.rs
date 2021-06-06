@@ -43,4 +43,7 @@ pub enum Command {
         key: String,
         index: i32,
     },
+    Llen {
+        key: String,
+    },
 }

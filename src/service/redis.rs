@@ -38,6 +38,7 @@ impl Redis {
             Command::Dbsize => Ok(self.db.len().to_string()),
 
             Command::Lindex { key, index } => self.lindex_method(key, index),
+            Command::Llen { key } => self.llen_method(key),
             Command::Lpush { key, value } => self.lpush_method(key, value),
         }
     }
@@ -171,6 +172,18 @@ impl Redis {
                 ),
             },
             None => Ok("nil".to_string()),
+        }
+    }
+
+    fn llen_method(&mut self, key: String) -> Result<String, String> {
+        match self.db.get_mut(key.as_str()) {
+            Some(value) => match value {
+                RedisElement::List(value) => Ok(value.len().to_string()),
+                _ => Err(
+                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+                ),
+            },
+            None => Ok("0".to_string()),
         }
     }
 
@@ -572,8 +585,6 @@ mod test {
         let index = -1;
         let lindex = redis.execute(Command::Lindex { key, index });
 
-        println!("{:?}", redis);
-
         assert!(lindex.is_ok());
         assert_eq!("value".to_string(), lindex.unwrap())
     }
@@ -594,6 +605,49 @@ mod test {
 
         assert!(lindex.is_ok());
         assert_eq!("nil".to_string(), lindex.unwrap())
+    }
+
+    #[test]
+    fn test_llen_key_saved_as_string_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key".to_string();
+        let llen = redis.execute(Command::Llen { key });
+
+        assert!(llen.is_err());
+    }
+
+    #[test]
+    fn test_llen_key_not_found_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let llen = redis.execute(Command::Llen { key });
+
+        assert!(llen.is_ok());
+        assert_eq!("0".to_string(), llen.unwrap())
+    }
+
+    #[test]
+    fn test_llen_key_used_twice_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+        let llen = redis.execute(Command::Llen { key });
+
+        assert_eq!("4".to_string(), llen.unwrap())
     }
 
     #[test]
