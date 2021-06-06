@@ -14,11 +14,11 @@ impl fmt::Display for RedisElement {
         match self {
             RedisElement::String(string) => write!(fmt, "{}", string)?,
             RedisElement::Set(set) => {
-                write!(fmt, "[")?;
+                write!(fmt, "{")?;
                 for element in set.iter() {
                     write!(fmt, " {}", element)?;
                 }
-                write!(fmt, " ]")?;
+                write!(fmt, " }")?;
             }
             RedisElement::List(list) => {
                 write!(fmt, "[")?;

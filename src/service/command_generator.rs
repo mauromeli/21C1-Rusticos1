@@ -158,7 +158,7 @@ fn generate_lindex(params: Vec<String>) -> Result<Command, String> {
 
 fn generate_llen(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
-        return Err("ERR wrong number of arguments for 'lindex' command".to_string());
+        return Err("ERR wrong number of arguments for 'llen' command".to_string());
     }
 
     let key = params[0].to_string();

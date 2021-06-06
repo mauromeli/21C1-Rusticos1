@@ -265,7 +265,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_element_fail_if_is_not_strinng() {
+    fn test_get_element_fail_if_is_not_string() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "key".to_string();
@@ -279,7 +279,7 @@ mod test {
     }
 
     #[test]
-    fn test_ping_retunrs_pong() {
+    fn test_ping_returns_pong() {
         let mut redis: Redis = Redis::new();
 
         let ping: Result<String, String> = redis.execute(Command::Ping);
