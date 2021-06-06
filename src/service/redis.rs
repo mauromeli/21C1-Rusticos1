@@ -25,11 +25,11 @@ impl Redis {
 
             // Strings
             Command::Append { key, value } => Ok(self.append_method(key, value)),
-            //decrby
+            Command::Decrby { key, decrement } => self.incrby_method(key, -(decrement as i32)),
             Command::Get { key } => self.get_method(key),
             Command::Getdel { key } => self.getdel_method(key),
             Command::Getset { key, value } => self.getset_method(key, value),
-            Command::Incrby { key, increment } => self.incrby_method(key, increment),
+            Command::Incrby { key, increment } => self.incrby_method(key, increment as i32),
             //mget
             //mset
             Command::Set { key, value } => Ok(self.set_method(key, value)),
@@ -74,14 +74,17 @@ impl Redis {
         match self.db.get(key.as_str()) {
             Some(return_value) => match return_value {
                 RedisElement::String(_) => Ok(return_value.to_string()),
-                _ => Err("Not string".to_string()),
+                _ => Err(
+                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+                ),
             },
-            None => Err("Not Found".to_string()),
+            None => Err("Not found".to_string()),
         }
     }
 
     #[allow(dead_code)]
     fn getset_method(&mut self, key: String, value: String) -> Result<String, String> {
+        //TODO: revisar que tiene que setear aunque get devuelva nil. Agregar tests.
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 self.set_method(key, value);
@@ -99,10 +102,10 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    fn incrby_method(&mut self, key: String, increment: u32) -> Result<String, String> {
+    fn incrby_method(&mut self, key: String, increment: i32) -> Result<String, String> {
         match self.get_method(key.clone()) {
             Ok(return_value) => {
-                let my_int: Result<u32, _> = return_value.parse();
+                let my_int: Result<i32, _> = return_value.parse();
                 if my_int.is_err() {
                     return Err("ERR value is not an integer or out of range".to_string());
                 }
@@ -380,6 +383,38 @@ mod test {
 
         assert_eq!("1".to_string(), get.unwrap().to_string());
         assert_ne!("10".to_string(), second_get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_decrby_on_new_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let decrement: u32 = 3;
+        let _decrby = redis.execute(Command::Decrby { key, decrement });
+
+        let key: String = "key".to_string();
+        let get: Result<String, String> = redis.execute(Command::Get { key });
+
+        assert_eq!("-3".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_decrby_on_existing_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value: String = "5".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key".to_string();
+        let decrement: u32 = 3;
+        let _decrby = redis.execute(Command::Decrby { key, decrement });
+
+        let key: String = "key".to_string();
+        let get: Result<String, String> = redis.execute(Command::Get { key });
+
+        assert_eq!("2".to_string(), get.unwrap().to_string());
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "exists" => generate_exists(params),
         "rename" => generate_rename(params),
         "incrby" => generate_incrby(params),
+        "decrby" => generate_decrby(params),
         "getdel" => generate_getdel(params),
         "append" => generate_append(params),
         "dbsize" => generate_dbsize(params),
@@ -93,6 +94,22 @@ fn generate_incrby(params: Vec<String>) -> Result<Command, String> {
 
     let increment = increment.unwrap();
     Ok(Command::Incrby { key, increment })
+}
+
+fn generate_decrby(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR syntax error".to_string());
+    }
+
+    let key = params[0].clone();
+    let decrement: Result<u32, _> = params[1].to_string().parse();
+
+    if decrement.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let decrement = decrement.unwrap();
+    Ok(Command::Decrby { key, decrement })
 }
 
 fn generate_getdel(params: Vec<String>) -> Result<Command, String> {
@@ -462,6 +479,37 @@ mod test {
         assert!(match result.unwrap() {
             Command::Ping => false,
             _ => true,
+        });
+    }
+
+    #[test]
+    fn generate_command_decrby_without_param_err() {
+        let params = vec!["decrby".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["decrby".to_string(), "key".to_string(), "hola".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_decrby_ok() {
+        let params = vec!["decrby".to_string(), "key1".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key1".to_string();
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Decrby {
+                key: _key,
+                decrement: 1,
+            } => true,
+            _ => false,
         });
     }
 

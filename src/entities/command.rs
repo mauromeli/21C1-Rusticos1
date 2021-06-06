@@ -27,6 +27,10 @@ pub enum Command {
         key: String,
         increment: u32,
     },
+    Decrby {
+        key: String,
+        decrement: u32,
+    },
     Getdel {
         key: String,
     },
