@@ -39,4 +39,8 @@ pub enum Command {
         key: String,
         value: Vec<String>,
     },
+    Lindex {
+        key: String,
+        index: i32,
+    },
 }

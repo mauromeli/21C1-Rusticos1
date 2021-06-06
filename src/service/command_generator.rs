@@ -7,21 +7,22 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
     }
 
     let command = params.first().unwrap();
-    let params = params.get(1..).unwrap();
+    let params = Vec::from(params.get(1..).unwrap());
     match command.to_lowercase().as_str() {
-        "ping" => generate_ping(Vec::from(params)),
-        "copy" => generate_copy(Vec::from(params)),
-        "get" => generate_get(Vec::from(params)),
-        "set" => generate_set(Vec::from(params)),
-        "del" => generate_del(Vec::from(params)),
-        "exists" => generate_exists(Vec::from(params)),
-        "rename" => generate_rename(Vec::from(params)),
-        "incrby" => generate_incrby(Vec::from(params)),
-        "getdel" => generate_getdel(Vec::from(params)),
-        "append" => generate_append(Vec::from(params)),
-        "dbsize" => generate_dbsize(Vec::from(params)),
+        "ping" => generate_ping(params),
+        "copy" => generate_copy(params),
+        "get" => generate_get(params),
+        "set" => generate_set(params),
+        "del" => generate_del(params),
+        "exists" => generate_exists(params),
+        "rename" => generate_rename(params),
+        "incrby" => generate_incrby(params),
+        "getdel" => generate_getdel(params),
+        "append" => generate_append(params),
+        "dbsize" => generate_dbsize(params),
 
-        "lpush" => generate_lpush(Vec::from(params)),
+        "lindex" => generate_lindex(params),
+        "lpush" => generate_lpush(params),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -136,6 +137,22 @@ fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
     }
 
     Ok(Command::Dbsize)
+}
+
+fn generate_lindex(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'lindex' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let index: Result<i32, _> = params[1].to_string().parse();
+
+    if index.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let index = index.unwrap();
+    Ok(Command::Lindex { key, index })
 }
 
 fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
@@ -465,6 +482,65 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Dbsize => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lindex_incorrect_params_err() {
+        let params = vec!["lindex".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lindex".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lindex".to_string(), "key".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec![
+            "lindex".to_string(),
+            "key".to_string(),
+            "1".to_string(),
+            "value".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_lindex_ok() {
+        let params = vec!["lindex".to_string(), "key".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _index = 1;
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lindex {
+                key: _key,
+                index: _index,
+            } => true,
+            _ => false,
+        });
+
+        let params = vec!["lindex".to_string(), "key".to_string(), "-1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _index = -1;
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lindex {
+                key: _key,
+                index: _index,
+            } => true,
             _ => false,
         });
     }
