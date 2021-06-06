@@ -46,4 +46,8 @@ pub enum Command {
     Llen {
         key: String,
     },
+    Getset {
+        key: String,
+        value: String,
+    },
 }

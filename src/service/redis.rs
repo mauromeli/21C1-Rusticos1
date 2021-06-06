@@ -19,24 +19,34 @@ impl Redis {
     #[allow(dead_code)]
     pub fn execute(&mut self, command: Command) -> Result<String, String> {
         match command {
+            // Server
+            Command::Dbsize => Ok(self.db.len().to_string()),
             Command::Ping => Ok("PONG".to_string()),
+
+            // Strings
+            Command::Append { key, value } => Ok(self.append_method(key, value)),
+            //decrby
+            Command::Get { key } => self.get_method(key),
+            Command::Getdel { key } => self.getdel_method(key),
+            Command::Getset { key, value } => self.getset_method(key, value),
+            Command::Incrby { key, increment } => self.incrby_method(key, increment),
+            //mget
+            //mset
+            Command::Set { key, value } => Ok(self.set_method(key, value)),
+
+            // Keys
             Command::Copy {
                 key_origin,
                 key_destination,
             } => self.copy_method(key_origin, key_destination),
-            Command::Get { key } => self.get_method(key),
-            Command::Set { key, value } => Ok(self.set_method(key, value)),
             Command::Del { keys } => Ok(self.del_method(keys)),
             Command::Exists { keys } => Ok(self.exists_method(keys)),
             Command::Rename {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
-            Command::Incrby { key, increment } => self.incrby_method(key, increment),
-            Command::Getdel { key } => self.getdel_method(key),
-            Command::Append { key, value } => Ok(self.append_method(key, value)),
-            Command::Dbsize => Ok(self.db.len().to_string()),
 
+            // Lists
             Command::Lindex { key, index } => self.lindex_method(key, index),
             Command::Llen { key } => self.llen_method(key),
             Command::Lpush { key, value } => self.lpush_method(key, value),
@@ -67,6 +77,17 @@ impl Redis {
                 _ => Err("Not string".to_string()),
             },
             None => Err("Not Found".to_string()),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn getset_method(&mut self, key: String, value: String) -> Result<String, String> {
+        match self.get_method(key.clone()) {
+            Ok(return_value) => {
+                self.set_method(key, value);
+                Ok(return_value.to_string())
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -266,6 +287,20 @@ mod test {
 
     #[test]
     fn test_get_element_fail_if_is_not_string() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+        let get: Result<String, String> = redis.execute(Command::Get { key });
+
+        assert!(get.is_err());
+    }
+
+    #[test]
+    fn test_getset_fails_if_is_not_string() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "key".to_string();

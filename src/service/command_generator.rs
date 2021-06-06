@@ -12,6 +12,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "ping" => generate_ping(params),
         "copy" => generate_copy(params),
         "get" => generate_get(params),
+        "getset" => generate_getset(params),
         "set" => generate_set(params),
         "del" => generate_del(params),
         "exists" => generate_exists(params),
@@ -56,6 +57,16 @@ fn generate_get(params: Vec<String>) -> Result<Command, String> {
 
     let key = params[0].clone();
     Ok(Command::Get { key })
+}
+
+fn generate_getset(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'getset' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let value = params[1].clone();
+    Ok(Command::Getset { key, value })
 }
 
 fn generate_set(params: Vec<String>) -> Result<Command, String> {
@@ -259,6 +270,39 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Get { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_getset_without_param_err() {
+        let params = vec!["getset".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_getset_with_one_param_err() {
+        let params = vec!["getset".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_getset_ok() {
+        let params = vec!["getset".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = "value".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Getset {
+                key: _key,
+                value: _value,
+            } => true,
             _ => false,
         });
     }
