@@ -54,4 +54,10 @@ pub enum Command {
         key: String,
         value: String,
     },
+    Mget {
+        keys: Vec<String>,
+    },
+    Mset {
+        key_values: Vec<(String, String)>,
+    },
 }

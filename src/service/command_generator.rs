@@ -21,6 +21,8 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "decrby" => generate_decrby(params),
         "getdel" => generate_getdel(params),
         "append" => generate_append(params),
+        "mget" => generate_mget(params),
+        "mset" => generate_mset(params),
         "dbsize" => generate_dbsize(params),
 
         "lindex" => generate_lindex(params),
@@ -158,6 +160,27 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
         key_origin,
         key_destination,
     })
+}
+
+fn generate_mget(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'mget' command".to_string());
+    }
+
+    Ok(Command::Mget { keys: params })
+}
+
+fn generate_mset(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() || params.len() % 2 != 0 {
+        return Err("ERR wrong number of arguments for 'mset' command".to_string());
+    }
+
+    let mut key_values: Vec<(String, String)> = Vec::new();
+    for pair in params.chunks(2) {
+        let tuple = (pair[0].to_string(), pair[1].to_string());
+        key_values.push(tuple);
+    }
+    Ok(Command::Mset { key_values })
 }
 
 fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
@@ -374,6 +397,27 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Del { keys: _keys } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_mget_without_param_err() {
+        let params = vec!["mget".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_mget_ok() {
+        let params = vec!["mget".to_string(), "key1".to_string(), "key2".to_string()];
+        let result = generate(params);
+
+        let _keys = vec!["key1".to_string(), "key2".to_string()];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Mget { keys: _keys } => true,
             _ => false,
         });
     }

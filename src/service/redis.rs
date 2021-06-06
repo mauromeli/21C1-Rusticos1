@@ -30,8 +30,8 @@ impl Redis {
             Command::Getdel { key } => self.getdel_method(key),
             Command::Getset { key, value } => self.getset_method(key, value),
             Command::Incrby { key, increment } => self.incrby_method(key, increment as i32),
-            //mget
-            //mset
+            Command::Mget { keys } => Err("not implemented".to_string()), //self.mget_method(keys),
+            Command::Mset { key_values } => Ok(self.mset_method(key_values)),
             Command::Set { key, value } => Ok(self.set_method(key, value)),
 
             // Keys
@@ -115,6 +115,24 @@ impl Redis {
             }
             Err(_) => Ok(self.set_method(key, increment.to_string())),
         }
+    }
+
+    #[allow(dead_code)]
+    fn mget_method(&mut self, keys: Vec<String>) -> Vec<String> {
+        //TODO: tests
+        let mut elements = Vec::new();
+        for key in keys.iter() {
+            elements.push(self.get_method(key.to_string()).unwrap());
+        }
+        elements
+    }
+
+    #[allow(dead_code)]
+    fn mset_method(&mut self, key_values: Vec<(String, String)>) -> String {
+        for (key, value) in key_values.iter() {
+            self.set_method(key.to_string(), value.to_string());
+        }
+        "Ok".to_string()
     }
 
     #[allow(dead_code)]
@@ -415,6 +433,25 @@ mod test {
         let get: Result<String, String> = redis.execute(Command::Get { key });
 
         assert_eq!("2".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_mset_sets_2_values() {
+        let mut redis: Redis = Redis::new();
+
+        let key_values = vec![
+            ("key1".to_string(), "value1".to_string()),
+            ("key2".to_string(), "value2".to_string()),
+        ];
+        let _mset = redis.execute(Command::Mset { key_values });
+
+        let key = "key1".to_string();
+        let get: Result<String, String> = redis.execute(Command::Get { key });
+        assert_eq!("value1".to_string(), get.unwrap().to_string());
+
+        let key = "key2".to_string();
+        let get: Result<String, String> = redis.execute(Command::Get { key });
+        assert_eq!("value2".to_string(), get.unwrap().to_string());
     }
 
     #[test]
