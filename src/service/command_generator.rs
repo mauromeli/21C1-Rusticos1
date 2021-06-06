@@ -433,14 +433,6 @@ mod test {
             } => true,
             _ => false,
         });
-
-        let params = vec!["exists".to_string(), "key".to_string(), "key2".to_string()];
-        let result = generate(params);
-
-        assert!(match result.unwrap() {
-            Command::Ping => false,
-            _ => true,
-        });
     }
 
     #[test]
@@ -471,14 +463,6 @@ mod test {
                 increment: 1,
             } => true,
             _ => false,
-        });
-
-        let params = vec!["exists".to_string(), "key".to_string(), "2".to_string()];
-        let result = generate(params);
-
-        assert!(match result.unwrap() {
-            Command::Ping => false,
-            _ => true,
         });
     }
 
