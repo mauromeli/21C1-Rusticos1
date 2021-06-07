@@ -48,7 +48,7 @@ pub enum Command {
     Llen {
         key: String,
     },
-    Sadd{
+    Sadd {
         key: String,
         values: HashSet<String>,
     },

@@ -40,7 +40,7 @@ impl Redis {
             Command::Lindex { key, index } => self.lindex_method(key, index),
             Command::Llen { key } => self.llen_method(key),
             Command::Lpush { key, value } => self.lpush_method(key, value),
-            Command::Sadd {key, values} => self.sadd_method(key, values),
+            Command::Sadd { key, values } => self.sadd_method(key, values),
         }
     }
 
@@ -226,8 +226,8 @@ impl Redis {
 
                     Ok((final_set_len - start_set_len).to_string())
                 }
-                _ => Err("WRONGTYPE A hashset data type expected".to_string())
-            }
+                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+            },
             None => {
                 self.db.insert(key, RedisElement::Set(values.clone()));
                 Ok(values.len().to_string())
@@ -754,7 +754,7 @@ mod test {
     }
 
     #[test]
-    fn test_sadd(){
+    fn test_sadd() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "key".to_string();
@@ -768,7 +768,7 @@ mod test {
     }
 
     #[test]
-    fn test_sadd_with_existing_key(){
+    fn test_sadd_with_existing_key() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "set".to_string();
@@ -790,7 +790,7 @@ mod test {
     }
 
     #[test]
-    fn test_sadd_error(){
+    fn test_sadd_error() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "set".to_string();
@@ -804,6 +804,9 @@ mod test {
         values.insert("value3".to_string());
         let sadd = redis.execute(Command::Sadd { key, values });
 
-        assert_eq!("WRONGTYPE A hashset data type expected".to_string(), sadd.err().unwrap())
+        assert_eq!(
+            "WRONGTYPE A hashset data type expected".to_string(),
+            sadd.err().unwrap()
+        )
     }
 }
