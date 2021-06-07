@@ -83,7 +83,6 @@ impl Redis {
 
     #[allow(dead_code)]
     fn getset_method(&mut self, key: String, value: String) -> Result<Re, String> {
-        //TODO: revisar que tiene que setear aunque get devuelva nil. Agregar tests.
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 self.set_method(key, value);
@@ -124,7 +123,6 @@ impl Redis {
 
     #[allow(dead_code)]
     fn mget_method(&mut self, keys: Vec<String>) -> Re {
-        //TODO: tests
         let mut elements: Vec<String> = Vec::new();
         for key in keys.iter() {
             elements.push(
