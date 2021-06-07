@@ -53,6 +53,7 @@ impl Redis {
             //Sets
             Command::Sadd { key, values } => self.sadd_method(key, values),
             Command::Scard { key } => self.scard_method(key),
+            Command::Sismember { key, value } => self.sismember_method(key, value),
         }
     }
 
@@ -303,6 +304,23 @@ impl Redis {
                 _ => Err("WRONGTYPE A hashset data type expected".to_string()),
             },
             None => Ok(Re::String("0".to_string())),
+        }
+    }
+
+    fn sismember_method(&mut self, key: String, value: String) -> Result<Re, String> {
+        match self.db.get_mut(key.as_str()) {
+            Some(redis_element) => match redis_element {
+                RedisElement::Set(redis_element) => {
+                    let set = redis_element.clone();
+                    if set.contains(value.as_str()) {
+                        Ok(Re::String("1".to_string()))
+                    } else {
+                        Ok(Re::String("0".to_string()))
+                    }
+                }
+                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+            },
+            None => Err("The key doesn't exist".to_string()),
         }
     }
 }
@@ -1089,5 +1107,63 @@ mod test {
             "WRONGTYPE A hashset data type expected".to_string(),
             scard.err().unwrap()
         )
+    }
+
+    #[test]
+    fn test_sismember() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key: String = "key".to_string();
+        let value: String = "value1".to_string();
+        let sismember = redis.execute(Command::Sismember { key, value });
+
+        assert_eq!("1".to_string(), sismember.unwrap().to_string());
+
+        let key: String = "key".to_string();
+        let value: String = "value".to_string();
+        let sismember = redis.execute(Command::Sismember { key, value });
+
+        assert_eq!("0".to_string(), sismember.unwrap().to_string())
+    }
+
+    #[test]
+    fn test_sismember_error() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key: String = "key1".to_string();
+        let value: String = "value1".to_string();
+        let sismember = redis.execute(Command::Sismember { key, value });
+
+        assert_eq!(
+            "The key doesn't exist".to_string(),
+            sismember.err().unwrap()
+        );
+
+        let key: String = "set".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "set".to_string();
+        let value: String = "value".to_string();
+        let sismember = redis.execute(Command::Sismember { key, value });
+
+        assert_eq!(
+            "WRONGTYPE A hashset data type expected".to_string(),
+            sismember.err().unwrap()
+        );
     }
 }
