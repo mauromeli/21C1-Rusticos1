@@ -219,9 +219,12 @@ impl Redis {
             Some(value) => match value {
                 RedisElement::Set(value) => {
                     let mut set = value.clone();
+                    let start_set_len = set.clone().len();
                     set.extend(values.clone());
+                    let final_set_len = set.clone().len();
                     self.db.insert(key, RedisElement::Set(set));
-                    Ok(values.clone().len().to_string())
+
+                    Ok((final_set_len - start_set_len).to_string())
                 }
                 _ => Err("WRONGTYPE A hashset data type expected".to_string())
             }
@@ -783,7 +786,7 @@ mod test {
         values.insert("value4".to_string());
 
         let sadd2 = redis.execute(Command::Sadd { key, values });
-        assert_eq!("2".to_string(), sadd2.unwrap());
+        assert_eq!("1".to_string(), sadd2.unwrap());
     }
 
     #[test]
