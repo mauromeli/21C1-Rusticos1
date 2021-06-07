@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Command {
@@ -45,5 +47,9 @@ pub enum Command {
     },
     Llen {
         key: String,
+    },
+    Sadd{
+        key: String,
+        values: HashSet<String>,
     },
 }
