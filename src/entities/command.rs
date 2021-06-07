@@ -52,7 +52,7 @@ pub enum Command {
         key: String,
         values: HashSet<String>,
     },
-    Scard{
+    Scard {
         key: String,
-    }
+    },
 }

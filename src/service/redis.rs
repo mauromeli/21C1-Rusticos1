@@ -243,11 +243,9 @@ impl Redis {
                     let set = value.clone();
                     Ok(set.len().to_string())
                 }
-                _ => Err("WRONGTYPE A hashset data type expected".to_string())
-            }
-            None => {
-                Ok("0".to_string())
-            }
+                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+            },
+            None => Ok("0".to_string()),
         }
     }
 }
@@ -827,7 +825,7 @@ mod test {
     }
 
     #[test]
-    fn test_scard(){
+    fn test_scard() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "key".to_string();
@@ -844,7 +842,7 @@ mod test {
     }
 
     #[test]
-    fn test_scard_error(){
+    fn test_scard_error() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "set".to_string();
@@ -854,7 +852,9 @@ mod test {
         let key: String = "set".to_string();
         let scard = redis.execute(Command::Scard { key });
 
-        assert_eq!("WRONGTYPE A hashset data type expected".to_string(), scard.err().unwrap())
+        assert_eq!(
+            "WRONGTYPE A hashset data type expected".to_string(),
+            scard.err().unwrap()
+        )
     }
-
 }
