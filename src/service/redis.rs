@@ -2,7 +2,6 @@ use crate::entities::command::Command;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use std::collections::{HashMap, HashSet};
 
-
 #[derive(Debug)]
 pub struct Redis {
     db: HashMap<String, Re>,
@@ -50,6 +49,8 @@ impl Redis {
             Command::Lindex { key, index } => self.lindex_method(key, index),
             Command::Llen { key } => self.llen_method(key),
             Command::Lpush { key, value } => self.lpush_method(key, value),
+
+            //Sets
             Command::Sadd { key, values } => self.sadd_method(key, values),
         }
     }
@@ -270,7 +271,7 @@ impl Redis {
         }
     }
 
-    fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<String, String> {
+    fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
             Some(value) => match value {
                 RedisElement::Set(value) => {
@@ -280,13 +281,13 @@ impl Redis {
                     let final_set_len = set.len();
                     self.db.insert(key, RedisElement::Set(set));
 
-                    Ok((final_set_len - start_set_len).to_string())
+                    Ok(Re::String((final_set_len - start_set_len).to_string()))
                 }
                 _ => Err("WRONGTYPE A hashset data type expected".to_string()),
             },
             None => {
                 self.db.insert(key, RedisElement::Set(values.clone()));
-                Ok(values.len().to_string())
+                Ok(Re::String(values.len().to_string()))
             }
         }
     }
@@ -295,10 +296,8 @@ impl Redis {
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
-    use crate::service::redis::Re;
-    use crate::service::redis::Redis;
+    use crate::service::redis::{Re, Redis};
     use std::collections::HashSet;
-
 
     #[allow(unused_imports)]
     #[test]
@@ -998,7 +997,7 @@ mod test {
         values.insert("value3".to_string());
         let sadd = redis.execute(Command::Sadd { key, values });
 
-        assert_eq!("3".to_string(), sadd.unwrap())
+        assert_eq!("3".to_string(), sadd.unwrap().to_string())
     }
 
     #[test]
@@ -1012,7 +1011,7 @@ mod test {
         values.insert("value3".to_string());
         let sadd = redis.execute(Command::Sadd { key, values });
 
-        assert_eq!("3".to_string(), sadd.unwrap());
+        assert_eq!("3".to_string(), sadd.unwrap().to_string());
 
         let key: String = "set".to_string();
         let mut values = HashSet::new();
@@ -1020,7 +1019,7 @@ mod test {
         values.insert("value4".to_string());
 
         let sadd2 = redis.execute(Command::Sadd { key, values });
-        assert_eq!("1".to_string(), sadd2.unwrap());
+        assert_eq!("1".to_string(), sadd2.unwrap().to_string());
     }
 
     #[test]
