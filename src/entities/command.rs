@@ -29,6 +29,10 @@ pub enum Command {
         key: String,
         increment: u32,
     },
+    Decrby {
+        key: String,
+        decrement: u32,
+    },
     Getdel {
         key: String,
     },
@@ -58,5 +62,15 @@ pub enum Command {
     Sismember {
         key: String,
         value: String,
+    },
+    Getset {
+        key: String,
+        value: String,
+    },
+    Mget {
+        keys: Vec<String>,
+    },
+    Mset {
+        key_values: Vec<(String, String)>,
     },
 }
