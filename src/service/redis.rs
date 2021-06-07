@@ -312,7 +312,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_element_not_found() {
+    fn test_get_on_empty_key_returns_nil() {
         let mut redis: Redis = Redis::new();
 
         let key = "hola".to_string();
@@ -344,9 +344,39 @@ mod test {
         let _lpush = redis.execute(Command::Lpush { key, value });
 
         let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let value: String = "value".to_string();
+        let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
 
-        assert!(get.is_err());
+        assert!(getset.is_err());
+    }
+
+    #[test]
+    fn test_getset_on_empty_key_returns_nil() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value: String = "value".to_string();
+        let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
+
+        assert_eq!("(nil)", getset.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_getset_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value: String = "1".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key".to_string();
+        let value: String = "value".to_string();
+        let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
+        assert_eq!("1", getset.unwrap().to_string());
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert_eq!("value", get.unwrap().to_string());
     }
 
     #[test]
