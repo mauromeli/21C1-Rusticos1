@@ -1,6 +1,6 @@
 use crate::entities::command::Command;
-use crate::entities::redis_element::RedisElement as Re;
-use std::collections::HashMap;
+use crate::entities::redis_element::{RedisElement as Re, RedisElement};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Redis {
@@ -49,6 +49,9 @@ impl Redis {
             Command::Lindex { key, index } => self.lindex_method(key, index),
             Command::Llen { key } => self.llen_method(key),
             Command::Lpush { key, value } => self.lpush_method(key, value),
+
+            //Sets
+            Command::Sadd { key, values } => self.sadd_method(key, values),
         }
     }
 
@@ -267,13 +270,35 @@ impl Redis {
             }
         }
     }
+
+    fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
+        match self.db.get_mut(key.as_str()) {
+            Some(value) => match value {
+                RedisElement::Set(value) => {
+                    let mut set = value.clone();
+                    let start_set_len = set.len();
+                    set.extend(values);
+                    let final_set_len = set.len();
+                    self.db.insert(key, RedisElement::Set(set));
+
+                    Ok(Re::String((final_set_len - start_set_len).to_string()))
+                }
+                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+            },
+            None => {
+                self.db.insert(key, RedisElement::Set(values.clone()));
+                Ok(Re::String(values.len().to_string()))
+            }
+        }
+    }
 }
 
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
-    use crate::service::redis::Re;
-    use crate::service::redis::Redis;
+    use crate::service::redis::{Re, Redis};
+    use std::collections::HashSet;
+
     #[allow(unused_imports)]
     #[test]
     fn test_set_element_and_get_the_same() {
@@ -959,5 +984,62 @@ mod test {
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
         assert_eq!("4".to_string(), lindex.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_sadd() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let sadd = redis.execute(Command::Sadd { key, values });
+
+        assert_eq!("3".to_string(), sadd.unwrap().to_string())
+    }
+
+    #[test]
+    fn test_sadd_with_existing_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "set".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let sadd = redis.execute(Command::Sadd { key, values });
+
+        assert_eq!("3".to_string(), sadd.unwrap().to_string());
+
+        let key: String = "set".to_string();
+        let mut values = HashSet::new();
+        values.insert("value3".to_string());
+        values.insert("value4".to_string());
+
+        let sadd2 = redis.execute(Command::Sadd { key, values });
+        assert_eq!("1".to_string(), sadd2.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_sadd_error() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "set".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "set".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let sadd = redis.execute(Command::Sadd { key, values });
+
+        assert_eq!(
+            "WRONGTYPE A hashset data type expected".to_string(),
+            sadd.err().unwrap()
+        )
     }
 }
