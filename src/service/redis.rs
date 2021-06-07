@@ -52,6 +52,7 @@ impl Redis {
 
             //Sets
             Command::Sadd { key, values } => self.sadd_method(key, values),
+            Command::Scard { key } => self.scard_method(key),
         }
     }
 
@@ -289,6 +290,19 @@ impl Redis {
                 self.db.insert(key, RedisElement::Set(values.clone()));
                 Ok(Re::String(values.len().to_string()))
             }
+        }
+    }
+
+    fn scard_method(&mut self, key: String) -> Result<Re, String> {
+        match self.db.get_mut(key.as_str()) {
+            Some(value) => match value {
+                RedisElement::Set(value) => {
+                    let set = value.clone();
+                    Ok(Re::String(set.len().to_string()))
+                }
+                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+            },
+            None => Ok(Re::String("0".to_string())),
         }
     }
 }
@@ -1040,6 +1054,40 @@ mod test {
         assert_eq!(
             "WRONGTYPE A hashset data type expected".to_string(),
             sadd.err().unwrap()
+        )
+    }
+
+    #[test]
+    fn test_scard() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key: String = "key".to_string();
+        let scard = redis.execute(Command::Scard { key });
+
+        assert_eq!("3".to_string(), scard.unwrap().to_string())
+    }
+
+    #[test]
+    fn test_scard_error() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "set".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "set".to_string();
+        let scard = redis.execute(Command::Scard { key });
+
+        assert_eq!(
+            "WRONGTYPE A hashset data type expected".to_string(),
+            scard.err().unwrap()
         )
     }
 }

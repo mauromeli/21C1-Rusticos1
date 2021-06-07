@@ -56,6 +56,9 @@ pub enum Command {
         key: String,
         values: HashSet<String>,
     },
+    Scard {
+        key: String,
+    },
     Getset {
         key: String,
         value: String,
