@@ -7,6 +7,7 @@ pub enum RedisElement {
     String(String),
     Set(HashSet<String>),
     List(Vec<String>),
+    Nil,
 }
 
 impl fmt::Display for RedisElement {
@@ -26,6 +27,9 @@ impl fmt::Display for RedisElement {
                     write!(fmt, " {}", element)?;
                 }
                 write!(fmt, " ]")?;
+            }
+            RedisElement::Nil => {
+                write!(fmt, "(nil)")?;
             }
         }
         Ok(())
