@@ -219,9 +219,9 @@ impl Redis {
             Some(value) => match value {
                 RedisElement::Set(value) => {
                     let mut set = value.clone();
-                    let start_set_len = set.clone().len();
-                    set.extend(values.clone());
-                    let final_set_len = set.clone().len();
+                    let start_set_len = set.len();
+                    set.extend(values);
+                    let final_set_len = set.len();
                     self.db.insert(key, RedisElement::Set(set));
 
                     Ok((final_set_len - start_set_len).to_string())
@@ -230,7 +230,7 @@ impl Redis {
             }
             None => {
                 self.db.insert(key, RedisElement::Set(values.clone()));
-                Ok(values.clone().len().to_string())
+                Ok(values.len().to_string())
             }
         }
     }
