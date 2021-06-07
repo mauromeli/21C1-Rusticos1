@@ -1,4 +1,6 @@
 use crate::entities::command::Command;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
@@ -24,6 +26,9 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "lindex" => generate_lindex(params),
         "lpush" => generate_lpush(params),
         "llen" => generate_llen(params),
+        "sadd" => generate_sadd(params),
+        "scard" => generate_scard(params),
+        "sismember" => generate_sismember(params),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -176,10 +181,41 @@ fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Lpush { key, value: values })
 }
 
+fn generate_sadd(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'sadd' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let vector = Vec::from(params.get(1..).unwrap());
+    let values = HashSet::from_iter(vector);
+
+    Ok(Command::Sadd { key, values })
+}
+
+fn generate_scard(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'scard' command".to_string());
+    }
+    let key = params[0].clone();
+    Ok(Command::Scard { key })
+}
+
+fn generate_sismember(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'sismember' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let value = params[1].clone();
+    Ok(Command::Sismember { key, value })
+}
+
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
     use crate::service::command_generator::generate;
+    use std::collections::HashSet;
 
     #[test]
     fn generate_command_with_params_empty_err() {
@@ -599,6 +635,89 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Lpush {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_sadd_incorrect_params_err() {
+        let params = vec!["sadd".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["sadd".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_sadd_ok() {
+        let params = vec!["sadd".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let mut _values = HashSet::new();
+        _values.insert("value1".to_string());
+        _values.insert("value2".to_string());
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Sadd {
+                key: _key,
+                values: _values,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_scard_without_param_err() {
+        let params = vec!["scard".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_scard_ok() {
+        let params = vec!["scard".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Scard { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_sismember_without_param_err() {
+        let params = vec!["sismember".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_sismember_ok() {
+        let params = vec![
+            "sismember".to_string(),
+            "key".to_string(),
+            "value".to_string(),
+        ];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = "value".to_string();
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Sismember {
                 key: _key,
                 value: _value,
             } => true,
