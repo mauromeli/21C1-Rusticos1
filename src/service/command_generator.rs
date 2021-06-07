@@ -27,6 +27,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "lpush" => generate_lpush(params),
         "llen" => generate_llen(params),
         "sadd" => generate_sadd(params),
+        "scard" => generate_scard(params),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -189,6 +190,14 @@ fn generate_sadd(params: Vec<String>) -> Result<Command, String> {
     let values = HashSet::from_iter(vector);
 
     Ok(Command::Sadd { key, values })
+}
+
+fn generate_scard(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'scard' command".to_string());
+    }
+    let key = params[0].clone();
+    Ok(Command::Scard { key })
 }
 
 #[allow(unused_imports)]
@@ -650,6 +659,27 @@ mod test {
                 key: _key,
                 values: _values,
             } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_scard_without_param_err() {
+        let params = vec!["scard".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_scard_ok() {
+        let params = vec!["scard".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Scard { key: _key } => true,
             _ => false,
         });
     }
