@@ -59,4 +59,8 @@ pub enum Command {
         key: String,
         value: String,
     },
+    Srem {
+        key: String,
+        values: HashSet<String>,
+    },
 }

@@ -43,6 +43,7 @@ impl Redis {
             Command::Sadd { key, values } => self.sadd_method(key, values),
             Command::Scard { key } => self.scard_method(key),
             Command::Sismember { key, value } => self.sismember_method(key, value),
+            Command::Srem { key, values } => self.srem_method(key, values),
         }
     }
 
@@ -264,6 +265,26 @@ impl Redis {
                 _ => Err("WRONGTYPE A hashset data type expected".to_string()),
             },
             None => Err("The key doesn't exist".to_string()),
+        }
+    }
+
+    fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<String, String> {
+        match self.db.get_mut(key.as_str()) {
+            Some(redis_element) => match redis_element {
+                RedisElement::Set(redis_element) => {
+                    let mut set = redis_element.clone();
+                    let mut count = 0;
+                    for value in values {
+                        if set.remove(value.as_str()) {
+                            count += 1;
+                        }
+                    }
+                    self.db.insert(key.clone(), RedisElement::Set(set));
+                    Ok(count.to_string())
+                }
+                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+            },
+            None => Ok("0".to_string()),
         }
     }
 }
@@ -931,6 +952,77 @@ mod test {
         assert_eq!(
             "WRONGTYPE A hashset data type expected".to_string(),
             sismember.err().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_srem() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        let srem = redis.execute(Command::Srem { key, values });
+
+        assert_eq!("1".to_string(), srem.unwrap());
+
+        let key: String = "key_inexistente".to_string();
+        let mut values = HashSet::new();
+        values.insert("value2".to_string());
+        let srem = redis.execute(Command::Srem { key, values });
+
+        assert_eq!("0".to_string(), srem.unwrap())
+    }
+
+    #[test]
+    fn test_srem_value_two_times() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        let srem = redis.execute(Command::Srem { key, values });
+
+        assert_eq!("1".to_string(), srem.unwrap());
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        let srem = redis.execute(Command::Srem { key, values });
+
+        assert_eq!("0".to_string(), srem.unwrap())
+    }
+
+    #[test]
+    fn test_srem_error() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "set".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "set".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        let srem = redis.execute(Command::Srem { key, values });
+
+        assert_eq!(
+            "WRONGTYPE A hashset data type expected".to_string(),
+            srem.err().unwrap()
         );
     }
 }
