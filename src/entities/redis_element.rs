@@ -2,11 +2,12 @@ use std::collections::HashSet;
 use std::fmt;
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RedisElement {
     String(String),
     Set(HashSet<String>),
     List(Vec<String>),
+    Nil,
 }
 
 impl fmt::Display for RedisElement {
@@ -14,11 +15,11 @@ impl fmt::Display for RedisElement {
         match self {
             RedisElement::String(string) => write!(fmt, "{}", string)?,
             RedisElement::Set(set) => {
-                write!(fmt, "[")?;
+                write!(fmt, "{{")?;
                 for element in set.iter() {
                     write!(fmt, " {}", element)?;
                 }
-                write!(fmt, " ]")?;
+                write!(fmt, " }}")?;
             }
             RedisElement::List(list) => {
                 write!(fmt, "[")?;
@@ -26,6 +27,9 @@ impl fmt::Display for RedisElement {
                     write!(fmt, " {}", element)?;
                 }
                 write!(fmt, " ]")?;
+            }
+            RedisElement::Nil => {
+                write!(fmt, "(nil)")?;
             }
         }
         Ok(())
