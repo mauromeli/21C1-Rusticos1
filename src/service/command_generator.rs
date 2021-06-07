@@ -454,13 +454,13 @@ mod test {
         ];
         let result = generate(params);
 
-        let pairs = vec![
+        let _pairs = vec![
             ("key1".to_string(), "value1".to_string()),
             ("key2".to_string(), "value2".to_string()),
         ];
         assert!(result.is_ok());
         assert!(match result.unwrap() {
-            Command::Mset { key_values: pairs } => true,
+            Command::Mset { key_values: _pairs } => true,
             _ => false,
         });
     }
