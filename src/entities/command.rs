@@ -63,6 +63,9 @@ pub enum Command {
         key: String,
         value: String,
     },
+    Smembers {
+        key: String,
+    },
     Srem {
         key: String,
         values: HashSet<String>,

@@ -54,6 +54,7 @@ impl Redis {
             Command::Sadd { key, values } => self.sadd_method(key, values),
             Command::Scard { key } => self.scard_method(key),
             Command::Sismember { key, value } => self.sismember_method(key, value),
+            Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
         }
     }
@@ -319,6 +320,17 @@ impl Redis {
                         Ok(Re::String("0".to_string()))
                     }
                 }
+                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+            },
+            None => Err("The key doesn't exist".to_string()),
+        }
+    }
+
+    fn smembers_method(&mut self, key: String) -> Result<RedisElement, String> {
+        match self.db.get_mut(key.as_str()) {
+            Some(redis_element) => match redis_element {
+                RedisElement::Set(redis_element) => Ok(Re::Set(redis_element.clone())),
+
                 _ => Err("WRONGTYPE A hashset data type expected".to_string()),
             },
             None => Err("The key doesn't exist".to_string()),
@@ -1257,5 +1269,32 @@ mod test {
             "WRONGTYPE A hashset data type expected".to_string(),
             srem.err().unwrap()
         );
+    }
+
+    #[test]
+    fn test_smembers() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key: String = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        values.insert("value3".to_string());
+        let smembers: Result<Re, String> = redis.execute(Command::Smembers { key });
+
+        assert!(smembers.is_ok());
+        match smembers.unwrap() {
+            Re::Set(set) => {
+                assert!(set.eq(&values));
+            }
+            _ => (),
+        }
     }
 }
