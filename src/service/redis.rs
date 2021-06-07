@@ -53,15 +53,22 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    fn copy_method(&mut self, key_origin: String, key_destination: String) -> i32 {
-        // TODO: no debería usar el metodo SET, si se estan copiando valores deberia mantenerse el tipo de elemento (String, Set, List)
-        //Devuelve 1 si se copio, 0 si no se copio
-
-        match self.db.get(key.as_str()) {
-            Some(value) => Ok(RedisElement::String(
-                self.set_method(key_destination, value.to_string()),
-            )),
-            None => Err("Not Found".to_string()),
+    fn copy_method(
+        &mut self,
+        key_origin: String,
+        key_destination: String,
+    ) -> Result<RedisElement, String> {
+        //TODO: deberia devolver 1 si se copio y 0 si no!
+        match self.db.get(key_origin.as_str()) {
+            Some(value) => match self.db.get(key_destination.as_str()) {
+                Some(_) => Err("ERR destination key already holds a value".to_string()),
+                None => {
+                    let value = value.clone();
+                    self.db.insert(key_destination, value);
+                    Ok(RedisElement::String("1".to_string()))
+                }
+            },
+            None => Err("ERR origin key has no value".to_string()),
         }
     }
 
@@ -613,7 +620,7 @@ mod test {
     }
 
     #[test]
-    fn test_set_two_elements_and_copy() {
+    fn test_copy_on_existing_key_fails() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "key1".to_string();
@@ -624,13 +631,27 @@ mod test {
         let value: String = "value2".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key2".to_string();
-        let get = redis.execute(Command::Get { key });
-        assert_eq!("value2".to_string(), get.unwrap().to_string());
+        let key_origin: String = "key1".to_string();
+        let key_destination: String = "key2".to_string();
+        let copy = redis.execute(Command::Copy {
+            key_destination,
+            key_origin,
+        });
+
+        assert!(copy.is_err());
+    }
+
+    #[test]
+    fn test_copy_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key1".to_string();
+        let value: String = "value1".to_string();
+        let _set = redis.execute(Command::Set { key, value });
 
         let key_origin: String = "key1".to_string();
         let key_destination: String = "key2".to_string();
-        let _copy = redis.execute(Command::Copy {
+        let copy = redis.execute(Command::Copy {
             key_destination,
             key_origin,
         });
