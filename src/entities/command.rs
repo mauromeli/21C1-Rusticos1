@@ -55,4 +55,8 @@ pub enum Command {
     Scard {
         key: String,
     },
+    Sismember {
+        key: String,
+        value: String,
+    },
 }
