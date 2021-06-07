@@ -50,4 +50,8 @@ pub enum Command {
         key: String,
         value: Vec<String>,
     },
+    Lrem {
+        key: String,
+
+    }
 }
