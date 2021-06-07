@@ -33,6 +33,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "sadd" => generate_sadd(params),
         "scard" => generate_scard(params),
         "sismember" => generate_sismember(params),
+        "smembers" => generate_smembers(params),
         "srem" => generate_srem(params),
         _ => Err("Command not valid".to_string()),
     }
@@ -273,6 +274,14 @@ fn generate_srem(params: Vec<String>) -> Result<Command, String> {
     let values = HashSet::from_iter(vector);
 
     Ok(Command::Srem { key, values })
+}
+
+fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'smembers' command".to_string());
+    }
+    let key = params[0].clone();
+    Ok(Command::Smembers { key })
 }
 
 #[allow(unused_imports)]
@@ -929,6 +938,27 @@ mod test {
                 key: _key,
                 values: _values,
             } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_smembers_without_param_err() {
+        let params = vec!["smembers".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_smembers_ok() {
+        let params = vec!["smembers".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Smembers { key: _key } => true,
             _ => false,
         });
     }
