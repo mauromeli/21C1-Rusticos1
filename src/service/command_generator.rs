@@ -35,6 +35,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         // Lists
         "lindex" => generate_lindex(params),
         "llen" => generate_llen(params),
+        "lpop" => generate_lpop(params),
         "lpush" => generate_lpush(params),
         "lpushx" => generate_lpushx(params),
 
@@ -230,6 +231,26 @@ fn generate_llen(params: Vec<String>) -> Result<Command, String> {
 
     let key = params[0].to_string();
     Ok(Command::Llen { key })
+}
+
+fn generate_lpop(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() || params.len() > 2 {
+        return Err("ERR wrong number of arguments for 'lpop' command".to_string());
+    }
+
+    let mut count: usize = 0;
+    if params.len() == 2 {
+        let parse_count: Result<usize, _> = params[1].to_string().parse();
+
+        if parse_count.is_err() {
+            return Err("ERR value is not an integer or out of range".to_string());
+        }
+
+        count = parse_count.unwrap();
+    }
+
+    let key = params[0].to_string();
+    Ok(Command::Lpop { key, count })
 }
 
 fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
@@ -819,6 +840,51 @@ mod test {
     }
 
     #[test]
+    fn generate_command_lpop_without_param_err() {
+        let params = vec!["lpop".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lpop_without_param_count_not_u32_err() {
+        let params = vec!["lpop".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lpop_ok() {
+        let params = vec!["lpop".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lpop {
+                key: _key,
+                count: 0,
+            } => true,
+            _ => false,
+        });
+
+        let params = vec!["lpop".to_string(), "key".to_string(), "3".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lpop {
+                key: _key,
+                count: 3,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
     fn generate_command_lpush_incorrect_params_err() {
         let params = vec!["lpush".to_string()];
         let result = generate(params);
@@ -851,6 +917,10 @@ mod test {
     #[test]
     fn generate_command_lpushx_incorrect_params_err() {
         let params = vec!["lpushx".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
         let params = vec!["lpushx".to_string(), "key".to_string()];
         let result = generate(params);
 
@@ -860,8 +930,11 @@ mod test {
     #[test]
     fn generate_command_sadd_incorrect_params_err() {
         let params = vec!["sadd".to_string()];
-        let params = vec!["sadd".to_string(), "key".to_string()];
+        let result = generate(params);
 
+        assert!(result.is_err());
+
+        let params = vec!["sadd".to_string(), "key".to_string()];
         let result = generate(params);
 
         assert!(result.is_err())

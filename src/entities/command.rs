@@ -6,6 +6,7 @@ pub enum Command {
     // Server
     Ping,
     Dbsize,
+
     // Strings
     Get {
         key: String,
@@ -39,6 +40,7 @@ pub enum Command {
     Mset {
         key_values: Vec<(String, String)>,
     },
+
     // Keys
     Copy {
         key_origin: String,
@@ -54,6 +56,7 @@ pub enum Command {
         key_origin: String,
         key_destination: String,
     },
+
     // List
     Lindex {
         key: String,
@@ -69,6 +72,10 @@ pub enum Command {
     Lpushx {
         key: String,
         value: Vec<String>,
+    },
+    Lpop {
+        key: String,
+        count: usize,
     },
     /*Lrem {
         key: String,
