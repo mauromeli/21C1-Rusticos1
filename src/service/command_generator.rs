@@ -1,4 +1,6 @@
 use crate::entities::command::Command;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
@@ -9,22 +11,39 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
     let command = params.first().unwrap();
     let params = Vec::from(params.get(1..).unwrap());
     match command.to_lowercase().as_str() {
+        // Server
+        "dbsize" => generate_dbsize(params),
         "ping" => generate_ping(params),
-        "copy" => generate_copy(params),
+
+        // Strings
         "get" => generate_get(params),
+        "getset" => generate_getset(params),
         "set" => generate_set(params),
+        "incrby" => generate_incrby(params),
+        "decrby" => generate_decrby(params),
+        "getdel" => generate_getdel(params),
+        "append" => generate_append(params),
+        "mget" => generate_mget(params),
+        "mset" => generate_mset(params),
+
+        // Keys
+        "copy" => generate_copy(params),
         "del" => generate_del(params),
         "exists" => generate_exists(params),
         "rename" => generate_rename(params),
-        "incrby" => generate_incrby(params),
-        "getdel" => generate_getdel(params),
-        "append" => generate_append(params),
-        "dbsize" => generate_dbsize(params),
 
+        // Lists
         "lindex" => generate_lindex(params),
         "llen" => generate_llen(params),
         "lpush" => generate_lpush(params),
         "lpushx" => generate_lpushx(params),
+
+        //Sets
+        "sadd" => generate_sadd(params),
+        "scard" => generate_scard(params),
+        "sismember" => generate_sismember(params),
+        "smembers" => generate_smembers(params),
+        "srem" => generate_srem(params),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -59,6 +78,16 @@ fn generate_get(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Get { key })
 }
 
+fn generate_getset(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'getset' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let value = params[1].clone();
+    Ok(Command::Getset { key, value })
+}
+
 fn generate_set(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR syntax error".to_string());
@@ -83,6 +112,22 @@ fn generate_incrby(params: Vec<String>) -> Result<Command, String> {
 
     let increment = increment.unwrap();
     Ok(Command::Incrby { key, increment })
+}
+
+fn generate_decrby(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR syntax error".to_string());
+    }
+
+    let key = params[0].clone();
+    let decrement: Result<u32, _> = params[1].to_string().parse();
+
+    if decrement.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let decrement = decrement.unwrap();
+    Ok(Command::Decrby { key, decrement })
 }
 
 fn generate_getdel(params: Vec<String>) -> Result<Command, String> {
@@ -133,6 +178,27 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
     })
 }
 
+fn generate_mget(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'mget' command".to_string());
+    }
+
+    Ok(Command::Mget { keys: params })
+}
+
+fn generate_mset(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() || params.len() % 2 != 0 {
+        return Err("ERR wrong number of arguments for 'mset' command".to_string());
+    }
+
+    let mut key_values: Vec<(String, String)> = Vec::new();
+    for pair in params.chunks(2) {
+        let tuple = (pair[0].to_string(), pair[1].to_string());
+        key_values.push(tuple);
+    }
+    Ok(Command::Mset { key_values })
+}
+
 fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
     if !params.is_empty() {
         return Err("ERR wrong number of arguments for 'dbsize' command".to_string());
@@ -159,7 +225,7 @@ fn generate_lindex(params: Vec<String>) -> Result<Command, String> {
 
 fn generate_llen(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
-        return Err("ERR wrong number of arguments for 'lindex' command".to_string());
+        return Err("ERR wrong number of arguments for 'llen' command".to_string());
     }
 
     let key = params[0].to_string();
@@ -188,10 +254,62 @@ fn generate_lpushx(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Lpushx { key, value: values })
 }
 
+fn generate_sadd(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'sadd' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let vector = Vec::from(params.get(1..).unwrap());
+    let values = HashSet::from_iter(vector);
+
+    Ok(Command::Sadd { key, values })
+}
+
+fn generate_scard(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'scard' command".to_string());
+    }
+    let key = params[0].clone();
+    Ok(Command::Scard { key })
+}
+
+fn generate_sismember(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'sismember' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let value = params[1].clone();
+    Ok(Command::Sismember { key, value })
+}
+
+fn generate_srem(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'srem' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let vector = Vec::from(params.get(1..).unwrap());
+    let values = HashSet::from_iter(vector);
+
+    Ok(Command::Srem { key, values })
+}
+
+fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'smembers' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Smembers { key })
+}
+
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
     use crate::service::command_generator::generate;
+    use std::collections::HashSet;
 
     #[test]
     fn generate_command_with_params_empty_err() {
@@ -276,6 +394,39 @@ mod test {
     }
 
     #[test]
+    fn generate_command_getset_without_param_err() {
+        let params = vec!["getset".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_getset_with_one_param_err() {
+        let params = vec!["getset".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_getset_ok() {
+        let params = vec!["getset".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = "value".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Getset {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
     fn generate_command_set_without_param_err() {
         let params = vec!["set".to_string()];
         let result = generate(params);
@@ -325,6 +476,70 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Del { keys: _keys } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_mget_without_param_err() {
+        let params = vec!["mget".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_mget_ok() {
+        let params = vec!["mget".to_string(), "key1".to_string(), "key2".to_string()];
+        let result = generate(params);
+
+        let _keys = vec!["key1".to_string(), "key2".to_string()];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Mget { keys: _keys } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_mset_without_param_err() {
+        let params = vec!["mset".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_mset_with_missing_value_err() {
+        let params = vec![
+            "mset".to_string(),
+            "key1".to_string(),
+            "value1".to_string(),
+            "key2".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_mset_ok() {
+        let params = vec![
+            "mset".to_string(),
+            "key1".to_string(),
+            "value1".to_string(),
+            "key2".to_string(),
+            "value2".to_string(),
+        ];
+        let result = generate(params);
+
+        let _pairs = vec![
+            ("key1".to_string(), "value1".to_string()),
+            ("key2".to_string(), "value2".to_string()),
+        ];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Mset { key_values: _pairs } => true,
             _ => false,
         });
     }
@@ -384,14 +599,6 @@ mod test {
             } => true,
             _ => false,
         });
-
-        let params = vec!["exists".to_string(), "key".to_string(), "key2".to_string()];
-        let result = generate(params);
-
-        assert!(match result.unwrap() {
-            Command::Ping => false,
-            _ => true,
-        });
     }
 
     #[test]
@@ -423,13 +630,36 @@ mod test {
             } => true,
             _ => false,
         });
+    }
 
-        let params = vec!["exists".to_string(), "key".to_string(), "2".to_string()];
+    #[test]
+    fn generate_command_decrby_without_param_err() {
+        let params = vec!["decrby".to_string()];
         let result = generate(params);
 
+        assert!(result.is_err());
+
+        let params = vec!["decrby".to_string(), "key".to_string(), "hola".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_decrby_ok() {
+        let params = vec!["decrby".to_string(), "key1".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key1".to_string();
+
+        assert!(result.is_ok());
+
         assert!(match result.unwrap() {
-            Command::Ping => false,
-            _ => true,
+            Command::Decrby {
+                key: _key,
+                decrement: 1,
+            } => true,
+            _ => false,
         });
     }
 
@@ -621,11 +851,17 @@ mod test {
     #[test]
     fn generate_command_lpushx_incorrect_params_err() {
         let params = vec!["lpushx".to_string()];
+        let params = vec!["lpushx".to_string(), "key".to_string()];
         let result = generate(params);
 
-        assert!(result.is_err());
+        assert!(result.is_err())
+    }
 
-        let params = vec!["lpushx".to_string(), "key".to_string()];
+    #[test]
+    fn generate_command_sadd_incorrect_params_err() {
+        let params = vec!["sadd".to_string()];
+        let params = vec!["sadd".to_string(), "key".to_string()];
+
         let result = generate(params);
 
         assert!(result.is_err())
@@ -644,6 +880,129 @@ mod test {
                 key: _key,
                 value: _value,
             } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_sadd_ok() {
+        let params = vec!["sadd".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let mut _values = HashSet::new();
+        _values.insert("value1".to_string());
+        _values.insert("value2".to_string());
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Sadd {
+                key: _key,
+                values: _values,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_scard_without_param_err() {
+        let params = vec!["scard".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_scard_ok() {
+        let params = vec!["scard".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Scard { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_sismember_without_param_err() {
+        let params = vec!["sismember".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_sismember_ok() {
+        let params = vec![
+            "sismember".to_string(),
+            "key".to_string(),
+            "value".to_string(),
+        ];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = "value".to_string();
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Sismember {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_srem_incorrect_params_err() {
+        let params = vec!["srem".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["srem".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_srem_ok() {
+        let params = vec!["srem".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let mut _values = HashSet::new();
+        _values.insert("value1".to_string());
+        _values.insert("value2".to_string());
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Srem {
+                key: _key,
+                values: _values,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_smembers_without_param_err() {
+        let params = vec!["smembers".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_smembers_ok() {
+        let params = vec!["smembers".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Smembers { key: _key } => true,
             _ => false,
         });
     }
