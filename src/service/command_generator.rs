@@ -36,6 +36,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "lindex" => generate_lindex(params),
         "llen" => generate_llen(params),
         "lpop" => generate_lpop(params),
+        "lrange" => generate_lrange(params),
         "lpush" => generate_lpush(params),
         "lpushx" => generate_lpushx(params),
 
@@ -251,6 +252,29 @@ fn generate_lpop(params: Vec<String>) -> Result<Command, String> {
 
     let key = params[0].to_string();
     Ok(Command::Lpop { key, count })
+}
+
+fn generate_lrange(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 3 {
+        return Err("ERR wrong number of arguments for 'lrange' command".to_string());
+    }
+
+    let parse_begin: Result<i32, _> = params[1].to_string().parse();
+    if parse_begin.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let begin = parse_begin.unwrap();
+
+    let parse_end: Result<i32, _> = params[2].to_string().parse();
+    if parse_end.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let end = parse_end.unwrap();
+    let key = params[0].to_string();
+
+    Ok(Command::Lrange { key, begin, end })
 }
 
 fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
@@ -879,6 +903,45 @@ mod test {
             Command::Lpop {
                 key: _key,
                 count: 3,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lrange_bad_params_err() {
+        let params = vec!["lrange".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lrange".to_string(), "key".to_string(), "a".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lrange".to_string(), "key".to_string(), "1".to_string(), "a".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lrange".to_string(), "key".to_string(), "1".to_string(), "2".to_string(), "3".to_string()];
+        let result = generate(params);
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lrange_ok() {
+        let params = vec!["lrange".to_string(), "key".to_string(), "0".to_string(), "-1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lrange {
+                key: _key,
+                begin: 0,
+                end: -1,
             } => true,
             _ => false,
         });

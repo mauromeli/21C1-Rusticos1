@@ -58,6 +58,7 @@ impl Redis {
             Command::Sismember { key, value } => self.sismember_method(key, value),
             Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
+            _ => Ok(Re::String("ok".to_string()))
         }
     }
 

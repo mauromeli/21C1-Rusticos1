@@ -77,6 +77,11 @@ pub enum Command {
         key: String,
         count: usize,
     },
+    Lrange {
+        key: String,
+        begin: i32,
+        end: i32,
+    },
     /*Lrem {
         key: String,
     },*/
