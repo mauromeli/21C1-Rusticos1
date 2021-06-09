@@ -915,24 +915,45 @@ mod test {
 
         assert!(result.is_err());
 
-        let params = vec!["lrange".to_string(), "key".to_string(), "a".to_string(), "1".to_string()];
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "a".to_string(),
+            "1".to_string(),
+        ];
         let result = generate(params);
 
         assert!(result.is_err());
 
-        let params = vec!["lrange".to_string(), "key".to_string(), "1".to_string(), "a".to_string()];
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "1".to_string(),
+            "a".to_string(),
+        ];
         let result = generate(params);
 
         assert!(result.is_err());
 
-        let params = vec!["lrange".to_string(), "key".to_string(), "1".to_string(), "2".to_string(), "3".to_string()];
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+        ];
         let result = generate(params);
         assert!(result.is_err())
     }
 
     #[test]
     fn generate_command_lrange_ok() {
-        let params = vec!["lrange".to_string(), "key".to_string(), "0".to_string(), "-1".to_string()];
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "0".to_string(),
+            "-1".to_string(),
+        ];
         let result = generate(params);
 
         let _key = "key".to_string();
