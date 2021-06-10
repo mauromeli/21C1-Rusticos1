@@ -2144,4 +2144,76 @@ mod test {
         assert!(rpushx.is_ok());
         assert_eq!("4".to_string(), rpushx.unwrap().to_string())
     }
+
+    #[test]
+    fn test_rpush_and_check_elements_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+        ];
+        let rpushx = redis.execute(Command::Rpush { key, value });
+
+        assert!(rpushx.is_ok());
+        assert_eq!("4".to_string(), rpushx.unwrap().to_string());
+
+        let key: String = "key".to_string();
+        let rpushx = redis.execute(Command::Lrange {
+            key,
+            begin: 0,
+            end: -1,
+        });
+
+        assert!(rpushx.is_ok());
+        assert_eq!(
+            Re::List(vec![
+                "1".to_string(),
+                "2".to_string(),
+                "3".to_string(),
+                "4".to_string()
+            ]),
+            rpushx.unwrap()
+        )
+    }
+
+    #[test]
+    fn test_rpush_rpushx_and_check_elements_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["1".to_string(), "2".to_string()];
+        let rpush = redis.execute(Command::Rpush { key, value });
+
+        assert!(rpush.is_ok());
+        assert_eq!("2".to_string(), rpush.unwrap().to_string());
+
+        let key: String = "key".to_string();
+        let value = vec!["3".to_string(), "4".to_string()];
+        let rpushx = redis.execute(Command::Rpushx { key, value });
+
+        assert!(rpushx.is_ok());
+        assert_eq!("4".to_string(), rpushx.unwrap().to_string());
+
+        let key: String = "key".to_string();
+        let rpushx = redis.execute(Command::Lrange {
+            key,
+            begin: 0,
+            end: -1,
+        });
+
+        assert!(rpushx.is_ok());
+        assert_eq!(
+            Re::List(vec![
+                "1".to_string(),
+                "2".to_string(),
+                "3".to_string(),
+                "4".to_string()
+            ]),
+            rpushx.unwrap()
+        )
+    }
 }
