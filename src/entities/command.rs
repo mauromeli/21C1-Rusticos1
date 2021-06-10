@@ -96,7 +96,14 @@ pub enum Command {
         key: String,
         count: usize,
     },
-
+    Rpush {
+        key: String,
+        value: Vec<String>,
+    },
+    Rpushx {
+        key: String,
+        value: Vec<String>,
+    },
     // Sets
     Sadd {
         key: String,

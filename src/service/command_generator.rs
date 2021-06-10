@@ -36,12 +36,14 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "lindex" => generate_lindex(params),
         "llen" => generate_llen(params),
         "lpop" => generate_lpop(params),
+        "lpush" => generate_lpush(params),
+        "lpushx" => generate_lpushx(params),
         "lrange" => generate_lrange(params),
         "lrem" => generate_lrem(params),
         "lset" => generate_lset(params),
         "rpop" => generate_rpop(params),
-        "lpush" => generate_lpush(params),
-        "lpushx" => generate_lpushx(params),
+        "rpush" => generate_rpush(params),
+        "rpushx" => generate_rpushx(params),
 
         //Sets
         "sadd" => generate_sadd(params),
@@ -357,13 +359,35 @@ fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
 
 fn generate_lpushx(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
-        return Err("ERR wrong number of arguments for 'lpush' command".to_string());
+        return Err("ERR wrong number of arguments for 'lpushx' command".to_string());
     }
 
     let key = params[0].clone();
     let values = Vec::from(params.get(1..).unwrap());
 
     Ok(Command::Lpushx { key, value: values })
+}
+
+fn generate_rpush(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'rpush' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let values = Vec::from(params.get(1..).unwrap());
+
+    Ok(Command::Rpush { key, value: values })
+}
+
+fn generate_rpushx(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'rpushx' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let values = Vec::from(params.get(1..).unwrap());
+
+    Ok(Command::Rpushx { key, value: values })
 }
 
 fn generate_sadd(params: Vec<String>) -> Result<Command, String> {
@@ -1224,6 +1248,49 @@ mod test {
         assert!(result.is_err());
 
         let params = vec!["lpushx".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_rpush_incorrect_params_err() {
+        let params = vec!["rpush".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["rpush".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_rpush_ok() {
+        let params = vec!["rpush".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = vec!["value".to_string()];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Rpush {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_rpushx_incorrect_params_err() {
+        let params = vec!["rpushx".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["rpushx".to_string(), "key".to_string()];
         let result = generate(params);
 
         assert!(result.is_err())
