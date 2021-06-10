@@ -50,8 +50,17 @@ impl Redis {
             Command::Llen { key } => self.llen_method(key),
             Command::Lpop { key, count } => self.lpop_method(key, count),
             Command::Lrange { key, begin, end } => self.lrange_method(key, begin, end),
-            Command::Lrem { key, count, element } => self.lrem_method(key, count, element), //TODO: Complete
-            Command::Lset { key, index, element } => self.lset_method(key, index, element),
+            Command::Lrem {
+                key,
+                count,
+                element,
+            } => self.lrem_method(key, count, element), //TODO: Complete
+            Command::Lset {
+                key,
+                index,
+                element,
+            } => self.lset_method(key, index, element),
+            Command::Rpop { key, count } => self.rpop_method(key, count),
             Command::Lpush { key, value } => self.lpush_method(key, value),
             Command::Lpushx { key, value } => self.lpushx_method(key, value),
 
@@ -61,7 +70,7 @@ impl Redis {
             Command::Sismember { key, value } => self.sismember_method(key, value),
             Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
-            _ => Err("fallo".to_string())
+            _ => Err("fallo".to_string()),
         }
     }
 
@@ -335,34 +344,34 @@ impl Redis {
         }
     }
     /*   Some(value) => match value {
-           Re::List(value) =>
-               Ok(Re::List(
-                   match count {
-                       x if x < 0 => {
-                           let mut n = 0;
-                           let mut vec = vec![];
-                           while n <= count {
-                               for val_element in value {
-                                   if val_element.clone().to_string() == element {
-                                       n += 1;
-                                   } else {
-                                       vec.push(val_element.clone())
+               Re::List(value) =>
+                   Ok(Re::List(
+                       match count {
+                           x if x < 0 => {
+                               let mut n = 0;
+                               let mut vec = vec![];
+                               while n <= count {
+                                   for val_element in value {
+                                       if val_element.clone().to_string() == element {
+                                           n += 1;
+                                       } else {
+                                           vec.push(val_element.clone())
+                                       }
                                    }
                                }
+                               vec
                            }
-                           vec
+                           x if x == 0 => value.iter().filter(|el| el.to_string() != element).collect::<Vec<String>>(),
+                           _ => vec![],
                        }
-                       x if x == 0 => value.iter().filter(|el| el.to_string() != element).collect::<Vec<String>>(),
-                       _ => vec![],
-                   }
-               )),
-           _ => Err(
-               "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-           ),
-       },
-       None => Ok(Re::List(vec![])),
-   }
-}*/
+                   )),
+               _ => Err(
+                   "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+               ),
+           },
+           None => Ok(Re::List(vec![])),
+       }
+    }*/
 
     fn lset_method(&mut self, key: String, index: i32, element: String) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
@@ -389,9 +398,48 @@ impl Redis {
                     "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
                 ),
             },
-            None => {
-                Err("ERR no such key".to_string())
-            }
+            None => Err("ERR no such key".to_string()),
+        }
+    }
+
+    fn rpop_method(&mut self, key: String, count: usize) -> Result<Re, String> {
+        match self.db.get_mut(key.as_str()) {
+            Some(value) => match value {
+                Re::List(value) => {
+                    let mut return_value: Vec<String>;
+                    let mut vector_to_save: Vec<String>;
+                    value.reverse();
+
+                    if count == 0 {
+                        return_value = Vec::from(value.get(..=count).unwrap());
+                        vector_to_save = Vec::from(value.get(count + 1..).unwrap());
+                    } else {
+                        let qty = match count {
+                            x if x >= value.len() => value.len(),
+                            _ => count,
+                        };
+                        return_value = Vec::from(value.get(..qty).unwrap());
+                        vector_to_save = Vec::from(value.get(qty..).unwrap());
+                    }
+
+                    vector_to_save.reverse();
+                    self.db.insert(key, Re::List(vector_to_save));
+
+                    if return_value.len() == 1 && return_value.first().is_some() {
+                        let value = return_value.first();
+                        return Ok(Re::String(value.unwrap().to_string()));
+                    }
+
+                    match return_value.len() {
+                        x if x > 0 => Ok(Re::List(return_value.to_vec())),
+                        _ => Ok(Re::Nil),
+                    }
+                }
+                _ => Err(
+                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+                ),
+            },
+            None => Ok(Re::Nil),
         }
     }
 
@@ -1355,7 +1403,11 @@ mod test {
         let key: String = "key".to_string();
         let index = -1;
         let element = "Nuevos".to_string();
-        let lset = redis.execute(Command::Lset { key, index, element });
+        let lset = redis.execute(Command::Lset {
+            key,
+            index,
+            element,
+        });
 
         assert!(lset.is_ok());
         assert_eq!("Ok".to_string(), lset.unwrap().to_string());
@@ -1385,7 +1437,11 @@ mod test {
         let key: String = "key".to_string();
         let index = -50;
         let element = "Nuevos".to_string();
-        let lset = redis.execute(Command::Lset { key, index, element });
+        let lset = redis.execute(Command::Lset {
+            key,
+            index,
+            element,
+        });
 
         assert!(lset.is_err());
     }
@@ -1401,7 +1457,11 @@ mod test {
         let key: String = "key".to_string();
         let index = 70;
         let element = "Nuevos".to_string();
-        let lset = redis.execute(Command::Lset { key, index, element });
+        let lset = redis.execute(Command::Lset {
+            key,
+            index,
+            element,
+        });
 
         assert!(lset.is_err());
     }
@@ -1413,7 +1473,11 @@ mod test {
         let key: String = "key".to_string();
         let index = 70;
         let element = "Nuevos".to_string();
-        let lset = redis.execute(Command::Lset { key, index, element });
+        let lset = redis.execute(Command::Lset {
+            key,
+            index,
+            element,
+        });
 
         assert!(lset.is_err());
     }
@@ -1429,9 +1493,114 @@ mod test {
         let key: String = "key".to_string();
         let index = 70;
         let element = "Nuevos".to_string();
-        let lset = redis.execute(Command::Lset { key, index, element });
+        let lset = redis.execute(Command::Lset {
+            key,
+            index,
+            element,
+        });
 
         assert!(lset.is_err());
+    }
+
+    #[test]
+    fn test_rpop_without_count_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+        let rpop = redis.execute(Command::Rpop { key, count: 0 });
+        assert!(rpop.is_ok());
+        assert_eq!("value".to_string(), rpop.unwrap().to_string());
+
+        let key: String = "key".to_string();
+        let llen = redis.execute(Command::Llen { key });
+        assert!(llen.is_ok());
+        assert_eq!("1".to_string(), llen.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_rpop_with_count_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec![
+            "value".to_string(),
+            "value2".to_string(),
+            "value3".to_string(),
+            "value4".to_string(),
+        ];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+        let rpop = redis.execute(Command::Rpop { key, count: 2 });
+        assert!(rpop.is_ok());
+        let list = rpop.clone().unwrap();
+        assert!(match list {
+            Re::List(_) => true,
+            _ => false,
+        });
+        assert_eq!(
+            Re::List(vec!["value".to_string(), "value2".to_string()]),
+            rpop.clone().unwrap()
+        );
+
+        let key: String = "key".to_string();
+        let llen = redis.execute(Command::Llen { key });
+        assert!(llen.is_ok());
+        assert_eq!("2".to_string(), llen.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_rpop_with_count_major_than_len_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec![
+            "value".to_string(),
+            "value2".to_string(),
+            "value3".to_string(),
+            "value4".to_string(),
+        ];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+        let rpop = redis.execute(Command::Rpop { key, count: 5 });
+        assert!(rpop.is_ok());
+        assert_eq!(
+            Re::List(vec![
+                "value".to_string(),
+                "value2".to_string(),
+                "value3".to_string(),
+                "value4".to_string()
+            ]),
+            rpop.clone().unwrap()
+        );
+
+        let key: String = "key".to_string();
+        let llen = redis.execute(Command::Llen { key });
+        assert!(llen.is_ok());
+        assert_eq!("0".to_string(), llen.unwrap().to_string());
+
+        let key: String = "key".to_string();
+        let rpop = redis.execute(Command::Rpop { key, count: 5 });
+        assert!(rpop.is_ok());
+        assert_eq!(Re::Nil, rpop.clone().unwrap());
+    }
+
+    #[test]
+    fn test_rpop_with_saved_string_err() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key".to_string();
+        let rpop = redis.execute(Command::Rpop { key, count: 5 });
+        assert!(rpop.is_err());
     }
 
     #[test]

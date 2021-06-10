@@ -87,10 +87,14 @@ pub enum Command {
         count: i32,
         element: String,
     },
-    Lset{
+    Lset {
         key: String,
         index: i32,
         element: String,
+    },
+    Rpop {
+        key: String,
+        count: usize,
     },
 
     // Sets
