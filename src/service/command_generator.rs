@@ -37,6 +37,8 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "llen" => generate_llen(params),
         "lpop" => generate_lpop(params),
         "lrange" => generate_lrange(params),
+        "lrem" => generate_lrem(params),
+        "lset" => generate_lset(params),
         "lpush" => generate_lpush(params),
         "lpushx" => generate_lpushx(params),
 
@@ -275,6 +277,42 @@ fn generate_lrange(params: Vec<String>) -> Result<Command, String> {
     let key = params[0].to_string();
 
     Ok(Command::Lrange { key, begin, end })
+}
+
+fn generate_lrem(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 3 {
+        return Err("ERR wrong number of arguments for 'lrem' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let count: Result<i32, _> = params[1].clone().to_string().parse();
+
+    if count.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let element = params[2].clone();
+    let count = count.unwrap();
+
+    Ok(Command::Lrem { key, count, element })
+}
+
+fn generate_lset(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 3 {
+        return Err("ERR wrong number of arguments for 'lset' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let index: Result<i32, _> = params[1].clone().to_string().parse();
+
+    if index.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let element = params[2].clone();
+    let index = index.unwrap();
+
+    Ok(Command::Lset { key, index, element })
 }
 
 fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
@@ -963,6 +1001,85 @@ mod test {
                 key: _key,
                 begin: 0,
                 end: -1,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lrem_err() {
+        let params = vec!["lrem".to_string(), "key".to_string(), "-1".to_string(), "element".to_string(), "element".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lrem".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lrem".to_string(), "key".to_string(), "a".to_string(), "element".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_lrem_ok() {
+        let params = vec![
+            "lrem".to_string(),
+            "key".to_string(),
+            "0".to_string(),
+            "element".to_string(),
+        ];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _element = "element".to_string();
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lrem {
+                key: _key,
+                count: 0,
+                element: _element,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lset_err() {
+        let params = vec!["lset".to_string(), "key".to_string(), "-1".to_string(), "element".to_string(), "element".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lset".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lset".to_string(), "key".to_string(), "a".to_string(), "element".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_lset_ok() {
+        let params = vec!["lset".to_string(), "key".to_string(), "1".to_string(), "Hola".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _index = "1".to_string();
+        let _element = "Hola".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lset {
+                key: _key,
+                index: _index,
+                element: _element,
             } => true,
             _ => false,
         });

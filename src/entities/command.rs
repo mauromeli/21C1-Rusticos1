@@ -82,9 +82,17 @@ pub enum Command {
         begin: i32,
         end: i32,
     },
-    /*Lrem {
+    Lrem {
         key: String,
-    },*/
+        count: i32,
+        element: String,
+    },
+    Lset{
+        key: String,
+        index: i32,
+        element: String,
+    },
+
     // Sets
     Sadd {
         key: String,
