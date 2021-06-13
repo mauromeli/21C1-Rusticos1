@@ -288,7 +288,7 @@ fn generate_lrem(params: Vec<String>) -> Result<Command, String> {
     }
 
     let key = params[0].clone();
-    let count: Result<i32, _> = params[1].clone().to_string().parse();
+    let count: Result<i32, _> = params[1].clone().parse();
 
     if count.is_err() {
         return Err("ERR value is not an integer or out of range".to_string());
@@ -310,7 +310,7 @@ fn generate_lset(params: Vec<String>) -> Result<Command, String> {
     }
 
     let key = params[0].clone();
-    let index: Result<i32, _> = params[1].clone().to_string().parse();
+    let index: Result<i32, _> = params[1].clone().parse();
 
     if index.is_err() {
         return Err("ERR value is not an integer or out of range".to_string());

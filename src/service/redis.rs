@@ -1,6 +1,7 @@
 use crate::entities::command::Command;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use std::collections::{HashMap, HashSet};
+use std::cmp::Ordering;
 
 #[derive(Debug)]
 pub struct Redis {
@@ -56,7 +57,7 @@ impl Redis {
                 key,
                 count,
                 element,
-            } => self.lrem_method(key, count, element), //TODO: Complete
+            } => self.lrem_method(key, count, element),
             Command::Lset {
                 key,
                 index,
@@ -71,8 +72,7 @@ impl Redis {
             Command::Scard { key } => self.scard_method(key),
             Command::Sismember { key, value } => self.sismember_method(key, value),
             Command::Smembers { key } => self.smembers_method(key),
-            Command::Srem { key, values } => self.srem_method(key, values),
-            _ => Err("fallo".to_string()),
+            Command::Srem { key, values } => self.srem_method(key, values)
         }
     }
 
@@ -388,39 +388,57 @@ impl Redis {
 
     fn lrem_method(&mut self, key: String, count: i32, element: String) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(value) => Ok(Re::String("Si".to_string())),
-            _ => Err("No".to_string()),
+            Some(value) => match value {
+                Re::List(value) => {
+                    match count.cmp(&0) {
+                        Ordering::Greater => {
+                            let (final_vector, deleted) = Self::remove_repeats(count as usize, element, value.clone());
+                            self.db.insert(key.clone(), Re::List(final_vector));
+                            Ok(Re::String(deleted.to_string()))
+                        }
+                        Ordering::Less => {
+                            value.reverse();
+                            let (mut final_vector, deleted) = Self::remove_repeats(count as usize, element, value.clone());
+                            final_vector.reverse();
+                            self.db.insert(key.clone(), Re::List(final_vector));
+                            Ok(Re::String(deleted.to_string()))
+                        }
+                        Ordering::Equal => {
+                            let (final_vector, deleted) = Self::remove_all_repeats(element, value.clone());
+                            self.db.insert(key.clone(), Re::List(final_vector));
+                            Ok(Re::String(deleted.to_string()))
+                        }
+                    }
+                }
+                _ => Err(
+                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+                ),
+            },
+            None => Ok(Re::List(vec![])),
         }
     }
-    /*   Some(value) => match value {
-               Re::List(value) =>
-                   Ok(Re::List(
-                       match count {
-                           x if x < 0 => {
-                               let mut n = 0;
-                               let mut vec = vec![];
-                               while n <= count {
-                                   for val_element in value {
-                                       if val_element.clone().to_string() == element {
-                                           n += 1;
-                                       } else {
-                                           vec.push(val_element.clone())
-                                       }
-                                   }
-                               }
-                               vec
-                           }
-                           x if x == 0 => value.iter().filter(|el| el.to_string() != element).collect::<Vec<String>>(),
-                           _ => vec![],
-                       }
-                   )),
-               _ => Err(
-                   "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-               ),
-           },
-           None => Ok(Re::List(vec![])),
-       }
-    }*/
+
+    fn remove_repeats(count: usize, element: String, mut vector: Vec<String>) -> (Vec<String>, usize) {
+        let mut n = 0;
+        for i in 0..vector.len() {
+            if n <= count && vector.get(i).is_some() && *vector.get(i).unwrap() == element {
+                vector.remove(i);
+                n += 1;
+            }
+        }
+        (vector, n)
+    }
+
+    fn remove_all_repeats(element: String, mut vector: Vec<String>) -> (Vec<String>, usize) {
+        let mut n = 0;
+        for i in 0..vector.len() {
+            if vector.get(i).is_some() && *vector.get(i).unwrap() == element {
+                vector.remove(i);
+                n += 1;
+            }
+        }
+        (vector, n)
+    }
 
     fn lset_method(&mut self, key: String, index: i32, element: String) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
@@ -455,7 +473,7 @@ impl Redis {
         match self.db.get_mut(key.as_str()) {
             Some(value) => match value {
                 Re::List(value) => {
-                    let mut return_value: Vec<String>;
+                    let return_value: Vec<String>;
                     let mut vector_to_save: Vec<String>;
                     value.reverse();
 
@@ -2216,4 +2234,125 @@ mod test {
             rpushx.unwrap()
         )
     }
+
+    #[test]
+    fn test_lrem_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value1".to_string(), "value2".to_string(), "value".to_string(), "value".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+
+        let lrem = redis.execute(Command::Lrem { key, count: 2, element: "value".to_string() });
+        assert!(lrem.clone().is_ok());
+        assert_eq!("2".to_string(), lrem.clone().unwrap().to_string());
+
+        let key: String = "key".to_string();
+
+        let lrange = redis.execute(Command::Lrange {
+            key,
+            begin: 0,
+            end: -1,
+        });
+
+        let mut vector = vec![
+            "value1".to_string(),
+            "value2".to_string(),
+            "value".to_string()
+        ];
+        vector.reverse();
+        assert_eq!(
+            Re::List(vector),
+            lrange.clone().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_lrem_reverse_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value".to_string(), "value2".to_string(), "value3".to_string(), "value1".to_string(), "value".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+
+        let lrem = redis.execute(Command::Lrem { key, count: -2, element: "value".to_string() });
+        assert!(lrem.clone().is_ok());
+        assert_eq!("2".to_string(), lrem.clone().unwrap().to_string());
+
+        let key: String = "key".to_string();
+
+        let lrange = redis.execute(Command::Lrange {
+            key,
+            begin: 0,
+            end: -1,
+        });
+
+        let mut vector = vec![
+            "value".to_string(),
+            "value2".to_string(),
+            "value3".to_string(),
+            "value1".to_string()
+        ];
+
+        vector.reverse();
+
+        assert_eq!(
+            Re::List(vector),
+            lrange.clone().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_lrem_all_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string(), "value3".to_string(), "value1".to_string(), "value".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+
+        let lrem = redis.execute(Command::Lrem { key, count: 0, element: "value".to_string() });
+        assert!(lrem.clone().is_ok());
+        assert_eq!("2".to_string(), lrem.clone().unwrap().to_string());
+
+        let key: String = "key".to_string();
+
+        let lrange = redis.execute(Command::Lrange {
+            key,
+            begin: 0,
+            end: -1,
+        });
+
+        let mut vector = vec![
+            "value2".to_string(),
+            "value3".to_string(),
+            "value1".to_string()
+        ];
+
+        vector.reverse();
+
+        assert_eq!(
+            Re::List(vector),
+            lrange.clone().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_lrem_invalid_key_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+
+        let lrem = redis.execute(Command::Lrem { key, count: 0, element: "value".to_string() });
+        assert!(lrem.clone().is_ok());
+        assert_eq!(Re::List(vec![]), lrem.clone().unwrap());
+
+    }
+
+
 }
