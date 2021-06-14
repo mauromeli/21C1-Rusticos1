@@ -15,6 +15,9 @@ pub enum Command {
         key: String,
         value: String,
     },
+    Keys {
+        pattern: String,
+    },
     Del {
         keys: Vec<String>,
     },

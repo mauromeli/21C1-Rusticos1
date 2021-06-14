@@ -1,5 +1,6 @@
 use crate::entities::command::Command;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
+use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
@@ -32,6 +33,7 @@ impl Redis {
             Command::Mget { keys } => Ok(self.mget_method(keys)),
             Command::Mset { key_values } => Ok(Re::String(self.mset_method(key_values))),
             Command::Set { key, value } => Ok(Re::String(self.set_method(key, value))),
+            //Command::Sort { pattern } => Ok()
 
             // Keys
             Command::Copy {
@@ -44,6 +46,7 @@ impl Redis {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
+            Command::Keys { pattern } => Ok(Re::List(self.keys_method(pattern))),
 
             // Lists
             Command::Lindex { key, index } => self.lindex_method(key, index),
@@ -355,6 +358,17 @@ impl Redis {
             },
             None => Ok(Re::String("0".to_string())),
         }
+    }
+
+    fn keys_method(&mut self, pattern: String) -> Vec<String> {
+        let mut vector = vec![];
+        for key in self.db.keys() {
+            let re = Regex::new(&*pattern).unwrap();
+            if re.is_match(key) {
+                vector.push(key.to_string());
+            }
+        }
+        vector
     }
 }
 
@@ -1296,5 +1310,32 @@ mod test {
             }
             _ => (),
         }
+    }
+
+    #[test]
+    fn test_keys_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key1".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let pattern: String = "/*".to_string();
+
+        let keys = redis.execute(Command::Keys { pattern });
+
+        let vector = vec!["key".to_string(), "key1".to_string()];
+        assert!(keys.is_ok());
+
+        let pattern: String = "k**".to_string();
+
+        let keys = redis.execute(Command::Keys { pattern });
+
+        let vector = vec!["key".to_string(), "key1".to_string()];
+        assert!(keys.is_ok());
     }
 }
