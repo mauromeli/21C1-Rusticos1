@@ -25,6 +25,9 @@ pub enum Command {
         key_origin: String,
         key_destination: String,
     },
+    Type {
+        key: String,
+    },
     Incrby {
         key: String,
         increment: u32,

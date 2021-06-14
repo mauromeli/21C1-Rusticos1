@@ -44,6 +44,7 @@ impl Redis {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
+            Command::Type { key } => Ok(Re::String(self.type_method(key))),
 
             // Lists
             Command::Lindex { key, index } => self.lindex_method(key, index),
@@ -211,6 +212,18 @@ impl Redis {
                 self.set_method(key_destination, value.to_string()),
             )),
             Err(msg) => Err(msg),
+        }
+    }
+
+    fn type_method(&mut self, key: String) -> String {
+        match self.db.get(key.as_str()) {
+            Some(return_value) => match return_value {
+                Re::String(_) => "string".to_string(),
+                Re::List(_) => "list".to_string(),
+                Re::Set(_) => "set".to_string(),
+                Re::Nil => "none".to_string(),
+            },
+            None => "none".to_string(),
         }
     }
 
@@ -863,6 +876,56 @@ mod test {
         let get = redis.execute(Command::Get { key });
         assert!(get.is_ok());
         assert_eq!("value1".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_string() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let type_method = redis.execute(Command::Type { key });
+        assert_eq!("string".to_string(), type_method.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_empty_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let type_method: Result<Re, String> = redis.execute(Command::Type { key });
+
+        assert_eq!("none".to_string(), type_method.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_list() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = vec!["value".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let type_method = redis.execute(Command::Type { key });
+        assert_eq!("list".to_string(), type_method.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_set() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key = "key".to_string();
+        let type_method = redis.execute(Command::Type { key });
+        assert_eq!("set".to_string(), type_method.unwrap().to_string());
     }
 
     #[test]
