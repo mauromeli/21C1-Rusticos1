@@ -1328,14 +1328,12 @@ mod test {
 
         let keys = redis.execute(Command::Keys { pattern });
 
-        let vector = vec!["key".to_string(), "key1".to_string()];
         assert!(keys.is_ok());
 
         let pattern: String = "k**".to_string();
 
         let keys = redis.execute(Command::Keys { pattern });
 
-        let vector = vec!["key".to_string(), "key1".to_string()];
         assert!(keys.is_ok());
     }
 }

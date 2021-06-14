@@ -35,6 +35,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "sismember" => generate_sismember(params),
         "smembers" => generate_smembers(params),
         "srem" => generate_srem(params),
+        "keys" => generate_keys(params),
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -282,6 +283,14 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
     }
     let key = params[0].clone();
     Ok(Command::Smembers { key })
+}
+
+fn generate_keys(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'keys' command".to_string());
+    }
+    let pattern = params[0].clone();
+    Ok(Command::Keys { pattern })
 }
 
 #[allow(unused_imports)]
@@ -959,6 +968,19 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Smembers { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_keys_ok() {
+        let params = vec!["keys".to_string(), "/*".to_string()];
+        let result = generate(params);
+
+        let _pattern = "/*".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Keys { pattern: _pattern } => true,
             _ => false,
         });
     }
