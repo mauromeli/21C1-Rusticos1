@@ -25,6 +25,10 @@ pub enum Command {
         key_origin: String,
         key_destination: String,
     },
+    Expire {
+        key: String,
+        seconds: u32,
+    },
     Type {
         key: String,
     },

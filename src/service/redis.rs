@@ -1,10 +1,11 @@
 use crate::entities::command::Command;
-use crate::entities::redis_element::{RedisElement as Re, RedisElement};
+use crate::entities::redis_data::RedisData;
+use crate::entities::redis_element::RedisElement as Re;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Redis {
-    db: HashMap<String, Re>,
+    db: HashMap<String, RedisData>,
 }
 
 impl Redis {
@@ -40,6 +41,7 @@ impl Redis {
             } => self.copy_method(key_origin, key_destination),
             Command::Del { keys } => Ok(Re::String(self.del_method(keys))),
             Command::Exists { keys } => Ok(Re::String(self.exists_method(keys))),
+            Command::Expire { key, seconds } => Ok(Re::String(self.expire_method(key, seconds))),
             Command::Rename {
                 key_origin,
                 key_destination,
@@ -79,7 +81,7 @@ impl Redis {
     #[allow(dead_code)]
     fn get_method(&mut self, key: String) -> Result<Re, String> {
         match self.db.get(key.as_str()) {
-            Some(return_value) => match return_value {
+            Some(return_value) => match &return_value.element {
                 Re::String(s) => Ok(Re::String(s.to_string())),
                 _ => Err(
                     "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
@@ -102,7 +104,7 @@ impl Redis {
 
     #[allow(dead_code)]
     fn set_method(&mut self, key: String, value: String) -> String {
-        self.db.insert(key, Re::String(value));
+        self.db.insert(key, RedisData::new(Re::String(value)));
 
         "Ok".to_string()
     }
@@ -206,6 +208,16 @@ impl Redis {
         count.to_string()
     }
 
+    fn expire_method(&mut self, key: String, seconds: u32) -> String {
+        match self.db.get_mut(key.as_str()) {
+            Some(return_value) => {
+                return_value.timeout = seconds;
+                "1".to_string()
+            }
+            None => "0".to_string(),
+        }
+    }
+
     fn rename_method(&mut self, key_origin: String, key_destination: String) -> Result<Re, String> {
         match self.getdel_method(key_origin) {
             Ok(value) => Ok(Re::String(
@@ -217,7 +229,7 @@ impl Redis {
 
     fn type_method(&mut self, key: String) -> String {
         match self.db.get(key.as_str()) {
-            Some(return_value) => match return_value {
+            Some(return_value) => match return_value.element {
                 Re::String(_) => "string".to_string(),
                 Re::List(_) => "list".to_string(),
                 Re::Set(_) => "set".to_string(),
@@ -229,7 +241,7 @@ impl Redis {
 
     fn lindex_method(&mut self, key: String, index: i32) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(value) => match value {
+            Some(value) => match &value.element {
                 Re::List(value) => {
                     let len_value = value.len() as i32;
                     let mut position: i32 = index;
@@ -253,7 +265,7 @@ impl Redis {
 
     fn llen_method(&mut self, key: String) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(value) => match value {
+            Some(value) => match &value.element {
                 Re::List(value) => Ok(Re::String(value.len().to_string())),
                 _ => Err(
                     "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
@@ -268,11 +280,12 @@ impl Redis {
         redis_element.reverse();
 
         match self.db.get_mut(key.as_str()) {
-            Some(value) => match value {
+            Some(value) => match &value.element {
                 Re::List(value) => {
                     let saved_vector = value.clone();
                     redis_element.extend(saved_vector);
-                    self.db.insert(key, Re::List(redis_element.clone()));
+                    self.db
+                        .insert(key, RedisData::new(Re::List(redis_element.clone())));
 
                     Ok(Re::String(redis_element.len().to_string()))
                 }
@@ -281,7 +294,8 @@ impl Redis {
                 ),
             },
             None => {
-                self.db.insert(key, Re::List(redis_element.clone()));
+                self.db
+                    .insert(key, RedisData::new(Re::List(redis_element.clone())));
 
                 Ok(Re::String(redis_element.len().to_string()))
             }
@@ -290,20 +304,20 @@ impl Redis {
 
     fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(value) => match value {
-                RedisElement::Set(value) => {
+            Some(value) => match &value.element {
+                Re::Set(value) => {
                     let mut set = value.clone();
                     let start_set_len = set.len();
                     set.extend(values);
                     let final_set_len = set.len();
-                    self.db.insert(key, RedisElement::Set(set));
+                    self.db.insert(key, RedisData::new(Re::Set(set)));
 
                     Ok(Re::String((final_set_len - start_set_len).to_string()))
                 }
                 _ => Err("WRONGTYPE A hashset data type expected".to_string()),
             },
             None => {
-                self.db.insert(key, RedisElement::Set(values.clone()));
+                self.db.insert(key, RedisData::new(Re::Set(values.clone())));
                 Ok(Re::String(values.len().to_string()))
             }
         }
@@ -311,8 +325,8 @@ impl Redis {
 
     fn scard_method(&mut self, key: String) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(value) => match value {
-                RedisElement::Set(value) => {
+            Some(value) => match &value.element {
+                Re::Set(value) => {
                     let set = value.clone();
                     Ok(Re::String(set.len().to_string()))
                 }
@@ -324,8 +338,8 @@ impl Redis {
 
     fn sismember_method(&mut self, key: String, value: String) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(redis_element) => match redis_element {
-                RedisElement::Set(redis_element) => {
+            Some(redis_element) => match &redis_element.element {
+                Re::Set(redis_element) => {
                     let set = redis_element.clone();
                     if set.contains(value.as_str()) {
                         Ok(Re::String("1".to_string()))
@@ -339,10 +353,10 @@ impl Redis {
         }
     }
 
-    fn smembers_method(&mut self, key: String) -> Result<RedisElement, String> {
+    fn smembers_method(&mut self, key: String) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(redis_element) => match redis_element {
-                RedisElement::Set(redis_element) => Ok(Re::Set(redis_element.clone())),
+            Some(redis_element) => match &redis_element.element {
+                Re::Set(redis_element) => Ok(Re::Set(redis_element.clone())),
 
                 _ => Err("WRONGTYPE A hashset data type expected".to_string()),
             },
@@ -352,8 +366,8 @@ impl Redis {
 
     fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
         match self.db.get_mut(key.as_str()) {
-            Some(redis_element) => match redis_element {
-                RedisElement::Set(redis_element) => {
+            Some(redis_element) => match &redis_element.element {
+                Re::Set(redis_element) => {
                     let mut set = redis_element.clone();
                     let mut count = 0;
                     for value in values {
@@ -361,7 +375,7 @@ impl Redis {
                             count += 1;
                         }
                     }
-                    self.db.insert(key.clone(), RedisElement::Set(set));
+                    self.db.insert(key.clone(), RedisData::new(Re::Set(set)));
                     Ok(Re::String(count.to_string()))
                 }
                 _ => Err("WRONGTYPE A hashset data type expected".to_string()),

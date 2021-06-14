@@ -19,6 +19,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "del" => generate_del(params),
         "exists" => generate_exists(params),
         "rename" => generate_rename(params),
+        "expire" => generate_expire(params),
         "type" => generate_type(params),
         "incrby" => generate_incrby(params),
         "decrby" => generate_decrby(params),
@@ -168,6 +169,22 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
         key_origin,
         key_destination,
     })
+}
+
+fn generate_expire(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR syntax error".to_string());
+    }
+
+    let key = params[0].clone();
+    let seconds: Result<u32, _> = params[1].to_string().parse();
+
+    if seconds.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let seconds = seconds.unwrap();
+    Ok(Command::Expire { key, seconds })
 }
 
 fn generate_type(params: Vec<String>) -> Result<Command, String> {
@@ -585,6 +602,37 @@ mod test {
             Command::Rename {
                 key_origin: _key_origin,
                 key_destination: _key_destination,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_expire_without_param_err() {
+        let params = vec!["expire".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["expire".to_string(), "key".to_string(), "10.5".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_expire_ok() {
+        let params = vec!["expire".to_string(), "key".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Expire {
+                key: _key,
+                seconds: 1,
             } => true,
             _ => false,
         });
