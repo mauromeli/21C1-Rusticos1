@@ -1,6 +1,8 @@
 use crate::entities::command::Command;
+use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
+use std::time::SystemTime;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
@@ -177,14 +179,16 @@ fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     }
 
     let key = params[0].clone();
+    //TODO: deberian poder ser segundos negativos, corregir
     let seconds: Result<u32, _> = params[1].to_string().parse();
 
     if seconds.is_err() {
         return Err("ERR value is not an integer or out of range".to_string());
     }
 
-    let seconds = seconds.unwrap();
-    Ok(Command::Expire { key, seconds })
+    let ttl = Duration::from_secs(seconds.unwrap().into());
+
+    Ok(Command::Expire { key, ttl })
 }
 
 fn generate_type(params: Vec<String>) -> Result<Command, String> {
@@ -315,7 +319,9 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
 mod test {
     use crate::entities::command::Command;
     use crate::service::command_generator::generate;
+    use core::time::Duration;
     use std::collections::HashSet;
+    use std::time::SystemTime;
 
     #[test]
     fn generate_command_with_params_empty_err() {
@@ -613,11 +619,14 @@ mod test {
         let result = generate(params);
 
         assert!(result.is_err());
+    }
 
+    #[test]
+    fn generate_command_expire_with_fractional_time_err() {
         let params = vec!["expire".to_string(), "key".to_string(), "10.5".to_string()];
         let result = generate(params);
 
-        assert!(result.is_err())
+        assert!(result.is_err());
     }
 
     #[test]
@@ -626,13 +635,14 @@ mod test {
         let result = generate(params);
 
         let _key = "key".to_string();
+        let _ttl = Duration::from_secs(1);
 
         assert!(result.is_ok());
 
         assert!(match result.unwrap() {
             Command::Expire {
                 key: _key,
-                seconds: 1,
+                ttl: _ttl,
             } => true,
             _ => false,
         });

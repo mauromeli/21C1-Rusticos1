@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -27,7 +28,7 @@ pub enum Command {
     },
     Expire {
         key: String,
-        seconds: u32,
+        ttl: Duration,
     },
     Type {
         key: String,
