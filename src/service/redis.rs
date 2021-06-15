@@ -50,6 +50,7 @@ impl Redis {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
+            Command::Touch { keys } => Ok(Re::String(self.touch_method(key))),
             Command::Type { key } => Ok(Re::String(self.type_method(key))),
 
             // Lists
@@ -241,6 +242,17 @@ impl Redis {
             )),
             Err(msg) => Err(msg),
         }
+    }
+
+    fn touch_method(&mut self, keys: Vec<String>) -> String {
+        let mut count = 0;
+        for key in keys.iter() {
+            if self.db.contains_key(&key) {
+                count += 1;
+            }
+        }
+
+        count.to_string()
     }
 
     fn type_method(&mut self, key: String) -> String {
@@ -882,7 +894,7 @@ mod test {
         assert_eq!("value1".to_string(), get.unwrap().to_string());
     }
 
-    // #[ignore]
+    #[ignore]
     #[test]
     fn test_expire_deletes_key() {
         let mut redis: Redis = Redis::new();
@@ -943,7 +955,7 @@ mod test {
         assert_eq!("0", expire.unwrap().to_string());
     }
 
-    // #[ignore]
+    #[ignore]
     #[test]
     fn test_persist_deletes_expire_time() {
         let mut redis: Redis = Redis::new();

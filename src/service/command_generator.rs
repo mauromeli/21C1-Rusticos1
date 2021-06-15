@@ -20,10 +20,11 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "set" => generate_set(params),
         "del" => generate_del(params),
         "exists" => generate_exists(params),
-        "rename" => generate_rename(params),
         "expire" => generate_expire(params),
         "expireat" => generate_expireat(params),
         "persist" => generate_persist(params),
+        "rename" => generate_rename(params),
+        "touch" => generate_touch(params),
         "type" => generate_type(params),
         "incrby" => generate_incrby(params),
         "decrby" => generate_decrby(params),
@@ -162,19 +163,6 @@ fn generate_exists(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Exists { keys: params })
 }
 
-fn generate_rename(params: Vec<String>) -> Result<Command, String> {
-    if params.len() != 2 {
-        return Err("ERR wrong number of arguments for 'rename' command".to_string());
-    }
-
-    let key_origin = params[0].clone();
-    let key_destination = params[1].clone();
-    Ok(Command::Rename {
-        key_origin,
-        key_destination,
-    })
-}
-
 fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'expire' command".to_string());
@@ -217,6 +205,27 @@ fn generate_persist(params: Vec<String>) -> Result<Command, String> {
 
     let key = params[0].clone();
     Ok(Command::Persist { key })
+}
+
+fn generate_rename(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'rename' command".to_string());
+    }
+
+    let key_origin = params[0].clone();
+    let key_destination = params[1].clone();
+    Ok(Command::Rename {
+        key_origin,
+        key_destination,
+    })
+}
+
+fn generate_touch(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'touch' command".to_string());
+    }
+
+    Ok(Command::Touch { keys: params })
 }
 
 fn generate_type(params: Vec<String>) -> Result<Command, String> {
@@ -733,6 +742,28 @@ mod test {
 
         assert!(match result.unwrap() {
             Command::Persist { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_touch_without_param_err() {
+        let params = vec!["touch".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_touch_ok() {
+        let params = vec!["touch".to_string(), "key1".to_string(), "key2".to_string()];
+        let result = generate(params);
+
+        let _keys = vec!["key1".to_string(), "key2".to_string()];
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Touch { keys: _keys } => true,
             _ => false,
         });
     }

@@ -22,10 +22,6 @@ pub enum Command {
     Exists {
         keys: Vec<String>,
     },
-    Rename {
-        key_origin: String,
-        key_destination: String,
-    },
     Expire {
         key: String,
         ttl: Duration,
@@ -36,6 +32,13 @@ pub enum Command {
     },
     Persist {
         key: String,
+    },
+    Rename {
+        key_origin: String,
+        key_destination: String,
+    },
+    Touch {
+        keys: Vec<String>,
     },
     Type {
         key: String,
