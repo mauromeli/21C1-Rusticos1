@@ -1,8 +1,11 @@
 use crate::service::redis::Redis;
 use std::net::{TcpListener, TcpStream};
-use std::io::{Read, BufReader, BufRead};
+use std::io::{Read, BufReader, BufRead, Write, BufWriter};
 use std::sync::mpsc;
 use std::thread;
+use crate::service::command_generator::generate;
+use std::sync::mpsc::{Sender, Receiver};
+use crate::entities::command::Command;
 
 #[derive(Debug)]
 pub struct Server {
@@ -18,47 +21,86 @@ impl Server {
         Self { redis: redis }
     }
 
-    pub fn serve(self) {
+    pub fn serve(mut self) {
         //TODO: leer de config
         let address = "0.0.0.0:".to_owned() + "8080";
-        server_run(&address).unwrap();
+        self.server_run(&address).unwrap();
     }
-}
 
-//TODO: Hay forma de meterlo en el mismo struct?
-fn server_run(address: &str) -> std::io::Result<()> {
-    let listener = TcpListener::bind(address)?;
-    // accept devuelve una tupla (TcpStream, std::net::SocketAddr)
-    while let connection = listener.accept()? {
-        let (client, _) = connection;
-        let handler = thread::spawn(move || {
-            let mut client_stream: TcpStream = client;
-            // TcpStream implementa el trait Read, así que podemos trabajar como si fuera un archivo
-            handle_client(&mut client_stream);
-        });
-    }
-    Ok(())
-}
 
-fn handle_client(stream: &mut dyn Read) -> std::io::Result<()> {
-    let reader = BufReader::new(stream);
-    let mut lines = reader.lines();
-    // iteramos las lineas que recibimos de nuestro cliente
+    //TODO: Hay forma de meterlo en el mismo struct?
+    fn server_run(mut self, address: &str) -> std::io::Result<()> {
+        let listener = TcpListener::bind(address)?;
 
-    /*let (dbSender, dbReceiver) = mpsc::channel();
-    let hiloDB = thread::spawn(move ||
-        {
-            while let msg = dbReceiver.recv() {
-                //TODO: Ver que hacer en DB
+        let (dbSender, dbReceiver) = mpsc::channel();
+
+        let hiloDB = thread::spawn(move ||
+            {
+                while let msg = dbReceiver.recv() {
+                    if msg.is_err() {
+                        panic!();
+                    }
+                    let (command, sender): (Command, Sender<String>) = msg.unwrap();
+                    //TODO: Ver que hacer en DB
+                    let redisResponse = self.redis.execute(command);
+
+                    println!("{:?}", redisResponse);
+                    sender.send(redisResponse.unwrap().to_string());
+
+                    //TODO: Encode RedisResponse
+                }
             }
+        );
+
+        while let connection = listener.accept()? {
+            let (client, _) = connection;
+            let dbSender_clone = dbSender.clone();
+            let handler = thread::spawn(move || {
+                let client_input: TcpStream = client.try_clone().unwrap();
+                let client_output: TcpStream = client;
+
+                //handle_client(&mut client_stream);
+                //TODO: Mover
+
+                let input = BufReader::new(client_input);
+                let mut output = client_output;
+                let mut lines = input.lines();
+
+                // iteramos las lineas que recibimos de nuestro cliente
+                while let Some(request) = lines.next() {
+                    //println!("{:?}", request.unwrap());
+
+                    let (clientSender, clientReceiver): (Sender<String>, Receiver<String>) = mpsc::channel();
+
+                    //TODO: Agregar decode
+                    let mut vector: Vec<String> = vec![];
+                    for string in request.unwrap().split(" ") {
+                        vector.push(string.to_string())
+                    }
+                    println!("{:?}", vector);
+                    let command = generate(vector);
+
+                    println!("{:?}", command);
+
+                    match command {
+                        Ok(command) => {
+                            dbSender_clone.send((command, clientSender));
+                        }
+                        _ => {
+                            output.write("Error".to_string().as_ref());
+                        }
+                    };
+
+                    let response = clientReceiver.recv();
+                    println!("{:?}",response);
+                    let nbytes = output.write(response.unwrap().as_bytes());
+                    output.write("\n".as_bytes());
+                    println!("nbytes: {:?}", nbytes);
+                }
+
+                //TODO: Mover
+            });
         }
-    );*/
-
-    while let Some(client) = lines.next() {
-        let handler = thread::spawn(move || {
-            println!("{:?}", client.unwrap());
-        });
+        Ok(())
     }
-
-    Ok(())
 }
