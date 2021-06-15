@@ -34,6 +34,9 @@ pub enum Command {
         key: String,
         ttl: SystemTime,
     },
+    Persist {
+        key: String,
+    },
     Type {
         key: String,
     },

@@ -177,7 +177,7 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
 
 fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
-        return Err("ERR syntax error".to_string());
+        return Err("ERR wrong number of arguments for 'expire' command".to_string());
     }
 
     let key = params[0].clone();
@@ -195,7 +195,7 @@ fn generate_expire(params: Vec<String>) -> Result<Command, String> {
 
 fn generate_expireat(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
-        return Err("ERR syntax error".to_string());
+        return Err("ERR wrong number of arguments for 'expireat' command".to_string());
     }
 
     let key = params[0].clone();
@@ -208,6 +208,15 @@ fn generate_expireat(params: Vec<String>) -> Result<Command, String> {
     let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(seconds.unwrap().into());
 
     Ok(Command::Expireat { key, ttl })
+}
+
+fn generate_persist(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'persist' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Persist { key })
 }
 
 fn generate_type(params: Vec<String>) -> Result<Command, String> {
@@ -702,6 +711,28 @@ mod test {
                 key: _key,
                 ttl: _ttl,
             } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_persist_without_param_err() {
+        let params = vec!["persist".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_persist_ok() {
+        let params = vec!["persist".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Persist { key: _key } => true,
             _ => false,
         });
     }

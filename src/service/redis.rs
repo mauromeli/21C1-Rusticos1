@@ -45,6 +45,7 @@ impl Redis {
             Command::Exists { keys } => Ok(Re::String(self.exists_method(keys))),
             Command::Expire { key, ttl } => Ok(Re::String(self.expire_method(key, ttl))),
             Command::Expireat { key, ttl } => Ok(Re::String(self.expireat_method(key, ttl))),
+            Command::Persist { key } => Ok(Re::String(self.persist_method(key))),
             Command::Rename {
                 key_origin,
                 key_destination,
@@ -226,6 +227,13 @@ impl Redis {
         }
         self.db.set_ttl_absolute(key, ttl);
         "1".to_string()
+    }
+
+    fn persist_method(&mut self, key: String) -> String {
+        match self.db.delete_ttl(&key) {
+            Some(_) => "1".to_string(),
+            None => "0".to_string(),
+        }
     }
 
     fn rename_method(&mut self, key_origin: String, key_destination: String) -> Result<Re, String> {
@@ -911,6 +919,58 @@ mod test {
         let key: String = "key".to_string();
         let get = redis.execute(Command::Get { key });
         assert_eq!("(nil)", get.unwrap().to_string());
+    }
+
+    // #[ignore]
+    #[test]
+    fn test_persist_deletes_expire_time() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(1);
+        let _expire = redis.execute(Command::Expire { key, ttl });
+
+        let key = "key".to_string();
+        let persist = redis.execute(Command::Persist { key });
+
+        thread::sleep(Duration::from_secs(1));
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+
+        assert_eq!("1", persist.unwrap().to_string());
+        assert_eq!("value", get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_persist_returns_0_on_persistent_value() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let persist = redis.execute(Command::Persist { key });
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+
+        assert_eq!("0", persist.unwrap().to_string());
+        assert_eq!("value", get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_persist_returns_0_on_new_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let persist = redis.execute(Command::Persist { key });
+        assert_eq!("0", persist.unwrap().to_string());
     }
 
     #[test]
