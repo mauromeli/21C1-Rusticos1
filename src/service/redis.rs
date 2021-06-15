@@ -214,19 +214,17 @@ impl Redis {
     }
 
     fn expire_method(&mut self, key: String, ttl: Duration) -> String {
-        if !self.db.contains_key(&key) {
-            return "0".to_string();
+        match self.db.set_ttl_relative(key, ttl) {
+            Some(_) => "1".to_string(),
+            None => "0".to_string(),
         }
-        self.db.set_ttl_relative(key, ttl);
-        "1".to_string()
     }
 
     fn expireat_method(&mut self, key: String, ttl: SystemTime) -> String {
-        if !self.db.contains_key(&key) {
-            return "0".to_string();
+        match self.db.set_ttl_absolute(key, ttl) {
+            Some(_) => "1".to_string(),
+            None => "0".to_string(),
         }
-        self.db.set_ttl_absolute(key, ttl);
-        "1".to_string()
     }
 
     fn persist_method(&mut self, key: String) -> String {
@@ -895,13 +893,25 @@ mod test {
 
         let key = "key".to_string();
         let ttl = Duration::from_secs(1);
-        let _expire = redis.execute(Command::Expire { key, ttl });
+        let expire = redis.execute(Command::Expire { key, ttl });
 
         thread::sleep(Duration::from_secs(1));
 
         let key: String = "key".to_string();
         let get = redis.execute(Command::Get { key });
         assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!("1", expire.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_expire_returns_0_on_unexisting_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(1);
+        let expire = redis.execute(Command::Expire { key, ttl });
+
+        assert_eq!("0", expire.unwrap().to_string());
     }
 
     #[test]
@@ -914,11 +924,23 @@ mod test {
 
         let key = "key".to_string();
         let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
-        let _expire = redis.execute(Command::Expireat { key, ttl });
+        let expire = redis.execute(Command::Expireat { key, ttl });
 
         let key: String = "key".to_string();
         let get = redis.execute(Command::Get { key });
         assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!("1", expire.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_expireat_returns_0_on_unexisting_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
+        let expire = redis.execute(Command::Expireat { key, ttl });
+
+        assert_eq!("0", expire.unwrap().to_string());
     }
 
     // #[ignore]
@@ -965,7 +987,7 @@ mod test {
     }
 
     #[test]
-    fn test_persist_returns_0_on_new_key() {
+    fn test_persist_returns_0_on_unexisting_key() {
         let mut redis: Redis = Redis::new();
 
         let key = "key".to_string();

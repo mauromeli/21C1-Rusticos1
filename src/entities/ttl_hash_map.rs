@@ -16,20 +16,40 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
         }
     }
 
-    pub fn expired(&self, key: &K) -> bool {
+    fn expired(&self, key: &K) -> bool {
         match self.timestamps.get(key) {
             Some(ttl) => ttl.elapsed().is_ok(),
             None => false,
         }
     }
 
+    /// Devuelve None si no existe ninguna key para expirar.
+    /// Si existe la clave, devuelve Some con el valor anterior del expire, o con SystemTime::UNIX_EPOCH si era persistente.
     pub fn set_ttl_relative(&mut self, key: K, duration: Duration) -> Option<SystemTime> {
-        let ttl = SystemTime::now() + duration;
-        self.timestamps.insert(key, ttl)
+        match self.get(&key) {
+            Some(_) => {
+                let ttl = SystemTime::now() + duration;
+                Some(
+                    self.timestamps
+                        .insert(key, ttl)
+                        .unwrap_or(SystemTime::UNIX_EPOCH),
+                )
+            }
+            None => None,
+        }
     }
 
+    /// Devuelve None si no existe ninguna key para expirar.
+    /// Si existe la clave, devuelve Some con el valor anterior del expire, o con SystemTime::UNIX_EPOCH si era persistente.
     pub fn set_ttl_absolute(&mut self, key: K, ttl: SystemTime) -> Option<SystemTime> {
-        self.timestamps.insert(key, ttl)
+        match self.get(&key) {
+            Some(_) => Some(
+                self.timestamps
+                    .insert(key, ttl)
+                    .unwrap_or(SystemTime::UNIX_EPOCH),
+            ),
+            None => None,
+        }
     }
 
     pub fn delete_ttl(&mut self, key: &K) -> Option<SystemTime> {
