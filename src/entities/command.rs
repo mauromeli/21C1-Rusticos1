@@ -30,6 +30,10 @@ pub enum Command {
         key: String,
         ttl: Duration,
     },
+    Expireat {
+        key: String,
+        ttl: SystemTime,
+    },
     Type {
         key: String,
     },

@@ -22,6 +22,8 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "exists" => generate_exists(params),
         "rename" => generate_rename(params),
         "expire" => generate_expire(params),
+        "expireat" => generate_expireat(params),
+        "persist" => generate_persist(params),
         "type" => generate_type(params),
         "incrby" => generate_incrby(params),
         "decrby" => generate_decrby(params),
@@ -189,6 +191,23 @@ fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     let ttl = Duration::from_secs(seconds.unwrap().into());
 
     Ok(Command::Expire { key, ttl })
+}
+
+fn generate_expireat(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR syntax error".to_string());
+    }
+
+    let key = params[0].clone();
+    let seconds: Result<u32, _> = params[1].to_string().parse();
+
+    if seconds.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(seconds.unwrap().into());
+
+    Ok(Command::Expireat { key, ttl })
 }
 
 fn generate_type(params: Vec<String>) -> Result<Command, String> {
@@ -641,6 +660,45 @@ mod test {
 
         assert!(match result.unwrap() {
             Command::Expire {
+                key: _key,
+                ttl: _ttl,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_expireat_without_param_err() {
+        let params = vec!["expireat".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expireat_with_fractional_time_err() {
+        let params = vec![
+            "expireat".to_string(),
+            "key".to_string(),
+            "10.5".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expireat_ok() {
+        let params = vec!["expireat".to_string(), "key".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Expireat {
                 key: _key,
                 ttl: _ttl,
             } => true,

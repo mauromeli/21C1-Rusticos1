@@ -44,6 +44,7 @@ impl Redis {
             Command::Del { keys } => Ok(Re::String(self.del_method(keys))),
             Command::Exists { keys } => Ok(Re::String(self.exists_method(keys))),
             Command::Expire { key, ttl } => Ok(Re::String(self.expire_method(key, ttl))),
+            Command::Expireat { key, ttl } => Ok(Re::String(self.expireat_method(key, ttl))),
             Command::Rename {
                 key_origin,
                 key_destination,
@@ -215,7 +216,15 @@ impl Redis {
         if !self.db.contains_key(&key) {
             return "0".to_string();
         }
-        self.db.set_ttl(key, ttl);
+        self.db.set_ttl_relative(key, ttl);
+        "1".to_string()
+    }
+
+    fn expireat_method(&mut self, key: String, ttl: SystemTime) -> String {
+        if !self.db.contains_key(&key) {
+            return "0".to_string();
+        }
+        self.db.set_ttl_absolute(key, ttl);
         "1".to_string()
     }
 
@@ -867,6 +876,7 @@ mod test {
         assert_eq!("value1".to_string(), get.unwrap().to_string());
     }
 
+    // #[ignore]
     #[test]
     fn test_expire_deletes_key() {
         let mut redis: Redis = Redis::new();
@@ -879,7 +889,24 @@ mod test {
         let ttl = Duration::from_secs(1);
         let _expire = redis.execute(Command::Expire { key, ttl });
 
-        thread::sleep(Duration::from_secs(2));
+        thread::sleep(Duration::from_secs(1));
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert_eq!("(nil)", get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_expireat_with_past_time_deletes_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
+        let _expire = redis.execute(Command::Expireat { key, ttl });
 
         let key: String = "key".to_string();
         let get = redis.execute(Command::Get { key });

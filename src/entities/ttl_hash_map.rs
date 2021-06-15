@@ -18,13 +18,17 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
 
     pub fn expired(&self, key: &K) -> bool {
         match self.timestamps.get(key) {
-            Some(ttl) => ttl.elapsed().is_err(),
+            Some(ttl) => ttl.elapsed().is_ok(),
             None => false,
         }
     }
 
-    pub fn set_ttl(&mut self, key: K, ttl: Duration) -> Option<SystemTime> {
-        let ttl = SystemTime::now() + ttl;
+    pub fn set_ttl_relative(&mut self, key: K, duration: Duration) -> Option<SystemTime> {
+        let ttl = SystemTime::now() + duration;
+        self.timestamps.insert(key, ttl)
+    }
+
+    pub fn set_ttl_absolute(&mut self, key: K, ttl: SystemTime) -> Option<SystemTime> {
         self.timestamps.insert(key, ttl)
     }
 
