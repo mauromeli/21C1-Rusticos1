@@ -60,7 +60,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
         let ttl = match self.timestamps.get(key) {
             Some(value) => value
                 .duration_since(SystemTime::now())
-                .unwrap_or(Duration::from_secs(0)),
+                .unwrap_or_else(|_| Duration::from_secs(0)),
             None => Duration::from_secs(0),
         };
         Some(ttl)
