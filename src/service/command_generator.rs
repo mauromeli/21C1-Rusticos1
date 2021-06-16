@@ -25,6 +25,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "persist" => generate_persist(params),
         "rename" => generate_rename(params),
         "touch" => generate_touch(params),
+        "ttl" => generate_ttl(params),
         "type" => generate_type(params),
         "incrby" => generate_incrby(params),
         "decrby" => generate_decrby(params),
@@ -226,6 +227,15 @@ fn generate_touch(params: Vec<String>) -> Result<Command, String> {
     }
 
     Ok(Command::Touch { keys: params })
+}
+
+fn generate_ttl(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'ttl' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Ttl { key })
 }
 
 fn generate_type(params: Vec<String>) -> Result<Command, String> {
@@ -764,6 +774,28 @@ mod test {
 
         assert!(match result.unwrap() {
             Command::Touch { keys: _keys } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_ttl_without_param_err() {
+        let params = vec!["ttl".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_ttl_ok() {
+        let params = vec!["ttl".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Ttl { key: _key } => true,
             _ => false,
         });
     }

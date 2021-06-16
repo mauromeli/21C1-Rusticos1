@@ -50,7 +50,8 @@ impl Redis {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
-            Command::Touch { keys } => Ok(Re::String(self.touch_method(key))),
+            Command::Touch { keys } => Ok(Re::String(self.touch_method(keys))),
+            Command::Ttl { key } => Ok(Re::String(self.ttl_method(key))),
             Command::Type { key } => Ok(Re::String(self.type_method(key))),
 
             // Lists
@@ -253,6 +254,18 @@ impl Redis {
         }
 
         count.to_string()
+    }
+
+    fn ttl_method(&mut self, key: String) -> String {
+        match self.db.get_ttl(&key) {
+            Some(value) => {
+                if value == Duration::from_secs(0) {
+                    return "-1".to_string();
+                }
+                value.as_secs().to_string()
+            }
+            None => "-2".to_string(),
+        }
     }
 
     fn type_method(&mut self, key: String) -> String {
@@ -1031,6 +1044,50 @@ mod test {
         let get = redis.execute(Command::Get { key });
         assert!(get.is_ok());
         assert_eq!("value1".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_ttl_returns_neg2_on_unexisting_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let ttl = redis.execute(Command::Ttl { key });
+
+        assert_eq!("-2", ttl.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_ttl_returns_neg1_on_persistent_value() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = redis.execute(Command::Ttl { key });
+
+        assert_eq!("-1", ttl.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_ttl_returns_secs_remaining() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(5);
+        let _expire = redis.execute(Command::Expire { key, ttl });
+
+        let key = "key".to_string();
+        let ttl = redis.execute(Command::Ttl { key });
+
+        let _key: String = "key".to_string();
+
+        assert_eq!("4", ttl.unwrap().to_string());
     }
 
     #[test]

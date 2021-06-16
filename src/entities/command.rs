@@ -40,6 +40,9 @@ pub enum Command {
     Touch {
         keys: Vec<String>,
     },
+    Ttl {
+        key: String,
+    },
     Type {
         key: String,
     },

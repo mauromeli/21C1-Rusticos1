@@ -23,37 +23,47 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
         }
     }
 
-    /// Devuelve None si no existe ninguna key para expirar.
-    /// Si existe la clave, devuelve Some con el valor anterior del expire, o con SystemTime::UNIX_EPOCH si era persistente.
+    /// Devuelve None si no existe la clave, y SystemTime::UNIX_EPOCH si era persistente. Sino, devuelve el valor previo de ttl.
     pub fn set_ttl_relative(&mut self, key: K, duration: Duration) -> Option<SystemTime> {
-        match self.get(&key) {
-            Some(_) => {
-                let ttl = SystemTime::now() + duration;
-                Some(
-                    self.timestamps
-                        .insert(key, ttl)
-                        .unwrap_or(SystemTime::UNIX_EPOCH),
-                )
-            }
-            None => None,
+        if !self.contains_key(&key) {
+            return None;
         }
+        let ttl = SystemTime::now() + duration;
+        Some(
+            self.timestamps
+                .insert(key, ttl)
+                .unwrap_or(SystemTime::UNIX_EPOCH),
+        )
     }
 
-    /// Devuelve None si no existe ninguna key para expirar.
-    /// Si existe la clave, devuelve Some con el valor anterior del expire, o con SystemTime::UNIX_EPOCH si era persistente.
+    /// Devuelve None si no existe la clave, y SystemTime::UNIX_EPOCH si era persistente. Sino, devuelve el valor previo de ttl.
     pub fn set_ttl_absolute(&mut self, key: K, ttl: SystemTime) -> Option<SystemTime> {
-        match self.get(&key) {
-            Some(_) => Some(
-                self.timestamps
-                    .insert(key, ttl)
-                    .unwrap_or(SystemTime::UNIX_EPOCH),
-            ),
-            None => None,
+        if !self.contains_key(&key) {
+            return None;
         }
+        Some(
+            self.timestamps
+                .insert(key, ttl)
+                .unwrap_or(SystemTime::UNIX_EPOCH),
+        )
     }
 
     pub fn delete_ttl(&mut self, key: &K) -> Option<SystemTime> {
         self.timestamps.remove(key)
+    }
+
+    /// Devuelve None si no existe la clave, y una duración 0 si existe pero es persistente. Sino, devuelve el ttl.
+    pub fn get_ttl(&mut self, key: &K) -> Option<Duration> {
+        if !self.contains_key(key) {
+            return None;
+        }
+        let ttl = match self.timestamps.get(key) {
+            Some(value) => value
+                .duration_since(SystemTime::now())
+                .unwrap_or(Duration::from_secs(0)),
+            None => Duration::from_secs(0),
+        };
+        Some(ttl)
     }
 
     pub fn len(&self) -> usize {
@@ -61,6 +71,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        self.delete_ttl(&key);
         self.store.insert(key, value)
     }
 
