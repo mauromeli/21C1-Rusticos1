@@ -1,6 +1,6 @@
 use crate::service::redis::Redis;
 use std::net::{TcpListener, TcpStream};
-use std::io::{Read, BufReader, BufRead, Write, BufWriter};
+use std::io::{BufReader, BufRead, Write};
 use std::sync::mpsc;
 use std::thread;
 use crate::service::command_generator::generate;
@@ -18,7 +18,7 @@ impl Server {
         //TODO: Add config to constructor
         let redis = Redis::new();
 
-        Self { redis: redis }
+        Self { redis }
     }
 
     pub fn serve(mut self) {
@@ -32,20 +32,20 @@ impl Server {
     fn server_run(mut self, address: &str) -> std::io::Result<()> {
         let listener = TcpListener::bind(address)?;
 
-        let (dbSender, dbReceiver) = mpsc::channel();
+        let (db_sender, db_receiver) = mpsc::channel();
 
-        let hiloDB = thread::spawn(move ||
+        let db_thread = thread::spawn(move ||
             {
-                while let msg = dbReceiver.recv() {
+                while let msg = db_receiver.recv() {
                     if msg.is_err() {
                         panic!();
                     }
                     let (command, sender): (Command, Sender<String>) = msg.unwrap();
                     //TODO: Ver que hacer en DB
-                    let redisResponse = self.redis.execute(command);
+                    let redis_response = self.redis.execute(command);
 
-                    println!("{:?}", redisResponse);
-                    sender.send(redisResponse.unwrap().to_string());
+                    println!("{:?}", redis_response);
+                    sender.send(redis_response.unwrap().to_string());
 
                     //TODO: Encode RedisResponse
                 }
@@ -54,7 +54,7 @@ impl Server {
 
         while let connection = listener.accept()? {
             let (client, _) = connection;
-            let dbSender_clone = dbSender.clone();
+            let db_sender_clone = db_sender.clone();
             let handler = thread::spawn(move || {
                 let client_input: TcpStream = client.try_clone().unwrap();
                 let client_output: TcpStream = client;
@@ -68,9 +68,8 @@ impl Server {
 
                 // iteramos las lineas que recibimos de nuestro cliente
                 while let Some(request) = lines.next() {
-                    //println!("{:?}", request.unwrap());
 
-                    let (clientSender, clientReceiver): (Sender<String>, Receiver<String>) = mpsc::channel();
+                    let (client_sender, client_receiver): (Sender<String>, Receiver<String>) = mpsc::channel();
 
                     //TODO: Agregar decode
                     let mut vector: Vec<String> = vec![];
@@ -84,14 +83,14 @@ impl Server {
 
                     match command {
                         Ok(command) => {
-                            dbSender_clone.send((command, clientSender));
+                            db_sender_clone.send((command, client_sender));
                         }
                         _ => {
                             output.write("Error".to_string().as_ref());
                         }
                     };
 
-                    let response = clientReceiver.recv();
+                    let response = client_receiver.recv();
                     println!("{:?}",response);
                     let nbytes = output.write(response.unwrap().as_bytes());
                     output.write("\n".as_bytes());
