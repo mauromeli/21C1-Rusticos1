@@ -348,7 +348,10 @@ impl Redis {
                     "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
                 ),
             },
-            None => Ok(Re::String("0".to_string())),
+            None => {
+                self.db.insert(key, Re::List(vec![]));
+                Ok(Re::String("0".to_string()))
+            }
         }
     }
 
@@ -415,7 +418,7 @@ impl Redis {
                     "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
                 ),
             },
-            None => Ok(Re::List(vec![])),
+            None => Ok(Re::String("0".to_string())),
         }
     }
 
@@ -2381,6 +2384,6 @@ mod test {
             element: "value".to_string(),
         });
         assert!(lrem.clone().is_ok());
-        assert_eq!(Re::List(vec![]), lrem.clone().unwrap());
+        assert_eq!(Re::String("0".to_string()), lrem.clone().unwrap());
     }
 }
