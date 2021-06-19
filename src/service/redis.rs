@@ -1,17 +1,19 @@
 use crate::entities::command::Command;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
+use crate::entities::ttl_hash_map::TtlHashMap;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 pub struct Redis {
-    db: HashMap<String, Re>,
+    db: TtlHashMap<String, RedisElement>,
 }
 
 impl Redis {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        let map = HashMap::new();
+        let map = TtlHashMap::new();
 
         Self { db: map }
     }
@@ -38,13 +40,19 @@ impl Redis {
             Command::Copy {
                 key_origin,
                 key_destination,
-            } => self.copy_method(key_origin, key_destination),
+            } => Ok(Re::String(self.copy_method(key_origin, key_destination))),
             Command::Del { keys } => Ok(Re::String(self.del_method(keys))),
             Command::Exists { keys } => Ok(Re::String(self.exists_method(keys))),
+            Command::Expire { key, ttl } => Ok(Re::String(self.expire_method(key, ttl))),
+            Command::Expireat { key, ttl } => Ok(Re::String(self.expireat_method(key, ttl))),
+            Command::Persist { key } => Ok(Re::String(self.persist_method(key))),
             Command::Rename {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
+            Command::Touch { keys } => Ok(Re::String(self.touch_method(keys))),
+            Command::Ttl { key } => Ok(Re::String(self.ttl_method(key))),
+            Command::Type { key } => Ok(Re::String(self.type_method(key))),
 
             // Lists
             Command::Lindex { key, index } => self.lindex_method(key, index),
@@ -77,24 +85,25 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    fn copy_method(&mut self, key_origin: String, key_destination: String) -> Result<Re, String> {
-        //TODO: la operacion tiene devolver 1 si se copio y 0 si no!
-        match self.db.get(key_origin.as_str()) {
-            Some(value) => match self.db.get(key_destination.as_str()) {
-                Some(_) => Err("ERR destination key already holds a value".to_string()),
-                None => {
-                    let value = value.clone();
-                    self.db.insert(key_destination, value);
-                    Ok(Re::String("1".to_string()))
-                }
-            },
-            None => Err("ERR origin key has no value".to_string()),
+    fn copy_method(&mut self, key_origin: String, key_destination: String) -> String {
+        let value_origin;
+        match self.db.get(&key_origin) {
+            Some(value) => value_origin = value.clone(),
+            None => return "0".to_string(),
+        };
+
+        match self.db.get(&key_destination) {
+            Some(_) => "0".to_string(),
+            None => {
+                self.db.insert(key_destination, value_origin);
+                "1".to_string()
+            }
         }
     }
 
     #[allow(dead_code)]
     fn get_method(&mut self, key: String) -> Result<Re, String> {
-        match self.db.get(key.as_str()) {
+        match self.db.get(&key) {
             Some(return_value) => match return_value {
                 Re::String(s) => Ok(Re::String(s.to_string())),
                 _ => Err(
@@ -171,7 +180,7 @@ impl Redis {
         match self.get_method(key.clone()) {
             Ok(return_value) => match return_value {
                 Re::String(_) => {
-                    self.db.remove(key.as_str());
+                    self.db.remove(&key);
                     Ok(return_value)
                 }
                 Re::Nil => Ok(return_value),
@@ -187,7 +196,7 @@ impl Redis {
     fn del_method(&mut self, keys: Vec<String>) -> String {
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.remove(key.as_str()).is_some() {
+            if self.db.remove(&key).is_some() {
                 count += 1;
             }
         }
@@ -200,7 +209,7 @@ impl Redis {
         match self.get_method(key.clone()) {
             Ok(redis_element) => match redis_element {
                 Re::String(s) => {
-                    let value = s + value.as_str();
+                    let value = s + &value;
                     Ok(Re::String(self.set_method(key, value)))
                 }
                 Re::Nil => Ok(Re::String(self.set_method(key, value))),
@@ -215,11 +224,32 @@ impl Redis {
     fn exists_method(&mut self, keys: Vec<String>) -> String {
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.contains_key(key.as_str()) {
+            if self.db.contains_key(&key) {
                 count += 1;
             }
         }
         count.to_string()
+    }
+
+    fn expire_method(&mut self, key: String, ttl: Duration) -> String {
+        match self.db.set_ttl_relative(key, ttl) {
+            Some(_) => "1".to_string(),
+            None => "0".to_string(),
+        }
+    }
+
+    fn expireat_method(&mut self, key: String, ttl: SystemTime) -> String {
+        match self.db.set_ttl_absolute(key, ttl) {
+            Some(_) => "1".to_string(),
+            None => "0".to_string(),
+        }
+    }
+
+    fn persist_method(&mut self, key: String) -> String {
+        match self.db.delete_ttl(&key) {
+            Some(_) => "1".to_string(),
+            None => "0".to_string(),
+        }
     }
 
     fn rename_method(&mut self, key_origin: String, key_destination: String) -> Result<Re, String> {
@@ -231,8 +261,43 @@ impl Redis {
         }
     }
 
+    fn touch_method(&mut self, keys: Vec<String>) -> String {
+        let mut count = 0;
+        for key in keys.iter() {
+            if self.db.contains_key(&key) {
+                count += 1;
+            }
+        }
+
+        count.to_string()
+    }
+
+    fn ttl_method(&mut self, key: String) -> String {
+        match self.db.get_ttl(&key) {
+            Some(value) => {
+                if value == Duration::from_secs(0) {
+                    return "-1".to_string();
+                }
+                value.as_secs().to_string()
+            }
+            None => "-2".to_string(),
+        }
+    }
+
+    fn type_method(&mut self, key: String) -> String {
+        match self.db.get(&key) {
+            Some(return_value) => match return_value {
+                Re::String(_) => "string".to_string(),
+                Re::List(_) => "list".to_string(),
+                Re::Set(_) => "set".to_string(),
+                Re::Nil => "none".to_string(),
+            },
+            None => "none".to_string(),
+        }
+    }
+
     fn lindex_method(&mut self, key: String, index: i32) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
                     let len_value = value.len() as i32;
@@ -256,7 +321,7 @@ impl Redis {
     }
 
     fn llen_method(&mut self, key: String) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => Ok(Re::String(value.len().to_string())),
                 _ => Err(
@@ -268,7 +333,7 @@ impl Redis {
     }
 
     fn lpop_method(&mut self, key: String, count: usize) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
                     let return_value: Vec<String>;
@@ -309,7 +374,7 @@ impl Redis {
         let mut redis_element: Vec<String> = values;
         redis_element.reverse();
 
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
                     let saved_vector = value.clone();
@@ -334,7 +399,7 @@ impl Redis {
         let mut redis_element: Vec<String> = values;
         redis_element.reverse();
 
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 RedisElement::List(value) => {
                     let saved_vector = value.clone();
@@ -356,7 +421,7 @@ impl Redis {
     }
 
     fn lrange_method(&mut self, key: String, begin: i32, end: i32) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
                     let len_value = value.len() as i32;
@@ -390,7 +455,7 @@ impl Redis {
     }
 
     fn lrem_method(&mut self, key: String, count: i32, element: String) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => match count.cmp(&0) {
                     Ordering::Greater => {
@@ -449,7 +514,7 @@ impl Redis {
     }
 
     fn lset_method(&mut self, key: String, index: i32, element: String) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
                     let len_value = value.len() as i32;
@@ -478,7 +543,7 @@ impl Redis {
     }
 
     fn rpop_method(&mut self, key: String, count: usize) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
                     let return_value: Vec<String>;
@@ -519,7 +584,7 @@ impl Redis {
     }
 
     fn rpush_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
                     let mut saved_vector = value.clone();
@@ -541,7 +606,7 @@ impl Redis {
     }
 
     fn rpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 RedisElement::List(value) => {
                     let mut saved_vector = value.clone();
@@ -560,7 +625,7 @@ impl Redis {
     }
 
     fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 RedisElement::Set(value) => {
                     let mut set = value.clone();
@@ -581,7 +646,7 @@ impl Redis {
     }
 
     fn scard_method(&mut self, key: String) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(value) => match value {
                 RedisElement::Set(value) => {
                     let set = value.clone();
@@ -594,11 +659,11 @@ impl Redis {
     }
 
     fn sismember_method(&mut self, key: String, value: String) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(redis_element) => match redis_element {
                 RedisElement::Set(redis_element) => {
                     let set = redis_element.clone();
-                    if set.contains(value.as_str()) {
+                    if set.contains(&value) {
                         Ok(Re::String("1".to_string()))
                     } else {
                         Ok(Re::String("0".to_string()))
@@ -611,7 +676,7 @@ impl Redis {
     }
 
     fn smembers_method(&mut self, key: String) -> Result<RedisElement, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(redis_element) => match redis_element {
                 RedisElement::Set(redis_element) => Ok(Re::Set(redis_element.clone())),
 
@@ -622,13 +687,13 @@ impl Redis {
     }
 
     fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
-        match self.db.get_mut(key.as_str()) {
+        match self.db.get_mut(&key) {
             Some(redis_element) => match redis_element {
                 RedisElement::Set(redis_element) => {
                     let mut set = redis_element.clone();
                     let mut count = 0;
                     for value in values {
-                        if set.remove(value.as_str()) {
+                        if set.remove(&value) {
                             count += 1;
                         }
                     }
@@ -647,6 +712,8 @@ mod test {
     use crate::entities::command::Command;
     use crate::service::redis::{Re, Redis};
     use std::collections::HashSet;
+    use std::thread::{self, sleep};
+    use std::time::{Duration, SystemTime};
 
     #[allow(unused_imports)]
     #[test]
@@ -1082,7 +1149,7 @@ mod test {
     }
 
     #[test]
-    fn test_copy_on_existing_key_fails() {
+    fn test_copy_on_existing_key_returns_0() {
         let mut redis: Redis = Redis::new();
 
         let key: String = "key1".to_string();
@@ -1100,7 +1167,7 @@ mod test {
             key_origin,
         });
 
-        assert!(copy.is_err());
+        assert_eq!("0".to_string(), copy.unwrap().to_string());
     }
 
     #[test]
@@ -1121,6 +1188,119 @@ mod test {
         let key: String = "key2".to_string();
         let get = redis.execute(Command::Get { key });
         assert_eq!("value1".to_string(), get.unwrap().to_string());
+    }
+
+    #[ignore]
+    #[test]
+    fn test_expire_deletes_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(1);
+        let expire = redis.execute(Command::Expire { key, ttl });
+
+        thread::sleep(Duration::from_secs(1));
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!("1", expire.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_expire_returns_0_on_unexisting_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(1);
+        let expire = redis.execute(Command::Expire { key, ttl });
+
+        assert_eq!("0", expire.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_expireat_with_past_time_deletes_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
+        let expire = redis.execute(Command::Expireat { key, ttl });
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!("1", expire.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_expireat_returns_0_on_unexisting_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
+        let expire = redis.execute(Command::Expireat { key, ttl });
+
+        assert_eq!("0", expire.unwrap().to_string());
+    }
+
+    #[ignore]
+    #[test]
+    fn test_persist_deletes_expire_time() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(1);
+        let _expire = redis.execute(Command::Expire { key, ttl });
+
+        let key = "key".to_string();
+        let persist = redis.execute(Command::Persist { key });
+
+        thread::sleep(Duration::from_secs(1));
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+
+        assert_eq!("1", persist.unwrap().to_string());
+        assert_eq!("value", get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_persist_returns_0_on_persistent_value() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let persist = redis.execute(Command::Persist { key });
+
+        let key: String = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+
+        assert_eq!("0", persist.unwrap().to_string());
+        assert_eq!("value", get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_persist_returns_0_on_unexisting_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let persist = redis.execute(Command::Persist { key });
+        assert_eq!("0", persist.unwrap().to_string());
     }
 
     #[test]
@@ -1147,6 +1327,100 @@ mod test {
         let get = redis.execute(Command::Get { key });
         assert!(get.is_ok());
         assert_eq!("value1".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_ttl_returns_neg2_on_unexisting_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let ttl = redis.execute(Command::Ttl { key });
+
+        assert_eq!("-2", ttl.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_ttl_returns_neg1_on_persistent_value() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = redis.execute(Command::Ttl { key });
+
+        assert_eq!("-1", ttl.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_ttl_returns_secs_remaining() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(5);
+        let _expire = redis.execute(Command::Expire { key, ttl });
+
+        let key = "key".to_string();
+        let ttl = redis.execute(Command::Ttl { key });
+
+        let _key: String = "key".to_string();
+
+        assert_eq!("4", ttl.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_string() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let type_method = redis.execute(Command::Type { key });
+        assert_eq!("string".to_string(), type_method.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_empty_key() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let type_method: Result<Re, String> = redis.execute(Command::Type { key });
+
+        assert_eq!("none".to_string(), type_method.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_list() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = vec!["value".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let type_method = redis.execute(Command::Type { key });
+        assert_eq!("list".to_string(), type_method.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_type_on_set() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key = "key".to_string();
+        let type_method = redis.execute(Command::Type { key });
+        assert_eq!("set".to_string(), type_method.unwrap().to_string());
     }
 
     #[test]
