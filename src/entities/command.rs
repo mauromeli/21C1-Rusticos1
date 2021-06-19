@@ -4,47 +4,17 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Command {
+    // Server
     Ping,
-    Copy {
-        key_origin: String,
-        key_destination: String,
-    },
+    Dbsize,
+
+    // Strings
     Get {
         key: String,
     },
     Set {
         key: String,
         value: String,
-    },
-    Del {
-        keys: Vec<String>,
-    },
-    Exists {
-        keys: Vec<String>,
-    },
-    Expire {
-        key: String,
-        ttl: Duration,
-    },
-    Expireat {
-        key: String,
-        ttl: SystemTime,
-    },
-    Persist {
-        key: String,
-    },
-    Rename {
-        key_origin: String,
-        key_destination: String,
-    },
-    Touch {
-        keys: Vec<String>,
-    },
-    Ttl {
-        key: String,
-    },
-    Type {
-        key: String,
     },
     Incrby {
         key: String,
@@ -61,11 +31,54 @@ pub enum Command {
         key: String,
         value: String,
     },
-    Dbsize,
-    Lpush {
+    Getset {
         key: String,
-        value: Vec<String>,
+        value: String,
     },
+    Mget {
+        keys: Vec<String>,
+    },
+    Mset {
+        key_values: Vec<(String, String)>,
+    },
+
+    // Keys
+    Copy {
+        key_origin: String,
+        key_destination: String,
+    },
+    Del {
+        keys: Vec<String>,
+    },
+    Exists {
+        keys: Vec<String>,
+    },
+    Rename {
+        key_origin: String,
+        key_destination: String,
+    },
+    Expire {
+        key: String,
+        ttl: Duration,
+    },
+    Expireat {
+        key: String,
+        ttl: SystemTime,
+    },
+    Persist {
+        key: String,
+    },
+    Touch {
+        keys: Vec<String>,
+    },
+    Ttl {
+        key: String,
+    },
+    Type {
+        key: String,
+    },
+
+    // List
     Lindex {
         key: String,
         index: i32,
@@ -73,6 +86,46 @@ pub enum Command {
     Llen {
         key: String,
     },
+    Lpush {
+        key: String,
+        value: Vec<String>,
+    },
+    Lpushx {
+        key: String,
+        value: Vec<String>,
+    },
+    Lpop {
+        key: String,
+        count: usize,
+    },
+    Lrange {
+        key: String,
+        begin: i32,
+        end: i32,
+    },
+    Lrem {
+        key: String,
+        count: i32,
+        element: String,
+    },
+    Lset {
+        key: String,
+        index: i32,
+        element: String,
+    },
+    Rpop {
+        key: String,
+        count: usize,
+    },
+    Rpush {
+        key: String,
+        value: Vec<String>,
+    },
+    Rpushx {
+        key: String,
+        value: Vec<String>,
+    },
+    // Sets
     Sadd {
         key: String,
         values: HashSet<String>,
@@ -90,15 +143,5 @@ pub enum Command {
     Srem {
         key: String,
         values: HashSet<String>,
-    },
-    Getset {
-        key: String,
-        value: String,
-    },
-    Mget {
-        keys: Vec<String>,
-    },
-    Mset {
-        key_values: Vec<(String, String)>,
     },
 }
