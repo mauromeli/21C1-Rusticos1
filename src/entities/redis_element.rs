@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RedisElement {
     String(String),
     Set(HashSet<String>),
