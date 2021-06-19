@@ -1,6 +1,8 @@
 use crate::entities::command::Command;
+use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
+use std::time::SystemTime;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
@@ -11,25 +13,47 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
     let command = params.first().unwrap();
     let params = Vec::from(params.get(1..).unwrap());
     match command.to_lowercase().as_str() {
+        // Server
+        "dbsize" => generate_dbsize(params),
         "ping" => generate_ping(params),
-        "copy" => generate_copy(params),
+
+        // Strings
         "get" => generate_get(params),
         "getset" => generate_getset(params),
         "set" => generate_set(params),
-        "del" => generate_del(params),
-        "exists" => generate_exists(params),
-        "rename" => generate_rename(params),
         "incrby" => generate_incrby(params),
         "decrby" => generate_decrby(params),
         "getdel" => generate_getdel(params),
         "append" => generate_append(params),
         "mget" => generate_mget(params),
         "mset" => generate_mset(params),
-        "dbsize" => generate_dbsize(params),
 
+        // Keys
+        "copy" => generate_copy(params),
+        "del" => generate_del(params),
+        "exists" => generate_exists(params),
+        "expire" => generate_expire(params),
+        "expireat" => generate_expireat(params),
+        "persist" => generate_persist(params),
+        "rename" => generate_rename(params),
+        "touch" => generate_touch(params),
+        "ttl" => generate_ttl(params),
+        "type" => generate_type(params),
+
+        // Lists
         "lindex" => generate_lindex(params),
-        "lpush" => generate_lpush(params),
         "llen" => generate_llen(params),
+        "lpop" => generate_lpop(params),
+        "lpush" => generate_lpush(params),
+        "lpushx" => generate_lpushx(params),
+        "lrange" => generate_lrange(params),
+        "lrem" => generate_lrem(params),
+        "lset" => generate_lset(params),
+        "rpop" => generate_rpop(params),
+        "rpush" => generate_rpush(params),
+        "rpushx" => generate_rpushx(params),
+
+        //Sets
         "sadd" => generate_sadd(params),
         "scard" => generate_scard(params),
         "sismember" => generate_sismember(params),
@@ -156,6 +180,50 @@ fn generate_exists(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Exists { keys: params })
 }
 
+fn generate_expire(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'expire' command".to_string());
+    }
+
+    let key = params[0].clone();
+    //TODO: deberian poder ser segundos negativos, corregir
+    let seconds: Result<u32, _> = params[1].to_string().parse();
+
+    if seconds.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let ttl = Duration::from_secs(seconds.unwrap().into());
+
+    Ok(Command::Expire { key, ttl })
+}
+
+fn generate_expireat(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'expireat' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let seconds: Result<u32, _> = params[1].to_string().parse();
+
+    if seconds.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(seconds.unwrap().into());
+
+    Ok(Command::Expireat { key, ttl })
+}
+
+fn generate_persist(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'persist' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Persist { key })
+}
+
 fn generate_rename(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'rename' command".to_string());
@@ -167,6 +235,32 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
         key_origin,
         key_destination,
     })
+}
+
+fn generate_touch(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'touch' command".to_string());
+    }
+
+    Ok(Command::Touch { keys: params })
+}
+
+fn generate_ttl(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'ttl' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Ttl { key })
+}
+
+fn generate_type(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'type' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Type { key })
 }
 
 fn generate_mget(params: Vec<String>) -> Result<Command, String> {
@@ -223,6 +317,113 @@ fn generate_llen(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Llen { key })
 }
 
+fn generate_lpop(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() || params.len() > 2 {
+        return Err("ERR wrong number of arguments for 'lpop' command".to_string());
+    }
+
+    let mut count: usize = 0;
+    if params.len() == 2 {
+        let parse_count: Result<usize, _> = params[1].to_string().parse();
+
+        if parse_count.is_err() {
+            return Err("ERR value is not an integer or out of range".to_string());
+        }
+
+        count = parse_count.unwrap();
+    }
+
+    let key = params[0].to_string();
+    Ok(Command::Lpop { key, count })
+}
+
+fn generate_lrange(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 3 {
+        return Err("ERR wrong number of arguments for 'lrange' command".to_string());
+    }
+
+    let parse_begin: Result<i32, _> = params[1].to_string().parse();
+    if parse_begin.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let begin = parse_begin.unwrap();
+
+    let parse_end: Result<i32, _> = params[2].to_string().parse();
+    if parse_end.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let end = parse_end.unwrap();
+    let key = params[0].to_string();
+
+    Ok(Command::Lrange { key, begin, end })
+}
+
+fn generate_lrem(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 3 {
+        return Err("ERR wrong number of arguments for 'lrem' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let count: Result<i32, _> = params[1].clone().parse();
+
+    if count.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let element = params[2].clone();
+    let count = count.unwrap();
+
+    Ok(Command::Lrem {
+        key,
+        count,
+        element,
+    })
+}
+
+fn generate_lset(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 3 {
+        return Err("ERR wrong number of arguments for 'lset' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let index: Result<i32, _> = params[1].clone().parse();
+
+    if index.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let element = params[2].clone();
+    let index = index.unwrap();
+
+    Ok(Command::Lset {
+        key,
+        index,
+        element,
+    })
+}
+
+fn generate_rpop(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() || params.len() > 2 {
+        return Err("ERR wrong number of arguments for 'rpop' command".to_string());
+    }
+
+    let mut count: usize = 0;
+    if params.len() == 2 {
+        let parse_count: Result<usize, _> = params[1].to_string().parse();
+
+        if parse_count.is_err() {
+            return Err("ERR value is not an integer or out of range".to_string());
+        }
+
+        count = parse_count.unwrap();
+    }
+
+    let key = params[0].to_string();
+    Ok(Command::Rpop { key, count })
+}
+
 fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
         return Err("ERR wrong number of arguments for 'lpush' command".to_string());
@@ -232,6 +433,39 @@ fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
     let values = Vec::from(params.get(1..).unwrap());
 
     Ok(Command::Lpush { key, value: values })
+}
+
+fn generate_lpushx(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'lpushx' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let values = Vec::from(params.get(1..).unwrap());
+
+    Ok(Command::Lpushx { key, value: values })
+}
+
+fn generate_rpush(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'rpush' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let values = Vec::from(params.get(1..).unwrap());
+
+    Ok(Command::Rpush { key, value: values })
+}
+
+fn generate_rpushx(params: Vec<String>) -> Result<Command, String> {
+    if params.len() <= 1 {
+        return Err("ERR wrong number of arguments for 'rpushx' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let values = Vec::from(params.get(1..).unwrap());
+
+    Ok(Command::Rpushx { key, value: values })
 }
 
 fn generate_sadd(params: Vec<String>) -> Result<Command, String> {
@@ -280,6 +514,7 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'smembers' command".to_string());
     }
+
     let key = params[0].clone();
     Ok(Command::Smembers { key })
 }
@@ -288,7 +523,9 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
 mod test {
     use crate::entities::command::Command;
     use crate::service::command_generator::generate;
+    use core::time::Duration;
     use std::collections::HashSet;
+    use std::time::SystemTime;
 
     #[test]
     fn generate_command_with_params_empty_err() {
@@ -581,6 +818,169 @@ mod test {
     }
 
     #[test]
+    fn generate_command_expire_without_param_err() {
+        let params = vec!["expire".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expire_with_fractional_time_err() {
+        let params = vec!["expire".to_string(), "key".to_string(), "10.5".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expire_ok() {
+        let params = vec!["expire".to_string(), "key".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _ttl = Duration::from_secs(1);
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Expire {
+                key: _key,
+                ttl: _ttl,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_expireat_without_param_err() {
+        let params = vec!["expireat".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expireat_with_fractional_time_err() {
+        let params = vec![
+            "expireat".to_string(),
+            "key".to_string(),
+            "10.5".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expireat_ok() {
+        let params = vec!["expireat".to_string(), "key".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Expireat {
+                key: _key,
+                ttl: _ttl,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_persist_without_param_err() {
+        let params = vec!["persist".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_persist_ok() {
+        let params = vec!["persist".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Persist { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_touch_without_param_err() {
+        let params = vec!["touch".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_touch_ok() {
+        let params = vec!["touch".to_string(), "key1".to_string(), "key2".to_string()];
+        let result = generate(params);
+
+        let _keys = vec!["key1".to_string(), "key2".to_string()];
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Touch { keys: _keys } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_ttl_without_param_err() {
+        let params = vec!["ttl".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_ttl_ok() {
+        let params = vec!["ttl".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Ttl { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_type_without_param_err() {
+        let params = vec!["type".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_type_ok() {
+        let params = vec!["type".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Type { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
     fn generate_command_incrby_without_param_err() {
         let params = vec!["incrby".to_string()];
         let result = generate(params);
@@ -798,6 +1198,262 @@ mod test {
     }
 
     #[test]
+    fn generate_command_lpop_without_param_err() {
+        let params = vec!["lpop".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lpop_without_param_count_not_u32_err() {
+        let params = vec!["lpop".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lpop_ok() {
+        let params = vec!["lpop".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lpop {
+                key: _key,
+                count: 0,
+            } => true,
+            _ => false,
+        });
+
+        let params = vec!["lpop".to_string(), "key".to_string(), "3".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lpop {
+                key: _key,
+                count: 3,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lrange_bad_params_err() {
+        let params = vec!["lrange".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "a".to_string(),
+            "1".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "1".to_string(),
+            "a".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+        ];
+        let result = generate(params);
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lrange_ok() {
+        let params = vec![
+            "lrange".to_string(),
+            "key".to_string(),
+            "0".to_string(),
+            "-1".to_string(),
+        ];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lrange {
+                key: _key,
+                begin: 0,
+                end: -1,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lrem_err() {
+        let params = vec![
+            "lrem".to_string(),
+            "key".to_string(),
+            "-1".to_string(),
+            "element".to_string(),
+            "element".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lrem".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec![
+            "lrem".to_string(),
+            "key".to_string(),
+            "a".to_string(),
+            "element".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_lrem_ok() {
+        let params = vec![
+            "lrem".to_string(),
+            "key".to_string(),
+            "0".to_string(),
+            "element".to_string(),
+        ];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _element = "element".to_string();
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lrem {
+                key: _key,
+                count: 0,
+                element: _element,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_lset_err() {
+        let params = vec![
+            "lset".to_string(),
+            "key".to_string(),
+            "-1".to_string(),
+            "element".to_string(),
+            "element".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lset".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec![
+            "lset".to_string(),
+            "key".to_string(),
+            "a".to_string(),
+            "element".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_lset_ok() {
+        let params = vec![
+            "lset".to_string(),
+            "key".to_string(),
+            "1".to_string(),
+            "Hola".to_string(),
+        ];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _index = "1".to_string();
+        let _element = "Hola".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lset {
+                key: _key,
+                index: _index,
+                element: _element,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_rpop_without_param_err() {
+        let params = vec!["rpop".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_rpop_without_param_count_not_u32_err() {
+        let params = vec!["rpop".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_rpop_ok() {
+        let params = vec!["rpop".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Rpop {
+                key: _key,
+                count: 0,
+            } => true,
+            _ => false,
+        });
+
+        let params = vec!["rpop".to_string(), "key".to_string(), "3".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Rpop {
+                key: _key,
+                count: 3,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
     fn generate_command_lpush_incorrect_params_err() {
         let params = vec!["lpush".to_string()];
         let result = generate(params);
@@ -828,6 +1484,62 @@ mod test {
     }
 
     #[test]
+    fn generate_command_lpushx_incorrect_params_err() {
+        let params = vec!["lpushx".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["lpushx".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_rpush_incorrect_params_err() {
+        let params = vec!["rpush".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["rpush".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_rpush_ok() {
+        let params = vec!["rpush".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = vec!["value".to_string()];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Rpush {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_rpushx_incorrect_params_err() {
+        let params = vec!["rpushx".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+
+        let params = vec!["rpushx".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
     fn generate_command_sadd_incorrect_params_err() {
         let params = vec!["sadd".to_string()];
         let result = generate(params);
@@ -838,6 +1550,23 @@ mod test {
         let result = generate(params);
 
         assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_lpushx_ok() {
+        let params = vec!["lpushx".to_string(), "key".to_string(), "value".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _value = vec!["value".to_string()];
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Lpushx {
+                key: _key,
+                value: _value,
+            } => true,
+            _ => false,
+        });
     }
 
     #[test]
