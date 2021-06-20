@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime};
 pub enum Command {
     // Server
     Ping,
+    Flushdb,
     Dbsize,
 
     // Strings

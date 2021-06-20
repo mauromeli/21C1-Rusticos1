@@ -14,8 +14,9 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
     let params = Vec::from(params.get(1..).unwrap());
     match command.to_lowercase().as_str() {
         // Server
-        "dbsize" => generate_dbsize(params),
         "ping" => generate_ping(params),
+        "flushdb" => generate_flushdb(params),
+        "dbsize" => generate_dbsize(params),
 
         // Strings
         "get" => generate_get(params),
@@ -69,6 +70,14 @@ fn generate_ping(params: Vec<String>) -> Result<Command, String> {
     }
 
     Ok(Command::Ping)
+}
+
+fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
+    if params.len() > 1 {
+        return Err("ERR wrong number of arguments for 'flushdb' command".to_string());
+    }
+
+    Ok(Command::Flushdb)
 }
 
 fn generate_copy(params: Vec<String>) -> Result<Command, String> {
@@ -551,6 +560,18 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Ping => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_with_command_flushdb() {
+        let params = vec!["flushdb".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Flushdb => true,
             _ => false,
         });
     }
