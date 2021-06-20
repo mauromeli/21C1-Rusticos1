@@ -36,9 +36,7 @@ impl Server {
         while let connection = listener.accept()? {
             let (client, _) = connection;
             let db_sender_clone = db_sender.clone();
-            let _ = thread::spawn(move || {
-                Server::client_handler(client, db_sender_clone)
-            });
+            let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
         }
         Ok(())
     }
@@ -52,8 +50,7 @@ impl Server {
 
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(request) = lines.next() {
-            let (client_sender, client_receiver): (Sender<String>, Receiver<String>) =
-                mpsc::channel();
+            let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
 
             //TODO: Agregar decode
             let mut vector: Vec<String> = vec![];
@@ -68,8 +65,8 @@ impl Server {
             // TODO: Agregar forma de escritura
             match command {
                 Ok(command) => {
-                    let _ = db_sender_clone.send((command, client_sender));
-                    let response = client_receiver.recv();
+                    let _ = db_sender_clone.send((command, client_sndr));
+                    let response = client_rcvr.recv();
                     output_response = response.unwrap() + "\n";
                 }
                 _ => {
@@ -91,7 +88,16 @@ impl Server {
                 let (command, sender): (Command, Sender<String>) = msg.unwrap();
                 let redis_response = self.redis.execute(command);
                 //TODO: Encode RedisResponse
-                let _ = sender.send(redis_response.unwrap().to_string());
+                let output_response;
+                match redis_response {
+                    Ok(value) => {
+                        output_response = value.to_string();
+                    }
+                    Err(error_msg) => {
+                        output_response = error_msg;
+                    }
+                };
+                let _ = sender.send(output_response);
             }
         });
     }
