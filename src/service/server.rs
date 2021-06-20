@@ -37,9 +37,7 @@ impl Server {
             let (client, _) = connection;
             let db_sender_clone = db_sender.clone();
             let _ = thread::spawn(move || {
-                //TODO: Mover
                 Server::client_handler(client, db_sender_clone)
-                //TODO: Mover
             });
         }
         Ok(())
