@@ -2679,12 +2679,12 @@ mod test {
         let get: Result<Re, String> = redis.execute(Command::Get { key });
         assert_eq!("value".to_string(), get.unwrap().to_string());
 
-        println!("{:?}",redis);
+        println!("{:?}", redis);
 
         let flushdb: Result<Re, String> = redis.execute(Command::Flushdb);
         assert!(flushdb.clone().is_ok());
 
-        println!("{:?}",redis);
+        println!("{:?}", redis);
 
         let key: String = "key".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
