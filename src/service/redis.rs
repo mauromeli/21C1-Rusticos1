@@ -22,8 +22,9 @@ impl Redis {
     pub fn execute(&mut self, command: Command) -> Result<Re, String> {
         match command {
             // Server
-            Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
             Command::Ping => Ok(Re::String("PONG".to_string())),
+            Command::Flushdb => Ok(self.flushdb_method()),
+            Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
 
             // Strings
             Command::Append { key, value } => self.append_method(key, value),
@@ -82,6 +83,11 @@ impl Redis {
             Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
         }
+    }
+
+    fn flushdb_method(&mut self) -> Re {
+        self.db = TtlHashMap::new();
+        Re::String("OK".to_string())
     }
 
     #[allow(dead_code)]
@@ -2659,5 +2665,29 @@ mod test {
         });
         assert!(lrem.clone().is_ok());
         assert_eq!(Re::String("0".to_string()), lrem.clone().unwrap());
+    }
+
+    #[test]
+    fn test_set_element_and_flushdb() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let key: String = "key".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key".to_string();
+        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        assert_eq!("value".to_string(), get.unwrap().to_string());
+
+        println!("{:?}", redis);
+
+        let flushdb: Result<Re, String> = redis.execute(Command::Flushdb);
+        assert!(flushdb.clone().is_ok());
+
+        println!("{:?}", redis);
+
+        let key: String = "key".to_string();
+        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        assert_eq!("(nil)", get.unwrap().to_string());
     }
 }
