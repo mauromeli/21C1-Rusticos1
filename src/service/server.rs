@@ -62,7 +62,7 @@ impl Server {
             let command = generate(vector);
             let output_response;
 
-            // TODO: Agregar forma de escritura
+            // TODO: Agregar forma de escritura por cada tipo.
             match command {
                 Ok(command) => {
                     let _ = db_sender_clone.send((command, client_sndr));
