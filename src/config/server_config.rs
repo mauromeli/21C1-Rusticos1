@@ -19,6 +19,6 @@ impl Config {
     }
 
     pub fn get_port(self) -> String {
-        return self.port.to_string();
+        self.port.to_string()
     }
 }

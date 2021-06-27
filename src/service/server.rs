@@ -14,6 +14,7 @@ pub struct Server {
     config: Config,
 }
 
+#[allow(irrefutable_let_patterns)]
 impl Server {
     #[allow(dead_code)]
     pub fn new(config: Config) -> Self {
@@ -41,6 +42,7 @@ impl Server {
         Ok(())
     }
 
+    #[allow(clippy::while_let_on_iterator)]
     fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<String>)>) {
         let client_input: TcpStream = client.try_clone().unwrap();
         let client_output: TcpStream = client;
@@ -54,7 +56,7 @@ impl Server {
 
             //TODO: Agregar decode
             let mut vector: Vec<String> = vec![];
-            for string in request.unwrap().split(" ") {
+            for string in request.unwrap().split_whitespace() {
                 vector.push(string.to_string())
             }
             //TODO: FIN Agregar decode
