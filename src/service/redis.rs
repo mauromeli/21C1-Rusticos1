@@ -722,10 +722,10 @@ impl Redis {
             Err(e) => return Err(e.to_string()),
         };
 
-        if let Err(e) = file.write_all(self.db.serialize().as_bytes()) {
-            return Err(e.to_string());
-        };
-        Ok(RedisElement::String("Ok".to_string()))
+        match file.write_all(self.db.serialize().as_bytes()) {
+            Ok(_) => Ok(RedisElement::String("Ok".to_string())),
+            Err(e) => Err(e.to_string()),
+        }
     }
 
     fn load_method(&mut self, path: String) -> Result<Re, String> {
@@ -734,8 +734,13 @@ impl Redis {
             Err(e) => return Err(e.to_string()),
         };
 
-        self.db = TtlHashMap::deserialize(text);
-        Ok(RedisElement::String("Ok".to_string()))
+        match TtlHashMap::deserialize(text) {
+            Ok(map) => {
+                self.db = map;
+                Ok(RedisElement::String("Ok".to_string()))
+            }
+            Err(e) => Err(e),
+        }
     }
 }
 

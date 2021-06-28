@@ -42,8 +42,8 @@ impl fmt::Display for RedisElement {
     }
 }
 
-impl From<String> for RedisElement {
-    fn from(s: String) -> Self {
+impl From<&str> for RedisElement {
+    fn from(s: &str) -> Self {
         if s.starts_with("(nil)") {
             RedisElement::Nil
         } else if s.starts_with('{') && s.ends_with('}') {
@@ -63,7 +63,7 @@ impl From<String> for RedisElement {
             }
             RedisElement::List(list)
         } else {
-            RedisElement::String(s)
+            RedisElement::String(s.to_string())
         }
     }
 }

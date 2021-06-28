@@ -123,22 +123,30 @@ impl<K: Eq + Hash + fmt::Display, V: fmt::Display> TtlHashMap<K, V> {
 }
 
 impl TtlHashMap<String, RedisElement> {
-    pub fn deserialize(s: String) -> Self {
+    pub fn deserialize(s: String) -> Result<Self, String> {
         let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
 
         for element in s.lines() {
-            let element: Vec<&str> = element.split(',').collect(); //Revisar error si no existen los 3 elementos, archivo mal cargado
-            let value = RedisElement::from(element[1].to_string());
-            map.insert(element[0].to_string(), value);
+            let mut element = element.split(',');
 
-            if element[2] != "0" {
-                let seconds = element[2].to_string().parse().unwrap_or(0);
+            let key = element.next().ok_or_else(|| "ERR syntax error")?;
+            let value = element
+                .next()
+                .ok_or_else(|| format!("ERR missing value at key: {}", key))?;
+            let ttl = element
+                .next()
+                .ok_or_else(|| format!("ERR missing ttl at key: {}", key))?
+                .parse()
+                .map_err(|_| format!("ERR ttl syntax error at key: {}", key))?;
+
+            map.insert(key.to_string(), RedisElement::from(value));
+            if ttl != 0 {
                 map.set_ttl_absolute(
-                    element[0].to_string(),
-                    SystemTime::UNIX_EPOCH + Duration::from_secs(seconds),
+                    key.to_string(),
+                    SystemTime::UNIX_EPOCH + Duration::from_secs(ttl),
                 );
             }
         }
-        map
+        Ok(map)
     }
 }
