@@ -129,7 +129,7 @@ impl TtlHashMap<String, RedisElement> {
         for element in s.lines() {
             let mut element = element.split(',');
 
-            let key = element.next().ok_or_else(|| "ERR syntax error")?;
+            let key = element.next().ok_or("ERR syntax error")?;
             let value = element
                 .next()
                 .ok_or_else(|| format!("ERR missing value at key: {}", key))?;
