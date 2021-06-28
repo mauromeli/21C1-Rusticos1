@@ -14,7 +14,6 @@ pub struct Server {
     config: Config,
 }
 
-#[allow(irrefutable_let_patterns)]
 impl Server {
     #[allow(dead_code)]
     pub fn new(config: Config) -> Self {
@@ -24,7 +23,7 @@ impl Server {
     }
 
     pub fn serve(self) {
-        let address = "0.0.0.0:".to_owned() + self.config.clone().get_port().as_str();
+        let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
         self.server_run(&address).unwrap();
     }
 
@@ -34,7 +33,7 @@ impl Server {
 
         self.db_thread(db_receiver);
 
-        while let connection = listener.accept()? {
+        while let Ok(connection) = listener.accept() {
             let (client, _) = connection;
             let db_sender_clone = db_sender.clone();
             let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
@@ -82,12 +81,7 @@ impl Server {
 
     fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>)>) {
         let _ = thread::spawn(move || {
-            while let msg = db_receiver.recv() {
-                if msg.is_err() {
-                    panic!();
-                }
-
-                let (command, sender): (Command, Sender<String>) = msg.unwrap();
+            while let Ok((command, sender)) = db_receiver.recv() {
                 let redis_response = self.redis.execute(command);
                 //TODO: Encode RedisResponse
                 let output_response;
