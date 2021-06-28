@@ -1,6 +1,8 @@
 use crate::entities::command::Command;
+use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
+use std::time::SystemTime;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
@@ -12,8 +14,11 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
     let params = Vec::from(params.get(1..).unwrap());
     match command.to_lowercase().as_str() {
         // Server
-        "dbsize" => generate_dbsize(params),
         "ping" => generate_ping(params),
+        "flushdb" => generate_flushdb(params),
+        "dbsize" => generate_dbsize(params),
+        "store" => generate_store(params),
+        "load" => generate_load(params),
 
         // Strings
         "get" => generate_get(params),
@@ -30,7 +35,13 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "copy" => generate_copy(params),
         "del" => generate_del(params),
         "exists" => generate_exists(params),
+        "expire" => generate_expire(params),
+        "expireat" => generate_expireat(params),
+        "persist" => generate_persist(params),
         "rename" => generate_rename(params),
+        "touch" => generate_touch(params),
+        "ttl" => generate_ttl(params),
+        "type" => generate_type(params),
 
         // Lists
         "lindex" => generate_lindex(params),
@@ -52,6 +63,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "smembers" => generate_smembers(params),
         "srem" => generate_srem(params),
         "keys" => generate_keys(params),
+
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -62,6 +74,14 @@ fn generate_ping(params: Vec<String>) -> Result<Command, String> {
     }
 
     Ok(Command::Ping)
+}
+
+fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
+    if params.len() > 1 {
+        return Err("ERR wrong number of arguments for 'flushdb' command".to_string());
+    }
+
+    Ok(Command::Flushdb)
 }
 
 fn generate_copy(params: Vec<String>) -> Result<Command, String> {
@@ -173,6 +193,50 @@ fn generate_exists(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Exists { keys: params })
 }
 
+fn generate_expire(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'expire' command".to_string());
+    }
+
+    let key = params[0].clone();
+    //TODO: deberian poder ser segundos negativos, corregir
+    let seconds: Result<u32, _> = params[1].to_string().parse();
+
+    if seconds.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let ttl = Duration::from_secs(seconds.unwrap().into());
+
+    Ok(Command::Expire { key, ttl })
+}
+
+fn generate_expireat(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'expireat' command".to_string());
+    }
+
+    let key = params[0].clone();
+    let seconds: Result<u32, _> = params[1].to_string().parse();
+
+    if seconds.is_err() {
+        return Err("ERR value is not an integer or out of range".to_string());
+    }
+
+    let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(seconds.unwrap().into());
+
+    Ok(Command::Expireat { key, ttl })
+}
+
+fn generate_persist(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'persist' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Persist { key })
+}
+
 fn generate_rename(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'rename' command".to_string());
@@ -184,6 +248,32 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
         key_origin,
         key_destination,
     })
+}
+
+fn generate_touch(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'touch' command".to_string());
+    }
+
+    Ok(Command::Touch { keys: params })
+}
+
+fn generate_ttl(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'ttl' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Ttl { key })
+}
+
+fn generate_type(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'type' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Type { key })
 }
 
 fn generate_mget(params: Vec<String>) -> Result<Command, String> {
@@ -450,11 +540,31 @@ fn generate_keys(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Keys { pattern })
 }
 
+fn generate_store(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'store' command".to_string());
+    }
+
+    let path = params[0].clone();
+    Ok(Command::Store { path })
+}
+
+fn generate_load(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'load' command".to_string());
+    }
+
+    let path = params[0].clone();
+    Ok(Command::Load { path })
+}
+
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
     use crate::service::command_generator::generate;
+    use core::time::Duration;
     use std::collections::HashSet;
+    use std::time::SystemTime;
 
     #[test]
     fn generate_command_with_params_empty_err() {
@@ -480,6 +590,18 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Ping => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_with_command_flushdb() {
+        let params = vec!["flushdb".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Flushdb => true,
             _ => false,
         });
     }
@@ -742,6 +864,169 @@ mod test {
                 key_origin: _key_origin,
                 key_destination: _key_destination,
             } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_expire_without_param_err() {
+        let params = vec!["expire".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expire_with_fractional_time_err() {
+        let params = vec!["expire".to_string(), "key".to_string(), "10.5".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expire_ok() {
+        let params = vec!["expire".to_string(), "key".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _ttl = Duration::from_secs(1);
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Expire {
+                key: _key,
+                ttl: _ttl,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_expireat_without_param_err() {
+        let params = vec!["expireat".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expireat_with_fractional_time_err() {
+        let params = vec![
+            "expireat".to_string(),
+            "key".to_string(),
+            "10.5".to_string(),
+        ];
+        let result = generate(params);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generate_command_expireat_ok() {
+        let params = vec!["expireat".to_string(), "key".to_string(), "1".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        let _ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Expireat {
+                key: _key,
+                ttl: _ttl,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_persist_without_param_err() {
+        let params = vec!["persist".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_persist_ok() {
+        let params = vec!["persist".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Persist { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_touch_without_param_err() {
+        let params = vec!["touch".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_touch_ok() {
+        let params = vec!["touch".to_string(), "key1".to_string(), "key2".to_string()];
+        let result = generate(params);
+
+        let _keys = vec!["key1".to_string(), "key2".to_string()];
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Touch { keys: _keys } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_ttl_without_param_err() {
+        let params = vec!["ttl".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_ttl_ok() {
+        let params = vec!["ttl".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Ttl { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_type_without_param_err() {
+        let params = vec!["type".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_type_ok() {
+        let params = vec!["type".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Type { key: _key } => true,
             _ => false,
         });
     }
@@ -1467,6 +1752,45 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Keys { pattern: _pattern } => true,
+    }
+
+    fn generate_command_store_without_param_err() {
+        let params = vec!["store".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_store_ok() {
+        let params = vec!["store".to_string(), "/store.file".to_string()];
+        let result = generate(params);
+
+        let _path = "/store.file".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Store { path: _path } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_load_without_param_err() {
+        let params = vec!["load".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_load_ok() {
+        let params = vec!["load".to_string(), "/store.file".to_string()];
+        let result = generate(params);
+
+        let _path = "/store.file".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Load { path: _path } => true,
             _ => false,
         });
     }

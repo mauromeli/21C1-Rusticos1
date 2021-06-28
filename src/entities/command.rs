@@ -1,11 +1,19 @@
 use std::collections::HashSet;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Command {
     // Server
     Ping,
+    Flushdb,
     Dbsize,
+    Store {
+        path: String,
+    },
+    Load {
+        path: String,
+    },
 
     // Strings
     Get {
@@ -58,6 +66,26 @@ pub enum Command {
     Rename {
         key_origin: String,
         key_destination: String,
+    },
+    Expire {
+        key: String,
+        ttl: Duration,
+    },
+    Expireat {
+        key: String,
+        ttl: SystemTime,
+    },
+    Persist {
+        key: String,
+    },
+    Touch {
+        keys: Vec<String>,
+    },
+    Ttl {
+        key: String,
+    },
+    Type {
+        key: String,
     },
 
     // List
