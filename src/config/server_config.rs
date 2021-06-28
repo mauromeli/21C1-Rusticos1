@@ -1,6 +1,11 @@
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::iter::FromIterator;
+use std::path::Path;
 
 #[derive(Clone, Debug)]
-struct Config {
+pub struct Config {
     verbose: u8,
     port: u16,
     timeout: u32,
@@ -9,7 +14,7 @@ struct Config {
 }
 
 impl Config {
-    fn new() -> Config {
+    pub fn new() -> Config {
         Config {
             verbose: 0,
             port: 6379,
@@ -19,13 +24,12 @@ impl Config {
         }
     }
 
-    fn new_from_file(path: String) -> Config {
+    pub fn new_from_file(path: String) -> Config {
         let path = Path::new(&path);
         let file = File::open(path).expect("File not found or cannot be opened");
         let content = BufReader::new(&file);
         let mut config = Config::new();
 
-        //TODO: Separar a que param = iterable
         for line in content.lines() {
             let line = line.expect("Could not read the line");
             // Remuevo espacios al principio y al final de la línea.
