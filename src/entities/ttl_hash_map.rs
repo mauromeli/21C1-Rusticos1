@@ -116,7 +116,7 @@ impl<K: Eq + Hash + fmt::Display, V: fmt::Display> TtlHashMap<K, V> {
                     .as_secs(),
                 None => 0,
             };
-            s = format!("{},{},{}\n", key.to_string(), value.to_string(), ttl);
+            s.push_str(format!("{},{},{}\n", key.to_string(), value.to_string(), ttl).as_str());
         }
         s
     }

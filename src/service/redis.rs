@@ -2725,11 +2725,14 @@ mod test {
     }
 
     #[test]
-    fn test_store_string() {
+    fn test_store_strings() {
         let mut redis: Redis = Redis::new();
 
-        let value = "value".to_string();
-        let key = "key".to_string();
+        let value = "value1".to_string();
+        let key = "key1".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+        let value = "value2".to_string();
+        let key = "key2".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let path = "test_store_string.rdb".to_string();
@@ -2737,7 +2740,7 @@ mod test {
 
         let path = "test_store_string.rdb".to_string();
         let content = fs::read_to_string(path).unwrap();
-        assert_eq!(content, "key,value,0\n");
+        assert_eq!(content, "key1,value1,0\nkey2,value2,0\n");
 
         fs::remove_file("test_store_string.rdb").unwrap();
     }
