@@ -3,6 +3,8 @@ use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use crate::entities::ttl_hash_map::TtlHashMap;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fs;
+use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
@@ -25,6 +27,8 @@ impl Redis {
             Command::Ping => Ok(Re::String("PONG".to_string())),
             Command::Flushdb => Ok(self.flushdb_method()),
             Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
+            Command::Store { path } => self.store_method(path),
+            Command::Load { path } => self.load_method(path),
 
             // Strings
             Command::Append { key, value } => self.append_method(key, value),
@@ -711,6 +715,29 @@ impl Redis {
             None => Ok(Re::String("0".to_string())),
         }
     }
+
+    fn store_method(&self, path: String) -> Result<Re, String> {
+        let mut file = match fs::File::create(path) {
+            Ok(file) => file,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        match file.write_all(self.db.serialize().as_bytes()) {
+            Err(e) => return Err(e.to_string()),
+            Ok(_) => (),
+        };
+        Ok(RedisElement::String("Ok".to_string()))
+    }
+
+    fn load_method(&mut self, path: String) -> Result<Re, String> {
+        let content = match fs::read_to_string(path) {
+            Ok(file) => file,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        self.db = TtlHashMap::deserialize(content);
+        Ok(RedisElement::String("Ok".to_string()))
+    }
 }
 
 #[allow(unused_imports)]
@@ -718,6 +745,8 @@ mod test {
     use crate::entities::command::Command;
     use crate::service::redis::{Re, Redis};
     use std::collections::HashSet;
+    use std::fs;
+    use std::io::Write;
     use std::thread::{self, sleep};
     use std::time::{Duration, SystemTime};
 
@@ -2689,5 +2718,270 @@ mod test {
         let key: String = "key".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
         assert_eq!("(nil)", get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_store_string() {
+        let mut redis: Redis = Redis::new();
+
+        let value = "value".to_string();
+        let key = "key".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let path = "test_store_string.rdb".to_string();
+        let _store = redis.execute(Command::Store { path });
+
+        let path = "test_store_string.rdb".to_string();
+        let content = fs::read_to_string(path).unwrap();
+        assert_eq!(content, "key,value,0\n");
+
+        fs::remove_file("test_store_string.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_store_list() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let value = vec!["value2".to_string(), "value1".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let path = "test_store_list.rdb".to_string();
+        let _store = redis.execute(Command::Store { path });
+
+        let path = "test_store_list.rdb".to_string();
+        let content = fs::read_to_string(path).unwrap();
+        assert_eq!(content, "key,[value1 - value2],0\n");
+
+        fs::remove_file("test_store_list.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_store_set() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let path = "test_store_set.rdb".to_string();
+        let _store = redis.execute(Command::Store { path });
+
+        let path = "test_store_set.rdb".to_string();
+        let content = fs::read_to_string(path).unwrap();
+        assert!(content == "key,{value1 - value2},0\n" || content == "key,{value2 - value1},0\n");
+
+        fs::remove_file("test_store_set.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_store_string_with_ttl() {
+        let mut redis: Redis = Redis::new();
+
+        let value = "value".to_string();
+        let key = "key".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(2);
+        let _expire = redis.execute(Command::Expire { key, ttl });
+
+        let path = "test_store_string_with_ttl.rdb".to_string();
+        let _store = redis.execute(Command::Store { path });
+        let ttl = (SystemTime::now() + Duration::from_secs(2))
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let path = "test_store_string_with_ttl.rdb".to_string();
+        let content = fs::read_to_string(path).unwrap();
+        assert_eq!(content, format!("key,value,{}\n", ttl));
+
+        fs::remove_file("test_store_string_with_ttl.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_store_value_with_dash() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value - 1".to_string());
+        values.insert("value2".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let path = "test_store_value_with_dash.rdb".to_string();
+        let _store = redis.execute(Command::Store { path });
+
+        let path = "test_store_value_with_dash.rdb".to_string();
+        let content = fs::read_to_string(path).unwrap();
+        assert!(content == "key,{value2 - value-1},0\n" || content == "key,{value-1 - value2},0\n");
+
+        fs::remove_file("test_store_value_with_dash.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_store_values_with_separated_words() {
+        let mut redis: Redis = Redis::new();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("value 1".to_string());
+        values.insert("value2".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let path = "test_store_values_with_separated_words.rdb".to_string();
+        let _store = redis.execute(Command::Store { path });
+
+        let path = "test_store_values_with_separated_words.rdb".to_string();
+        let content = fs::read_to_string(path).unwrap();
+        assert!(content == "key,{value2 - value 1},0\n" || content == "key,{value 1 - value2},0\n");
+
+        fs::remove_file("test_store_values_with_separated_words.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_load_string() {
+        let mut file = fs::File::create("test_load_string.rdb").unwrap();
+        file.write_all("key,value,0\n".as_bytes()).unwrap();
+
+        let mut redis: Redis = Redis::new();
+        let path = "test_load_string.rdb".to_string();
+        let _load = redis.execute(Command::Load { path });
+
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+
+        assert_eq!("value", get.unwrap().to_string());
+
+        fs::remove_file("test_load_string.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_load_list() {
+        let mut file = fs::File::create("test_load_list.rdb").unwrap();
+        file.write_all("key,[value1 - value2],0\n".as_bytes())
+            .unwrap();
+
+        let mut redis: Redis = Redis::new();
+        let path = "test_load_list.rdb".to_string();
+        let _load = redis.execute(Command::Load { path });
+
+        let key = "key".to_string();
+        let index = 0;
+        let lindex_0 = redis.execute(Command::Lindex { key, index });
+        assert_eq!("value1", lindex_0.unwrap().to_string());
+
+        let key = "key".to_string();
+        let index = 1;
+        let lindex_1 = redis.execute(Command::Lindex { key, index });
+        assert_eq!("value2", lindex_1.unwrap().to_string());
+
+        fs::remove_file("test_load_list.rdb").unwrap();
+    }
+    #[test]
+    fn test_load_set() {
+        let mut file = fs::File::create("test_load_set.rdb").unwrap();
+        file.write_all("key,{value1 - value2},0\n".as_bytes())
+            .unwrap();
+
+        let mut redis: Redis = Redis::new();
+        let path = "test_load_set.rdb".to_string();
+        let _load = redis.execute(Command::Load { path });
+
+        let key = "key".to_string();
+        let smembers = redis.execute(Command::Smembers { key });
+
+        let mut values = HashSet::new();
+        values.insert("value1".to_string());
+        values.insert("value2".to_string());
+
+        match smembers.unwrap() {
+            Re::Set(set) => {
+                assert!(set.eq(&values));
+            }
+            _ => assert!(false),
+        }
+
+        fs::remove_file("test_load_set.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_load_string_with_ttl() {
+        let mut file = fs::File::create("test_load_string_with_ttl.rdb").unwrap();
+        let ttl = (SystemTime::now() + Duration::from_secs(2))
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let serialized = format!("key,value,{}\n", ttl.clone());
+        file.write_all(serialized.as_bytes()).unwrap();
+
+        let mut redis: Redis = Redis::new();
+        let path = "test_load_string_with_ttl.rdb".to_string();
+        let _load = redis.execute(Command::Load { path });
+
+        let key = "key".to_string();
+        let get_ttl = redis.execute(Command::Ttl { key });
+
+        assert_eq!("1", get_ttl.unwrap().to_string());
+
+        fs::remove_file("test_load_string_with_ttl.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_load_values_with_dash() {
+        let mut redis: Redis = Redis::new();
+
+        let mut file = fs::File::create("test_load_values_with_dash.rdb").unwrap();
+        file.write_all("key,{value-1 - value2},0\n".as_bytes())
+            .unwrap();
+
+        let path = "test_load_values_with_dash.rdb".to_string();
+        let _load = redis.execute(Command::Load { path });
+
+        let key = "key".to_string();
+        let smembers = redis.execute(Command::Smembers { key });
+
+        let mut values = HashSet::new();
+        values.insert("value-1".to_string());
+        values.insert("value2".to_string());
+
+        match smembers.unwrap() {
+            Re::Set(set) => {
+                assert!(set.eq(&values));
+            }
+            _ => assert!(false),
+        }
+        fs::remove_file("test_load_values_with_dash.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_load_values_with_separated_words() {
+        let mut redis: Redis = Redis::new();
+
+        let mut file = fs::File::create("test_load_values_with_separated_words.rdb").unwrap();
+        file.write_all("key,{value 1 - value2},0\n".as_bytes())
+            .unwrap();
+
+        let path = "test_load_values_with_separated_words.rdb".to_string();
+        let _load = redis.execute(Command::Load { path });
+
+        let key = "key".to_string();
+        let smembers = redis.execute(Command::Smembers { key });
+
+        let mut values = HashSet::new();
+        values.insert("value 1".to_string());
+        values.insert("value2".to_string());
+
+        match smembers.unwrap() {
+            Re::Set(set) => {
+                assert!(set.eq(&values));
+            }
+            _ => assert!(false),
+        }
+        fs::remove_file("test_load_values_with_separated_words.rdb").unwrap();
     }
 }
