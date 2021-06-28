@@ -728,7 +728,7 @@ impl Redis {
         }
         vector
     }
-  
+
     fn store_method(&self, path: String) -> Result<Re, String> {
         let mut file = match fs::File::create(path) {
             Ok(file) => file,
@@ -2737,8 +2737,8 @@ mod test {
 
         assert!(keys.is_ok());
     }
-  
-    #[test]  
+
+    #[test]
     fn test_set_element_and_flushdb() {
         let mut redis: Redis = Redis::new();
 

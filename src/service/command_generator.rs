@@ -1752,8 +1752,11 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Keys { pattern: _pattern } => true,
+            _ => false,
+        });
     }
 
+    #[test]
     fn generate_command_store_without_param_err() {
         let params = vec!["store".to_string()];
         let result = generate(params);
