@@ -1,4 +1,6 @@
+use crate::entities::redis_element::RedisElement;
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::Hash;
 use std::time::{Duration, SystemTime};
 
@@ -80,6 +82,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
+        self.timestamps.remove(key);
         self.store.remove(key)
     }
 
@@ -99,5 +102,51 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
         }
 
         self.store.get_mut(key)
+    }
+}
+
+impl<K: Eq + Hash + fmt::Display, V: fmt::Display> TtlHashMap<K, V> {
+    pub fn serialize(&self) -> String {
+        let mut s = "".to_string();
+        for (key, value) in self.store.iter() {
+            let ttl = match self.timestamps.get(key) {
+                Some(t) => t
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_else(|_| Duration::from_secs(0))
+                    .as_secs(),
+                None => 0,
+            };
+            s.push_str(format!("{},{},{}\n", key.to_string(), value.to_string(), ttl).as_str());
+        }
+        s
+    }
+}
+
+impl TtlHashMap<String, RedisElement> {
+    pub fn deserialize(s: String) -> Result<Self, String> {
+        let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
+
+        for element in s.lines() {
+            let mut element = element.split(',');
+
+            let key = element.next().ok_or("ERR syntax error")?;
+            let value = element
+                .next()
+                .ok_or_else(|| format!("ERR missing value at key: {}", key))?;
+            let ttl = element
+                .next()
+                .ok_or_else(|| format!("ERR missing ttl at key: {}", key))?
+                .parse()
+                .map_err(|_| format!("ERR ttl syntax error at key: {}", key))?;
+
+            map.insert(key.to_string(), RedisElement::from(value));
+            if ttl != 0 {
+                map.set_ttl_absolute(
+                    key.to_string(),
+                    SystemTime::UNIX_EPOCH + Duration::from_secs(ttl),
+                );
+            }
+        }
+        Ok(map)
     }
 }

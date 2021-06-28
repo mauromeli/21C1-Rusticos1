@@ -8,6 +8,12 @@ pub enum Command {
     Ping,
     Flushdb,
     Dbsize,
+    Store {
+        path: String,
+    },
+    Load {
+        path: String,
+    },
 
     // Strings
     Get {
