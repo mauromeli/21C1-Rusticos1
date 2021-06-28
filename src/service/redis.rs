@@ -2778,7 +2778,10 @@ mod test {
 
         let path = "test_store_string.rdb".to_string();
         let content = fs::read_to_string(path).unwrap();
-        assert_eq!(content, "key1,value1,0\nkey2,value2,0\n");
+        assert!(
+            content == "key1,value1,0\nkey2,value2,0\n"
+                || content == "key2,value2,0\nkey1,value1,0\n"
+        );
 
         fs::remove_file("test_store_string.rdb").unwrap();
     }
