@@ -112,7 +112,7 @@ impl<K: Eq + Hash + fmt::Display, V: fmt::Display> TtlHashMap<K, V> {
             let ttl = match self.timestamps.get(key) {
                 Some(t) => t
                     .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap_or(Duration::from_secs(0))
+                    .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_secs(),
                 None => 0,
             };
@@ -127,7 +127,7 @@ impl TtlHashMap<String, RedisElement> {
         let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
 
         for element in s.lines() {
-            let element: Vec<&str> = element.split(",").collect(); //Revisar error si no existen los 3 elementos, archivo mal cargado
+            let element: Vec<&str> = element.split(',').collect(); //Revisar error si no existen los 3 elementos, archivo mal cargado
             let value = RedisElement::from(element[1].to_string());
             map.insert(element[0].to_string(), value);
 

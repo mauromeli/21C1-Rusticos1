@@ -13,10 +13,7 @@ pub enum RedisElement {
 impl fmt::Display for RedisElement {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            RedisElement::String(s) => {
-                let s = s.replace(" - ", "-");
-                write!(fmt, "{}", s)?;
-            }
+            RedisElement::String(s) => write!(fmt, "{}", s.replace(" - ", "-"))?,
             RedisElement::Set(set) => {
                 write!(fmt, "{{")?;
 
@@ -52,23 +49,21 @@ impl From<String> for RedisElement {
         } else if s.starts_with('{') && s.ends_with('}') {
             let mut set: HashSet<String> = HashSet::new();
             let s = s.strip_prefix("{").unwrap().strip_suffix("}").unwrap();
-            let s = s.split(" - ");
 
-            for element in s {
+            for element in s.split(" - ") {
                 set.insert(element.to_string());
             }
             RedisElement::Set(set)
         } else if s.starts_with('[') && s.ends_with(']') {
             let mut list: Vec<String> = Vec::new();
             let s = s.strip_prefix("[").unwrap().strip_suffix("]").unwrap();
-            let s = s.split(" - ");
 
-            for element in s {
+            for element in s.split(" - ") {
                 list.push(element.to_string());
             }
             RedisElement::List(list)
         } else {
-            RedisElement::String(s.to_string())
+            RedisElement::String(s)
         }
     }
 }
