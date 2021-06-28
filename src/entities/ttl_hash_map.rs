@@ -1,4 +1,5 @@
 use crate::entities::redis_element::RedisElement;
+use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
@@ -102,6 +103,11 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
         }
 
         self.store.get_mut(key)
+    }
+
+    /// Devuelve las keys sin chequear que no hayan expirado
+    pub fn keys(&self) -> Keys<K, V> {
+        self.store.keys()
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::entities::command::Command;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use crate::entities::ttl_hash_map::TtlHashMap;
+use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fs;
@@ -55,6 +56,7 @@ impl Redis {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
+            Command::Keys { pattern } => Ok(Re::List(self.keys_method(pattern))),
             Command::Touch { keys } => Ok(Re::String(self.touch_method(keys))),
             Command::Ttl { key } => Ok(Re::String(self.ttl_method(key))),
             Command::Type { key } => Ok(Re::String(self.type_method(key))),
@@ -714,6 +716,17 @@ impl Redis {
             },
             None => Ok(Re::String("0".to_string())),
         }
+    }
+
+    fn keys_method(&mut self, pattern: String) -> Vec<String> {
+        let mut vector = vec![];
+        for key in self.db.keys() {
+            let re = Regex::new(&*pattern).unwrap();
+            if re.is_match(key) {
+                vector.push(key.to_string());
+            }
+        }
+        vector
     }
 
     fn store_method(&self, path: String) -> Result<Re, String> {
@@ -2701,6 +2714,31 @@ mod test {
     }
 
     #[test]
+    fn test_keys_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "key1".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let pattern: String = "/*".to_string();
+
+        let keys = redis.execute(Command::Keys { pattern });
+
+        assert!(keys.is_ok());
+
+        let pattern: String = "k**".to_string();
+
+        let keys = redis.execute(Command::Keys { pattern });
+
+        assert!(keys.is_ok());
+    }
+
+    #[test]
     fn test_set_element_and_flushdb() {
         let mut redis: Redis = Redis::new();
 
@@ -2740,7 +2778,10 @@ mod test {
 
         let path = "test_store_string.rdb".to_string();
         let content = fs::read_to_string(path).unwrap();
-        assert_eq!(content, "key1,value1,0\nkey2,value2,0\n");
+        assert!(
+            content == "key1,value1,0\nkey2,value2,0\n"
+                || content == "key2,value2,0\nkey1,value1,0\n"
+        );
 
         fs::remove_file("test_store_string.rdb").unwrap();
     }

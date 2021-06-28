@@ -23,6 +23,9 @@ pub enum Command {
         key: String,
         value: String,
     },
+    Keys {
+        pattern: String,
+    },
     Incrby {
         key: String,
         increment: u32,
