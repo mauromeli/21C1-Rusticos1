@@ -7,6 +7,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct Server {
@@ -28,13 +29,17 @@ impl Server {
     }
 
     fn server_run(self, address: &str) -> std::io::Result<()> {
-        let listener = TcpListener::bind(address)?;
+        let listener = TcpListener::bind(address).expect("Could not bind");
         let (db_sender, db_receiver) = mpsc::channel();
+        let timeout = self.config.get_timeout();
 
         self.db_thread(db_receiver);
 
         while let Ok(connection) = listener.accept() {
             let (client, _) = connection;
+            if timeout != 0 {
+                client.set_read_timeout(Option::from(Duration::from_secs(timeout))).expect("Could not set timeout");
+            }
             let db_sender_clone = db_sender.clone();
             let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
         }
@@ -53,6 +58,9 @@ impl Server {
         while let Some(request) = lines.next() {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
 
+            if request.is_err() {
+                break;
+            }
             //TODO: Agregar decode
             let mut vector: Vec<String> = vec![];
             for string in request.unwrap().split_whitespace() {

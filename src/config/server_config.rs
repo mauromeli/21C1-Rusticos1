@@ -8,7 +8,7 @@ use std::path::Path;
 pub struct Config {
     verbose: u8,
     port: u16,
-    timeout: u32,
+    timeout: u64,
     dbfilename: String,
     logfile: String,
 }
@@ -19,7 +19,7 @@ impl Config {
         Config {
             verbose: 0,
             port: 6379,
-            timeout: 0,
+            timeout: 30,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
         }
@@ -42,9 +42,9 @@ impl Config {
             }
 
             // Separo el attributo de la config con el valor de la config.
-            let tokens = Vec::from_iter(line.split_whitespace());
-            let name = tokens.first().unwrap();
-            let tokens = tokens.get(1..).unwrap();
+            let splited = Vec::from_iter(line.split_whitespace());
+            let name = splited.first().unwrap();
+            let tokens = splited.get(1..).unwrap();
 
             // Remuevo si hay un signo =
             let tokens = tokens.iter().filter(|t| !t.starts_with("="));
@@ -70,7 +70,7 @@ impl Config {
             match name.to_lowercase().as_str() {
                 "verbose" => config.set_verbose(param.unwrap()),
                 "port" => config.set_port(param.unwrap() as u16),
-                "timeout" => config.set_timeout(param.unwrap() as u32),
+                "timeout" => config.set_timeout(param.unwrap() as u64),
                 "dbfilename" => config.set_dbfilename(param.unwrap().to_string()),
                 "logfile" => config.set_logfile(param.unwrap().to_string()),
                 _ => (),
@@ -88,7 +88,7 @@ impl Config {
         self.port = port;
     }
 
-    fn set_timeout(&mut self, timeout: u32) {
+    fn set_timeout(&mut self, timeout: u64) {
         self.timeout = timeout;
     }
 
@@ -102,6 +102,22 @@ impl Config {
 
     pub fn get_port(&self) -> String {
         self.port.to_string()
+    }
+
+    pub fn get_verbose(&self) -> String {
+        self.verbose.to_string()
+    }
+
+    pub fn get_timeout(&self) -> u64 {
+        self.timeout
+    }
+
+    pub fn get_dbfilename(&self) -> String {
+        self.dbfilename.to_string()
+    }
+
+    pub fn get_logfile(&self) -> String {
+        self.logfile.to_string()
     }
 }
 
