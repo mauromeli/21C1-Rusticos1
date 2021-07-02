@@ -19,7 +19,7 @@ impl Config {
         Config {
             verbose: 0,
             port: 6379,
-            timeout: 30,
+            timeout: 0,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
         }
