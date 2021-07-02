@@ -1,11 +1,14 @@
+use crate::config::server_config::Config;
+use crate::service::server::Server;
+
+mod config;
 mod entities;
 mod service;
-mod config;
-
-use crate::config::server_config::Config;
 
 fn main() {
-    let path = String::from("src/file.conf");
-    let cfg = Config::new_from_file(path);
-    println!("{:?}", cfg);
+    let _path = String::from("src/file.conf");
+    let config = Config::new();
+    let server = Server::new(config);
+    server.serve();
+    println!("Hello, world!");
 }

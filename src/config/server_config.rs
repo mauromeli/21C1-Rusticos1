@@ -13,6 +13,7 @@ pub struct Config {
     logfile: String,
 }
 
+#[allow(dead_code)]
 impl Config {
     pub fn new() -> Config {
         Config {
@@ -82,17 +83,25 @@ impl Config {
     fn set_verbose(&mut self, verbose: u8) {
         self.verbose = verbose;
     }
+
     fn set_port(&mut self, port: u16) {
         self.port = port;
     }
+
     fn set_timeout(&mut self, timeout: u32) {
         self.timeout = timeout;
     }
+
     fn set_dbfilename(&mut self, dbfilename: String) {
         self.dbfilename = dbfilename;
     }
+
     fn set_logfile(&mut self, logfile: String) {
         self.logfile = logfile;
+    }
+
+    pub fn get_port(&self) -> String {
+        self.port.to_string()
     }
 }
 

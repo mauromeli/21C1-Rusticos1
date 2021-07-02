@@ -8,6 +8,12 @@ pub enum Command {
     Ping,
     Flushdb,
     Dbsize,
+    Store {
+        path: String,
+    },
+    Load {
+        path: String,
+    },
 
     // Strings
     Get {
@@ -16,6 +22,9 @@ pub enum Command {
     Set {
         key: String,
         value: String,
+    },
+    Keys {
+        pattern: String,
     },
     Incrby {
         key: String,

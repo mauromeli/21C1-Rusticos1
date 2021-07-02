@@ -17,6 +17,8 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "ping" => generate_ping(params),
         "flushdb" => generate_flushdb(params),
         "dbsize" => generate_dbsize(params),
+        "store" => generate_store(params),
+        "load" => generate_load(params),
 
         // Strings
         "get" => generate_get(params),
@@ -60,6 +62,8 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "sismember" => generate_sismember(params),
         "smembers" => generate_smembers(params),
         "srem" => generate_srem(params),
+        "keys" => generate_keys(params),
+
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -526,6 +530,32 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
 
     let key = params[0].clone();
     Ok(Command::Smembers { key })
+}
+
+fn generate_keys(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'keys' command".to_string());
+    }
+    let pattern = params[0].clone();
+    Ok(Command::Keys { pattern })
+}
+
+fn generate_store(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'store' command".to_string());
+    }
+
+    let path = params[0].clone();
+    Ok(Command::Store { path })
+}
+
+fn generate_load(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'load' command".to_string());
+    }
+
+    let path = params[0].clone();
+    Ok(Command::Load { path })
 }
 
 #[allow(unused_imports)]
@@ -1709,6 +1739,61 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Smembers { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_keys_ok() {
+        let params = vec!["keys".to_string(), "/*".to_string()];
+        let result = generate(params);
+
+        let _pattern = "/*".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Keys { pattern: _pattern } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_store_without_param_err() {
+        let params = vec!["store".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_store_ok() {
+        let params = vec!["store".to_string(), "/store.file".to_string()];
+        let result = generate(params);
+
+        let _path = "/store.file".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Store { path: _path } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_load_without_param_err() {
+        let params = vec!["load".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_load_ok() {
+        let params = vec!["load".to_string(), "/store.file".to_string()];
+        let result = generate(params);
+
+        let _path = "/store.file".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Load { path: _path } => true,
             _ => false,
         });
     }
