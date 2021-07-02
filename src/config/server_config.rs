@@ -46,21 +46,7 @@ impl Config {
             let name = splited.first().unwrap();
             let tokens = splited.get(1..).unwrap();
 
-            // Remuevo si hay un signo =
-            let tokens = tokens.iter().filter(|t| !t.starts_with("="));
-            // Remuevo si hay comentarios al final de los params
-            let tokens = tokens.take_while(|t| !t.starts_with("#") && !t.starts_with(";"));
-
-            // Concat back the parameters into one string to split for separated parameters
-            let mut parameters = String::new();
-            tokens.for_each(|t| {
-                parameters.push_str(t);
-                parameters.push(' ');
-            });
-            // Splits the parameters and trims
-            let parameters = parameters.split(',').map(|s| s.trim());
-            // Converts them from Vec<&str> into Vec<String>
-            let parameters: Vec<String> = parameters.map(|s| s.to_string()).collect();
+            let parameters = Config::clean_and_parse_lines(tokens);
 
             let param = parameters[0].parse();
             if param.is_err() {
@@ -78,6 +64,25 @@ impl Config {
         }
 
         config
+    }
+
+    fn clean_and_parse_lines(tokens: &[&str]) -> Vec<String> {
+        // Remuevo si hay un signo =
+        let tokens = tokens.iter().filter(|t| !t.starts_with("="));
+        // Remuevo si hay comentarios al final de los params
+        let tokens = tokens.take_while(|t| !t.starts_with("#") && !t.starts_with(";"));
+
+        // Concat back the parameters into one string to split for separated parameters
+        let mut parameters = String::new();
+        tokens.for_each(|t| {
+            parameters.push_str(t);
+            parameters.push(' ');
+        });
+        // Splits the parameters and trims
+        let parameters = parameters.split(',').map(|s| s.trim());
+        // Converts them from Vec<&str> into Vec<String>
+        let parameters: Vec<String> = parameters.map(|s| s.to_string()).collect();
+        parameters
     }
 
     fn set_verbose(&mut self, verbose: u8) {
