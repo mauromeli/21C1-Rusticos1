@@ -12,6 +12,9 @@ use std::io::Write;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, SystemTime};
 
+const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
+const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
+
 #[derive(Debug)]
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
@@ -111,6 +114,17 @@ impl Redis {
 
     #[allow(dead_code)]
     fn copy_method(&mut self, key_origin: String, key_destination: String) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command COPY Received - key origin:".to_string()
+                + &*key_origin
+                + " - key destination: "
+                + &*key_destination,
+        ));
+
         let value_origin;
         match self.db.get(&key_origin) {
             Some(value) => value_origin = value.clone(),
@@ -139,9 +153,16 @@ impl Redis {
         match self.db.get(&key) {
             Some(return_value) => match return_value {
                 Re::String(s) => Ok(Re::String(s.to_string())),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::Nil),
         }
@@ -149,17 +170,42 @@ impl Redis {
 
     #[allow(dead_code)]
     fn getset_method(&mut self, key: String, value: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command GETSET Received - key: ".to_string() + &*key,
+        ));
+
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 self.set_method(key, value);
                 Ok(Re::String(return_value.to_string()))
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.clone(),
+                ));
+                Err(e)
+            }
         }
     }
 
     #[allow(dead_code)]
     fn set_method(&mut self, key: String, value: String) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SET Received - key: ".to_string() + &*key,
+        ));
+
         self.db.insert(key, Re::String(value));
 
         "Ok".to_string()
@@ -167,21 +213,44 @@ impl Redis {
 
     #[allow(dead_code)]
     fn incrby_method(&mut self, key: String, increment: i32) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command INCRBY Received - key: ".to_string() + &*key,
+        ));
+
         match self.get_method(key.clone()) {
             Ok(return_value) => match return_value {
                 Re::String(value) => {
                     let my_int: Result<i32, _> = value.parse();
                     if my_int.is_err() {
-                        return Err("ERR value is not an integer or out of range".to_string());
+                        let _ = self.log_sender.send(Log::new(
+                            LogLevel::Error,
+                            line!(),
+                            column!(),
+                            file!().to_string(),
+                            OUT_OF_RANGE_MSG.to_string(),
+                        ));
+
+                        return Err(OUT_OF_RANGE_MSG.to_string());
                     }
 
                     let my_int = my_int.unwrap() + increment;
                     Ok(Re::String(self.set_method(key, my_int.to_string())))
                 }
                 Re::Nil => Ok(Re::String(self.set_method(key, increment.to_string()))),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             Err(_) => Ok(Re::String(self.set_method(key, increment.to_string()))),
         }
@@ -189,6 +258,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn mget_method(&mut self, keys: Vec<String>) -> Re {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command MGET Received - keys: ".to_string() + &keys.join(" - "),
+        ));
+
         let mut elements: Vec<String> = Vec::new();
         for key in keys.iter() {
             elements.push(
@@ -202,6 +279,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn mset_method(&mut self, key_values: Vec<(String, String)>) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command MSET Received".to_string(),
+        ));
+
         for (key, value) in key_values.iter() {
             self.set_method(key.to_string(), value.to_string());
         }
@@ -210,6 +295,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn getdel_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command GETDEL Received - keys: ".to_string() + &key,
+        ));
+
         match self.get_method(key.clone()) {
             Ok(return_value) => match return_value {
                 Re::String(_) => {
@@ -217,9 +310,16 @@ impl Redis {
                     Ok(return_value)
                 }
                 Re::Nil => Ok(return_value),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             Err(msg) => Err(msg),
         }
@@ -246,9 +346,7 @@ impl Redis {
                     Ok(Re::String(self.set_method(key, value)))
                 }
                 Re::Nil => Ok(Re::String(self.set_method(key, value))),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             Err(e) => Err(e),
         }
@@ -345,9 +443,7 @@ impl Redis {
                         None => Ok(Re::Nil),
                     }
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Ok(Re::Nil),
         }
@@ -357,9 +453,7 @@ impl Redis {
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => Ok(Re::String(value.len().to_string())),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Ok(Re::String("0".to_string())),
         }
@@ -395,9 +489,7 @@ impl Redis {
                         _ => Ok(Re::Nil),
                     }
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Ok(Re::Nil),
         }
@@ -416,9 +508,7 @@ impl Redis {
 
                     Ok(Re::String(redis_element.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => {
                 self.db.insert(key, Re::List(redis_element.clone()));
@@ -442,9 +532,7 @@ impl Redis {
 
                     Ok(Re::String(redis_element.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => {
                 self.db.insert(key, Re::List(vec![]));
@@ -479,9 +567,7 @@ impl Redis {
 
                     Ok(Re::List(return_value.unwrap().to_vec()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Ok(Re::List(vec![])),
         }
@@ -512,9 +598,7 @@ impl Redis {
                         Ok(Re::String(deleted.to_string()))
                     }
                 },
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Ok(Re::String("0".to_string())),
         }
@@ -567,9 +651,7 @@ impl Redis {
 
                     Ok(Re::String("Ok".to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Err("ERR no such key".to_string()),
         }
@@ -608,9 +690,7 @@ impl Redis {
                         _ => Ok(Re::Nil),
                     }
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Ok(Re::Nil),
         }
@@ -626,9 +706,7 @@ impl Redis {
 
                     Ok(Re::String(saved_vector.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => {
                 self.db.insert(key, Re::List(values.clone()));
@@ -649,9 +727,7 @@ impl Redis {
 
                     Ok(Re::String(saved_vector.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => Err(WRONGTYPE_MSG.to_string()),
             },
             None => Ok(Re::String("0".to_string())),
         }

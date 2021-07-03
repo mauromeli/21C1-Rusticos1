@@ -58,10 +58,18 @@ impl Server {
     fn server_run(self, address: &str) -> std::io::Result<()> {
         let listener = TcpListener::bind(address)?;
         let (db_sender, db_receiver) = mpsc::channel();
-
+        let log_sender = self.log_sender.clone();
         self.db_thread(db_receiver);
 
         while let Ok(connection) = listener.accept() {
+            let _ = log_sender.send(Log::new(
+                LogLevel::Info,
+                line!(),
+                column!(),
+                file!().to_string(),
+                "=======New Client Connected======".to_string(),
+            ));
+
             let (client, _) = connection;
             let db_sender_clone = db_sender.clone();
             let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));

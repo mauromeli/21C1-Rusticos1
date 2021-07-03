@@ -26,7 +26,7 @@ impl ToString for Log {
     fn to_string(&self) -> String {
         let level = match self.level {
             LogLevel::Debug => "[DEBUG]",
-            LogLevel::Info => "[INFO]",
+            LogLevel::Info => "[INFO] ",
             LogLevel::Error => "[ERROR]",
         };
 
