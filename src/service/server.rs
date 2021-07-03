@@ -27,7 +27,9 @@ impl Server {
 
     pub fn serve(mut self) {
         // load db
-        let command = Command::Load { path: self.config.get_dbfilename() };
+        let command = Command::Load {
+            path: self.config.get_dbfilename(),
+        };
         let _ = self.redis.execute(command);
         // endload db
 
@@ -41,7 +43,8 @@ impl Server {
 
         let db_filename = self.config.get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
-        let _ = thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
+        let _ =
+            thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
 
         self.db_thread(db_receiver);
 
@@ -113,7 +116,9 @@ impl Server {
     fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<String>)>) {
         loop {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
-            let command = Command::Store { path: file.to_string() };
+            let command = Command::Store {
+                path: file.to_string(),
+            };
             let _ = db_receiver.send((command, client_sndr));
             let _ = client_rcvr.recv();
 
