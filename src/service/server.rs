@@ -7,24 +7,33 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use crate::service::logger::Logger;
 
 #[derive(Debug)]
 pub struct Server {
     redis: Redis,
     config: Config,
+    log_sender: Sender<String>,
 }
 
 impl Server {
     #[allow(dead_code)]
     pub fn new(config: Config) -> Self {
-        let redis = Redis::new();
+        let (log_sender, log_receiver) = mpsc::channel();
 
-        Self { redis, config }
+        let redis = Redis::new(log_sender.clone());
+        let logger = Logger::new(log_receiver, "logger.log".to_string());
+        let _ = thread::spawn(move || logger.log());
+
+        Self { redis, config, log_sender }
     }
 
     pub fn serve(self) {
         let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
+        let sender = self.log_sender.clone();
+        sender.send("=======Server Start Running======".to_string());
         self.server_run(&address).unwrap();
+        sender.send("=======Server Stop Running======".to_string());
     }
 
     fn server_run(self, address: &str) -> std::io::Result<()> {

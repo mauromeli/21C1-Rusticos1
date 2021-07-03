@@ -7,18 +7,20 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::time::{Duration, SystemTime};
+use std::sync::mpsc::Sender;
 
 #[derive(Debug)]
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
+    log_sender: Sender<String>,
 }
 
 impl Redis {
     #[allow(dead_code)]
-    pub fn new() -> Self {
-        let map = TtlHashMap::new();
+    pub fn new(log_sender: Sender<String>) -> Self {
+        let db = TtlHashMap::new();
 
-        Self { db: map }
+        Self { db, log_sender }
     }
 
     #[allow(dead_code)]
@@ -2929,6 +2931,7 @@ mod test {
 
         fs::remove_file("test_load_list.rdb").unwrap();
     }
+
     #[test]
     fn test_load_set() {
         let mut file = fs::File::create("test_load_set.rdb").unwrap();
