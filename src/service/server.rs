@@ -1,39 +1,58 @@
 use crate::config::server_config::Config;
 use crate::entities::command::Command;
+use crate::entities::log::Log;
+use crate::entities::log_level::LogLevel;
 use crate::service::command_generator::generate;
+use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
-use crate::service::logger::Logger;
 
 #[derive(Debug)]
 pub struct Server {
     redis: Redis,
     config: Config,
-    log_sender: Sender<String>,
+    log_sender: Sender<Log>,
 }
 
 impl Server {
     #[allow(dead_code)]
     pub fn new(config: Config) -> Self {
-        let (log_sender, log_receiver) = mpsc::channel();
+        let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
         let redis = Redis::new(log_sender.clone());
-        let logger = Logger::new(log_receiver, "logger.log".to_string());
-        let _ = thread::spawn(move || logger.log());
 
-        Self { redis, config, log_sender }
+        let logger = Logger::new(log_receiver, config.get_logfile());
+        logger.log();
+
+        Self {
+            redis,
+            config,
+            log_sender,
+        }
     }
 
     pub fn serve(self) {
         let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
         let sender = self.log_sender.clone();
-        sender.send("=======Server Start Running======".to_string());
+        let _ = sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "=======Server Start Running======".to_string(),
+        ));
         self.server_run(&address).unwrap();
-        sender.send("=======Server Stop Running======".to_string());
+        let _ = sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "=======Server Stop Running======".to_string(),
+        ));
     }
 
     fn server_run(self, address: &str) -> std::io::Result<()> {

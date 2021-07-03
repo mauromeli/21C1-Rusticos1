@@ -1,23 +1,26 @@
 use crate::entities::command::Command;
+use crate::entities::log::Log;
+use crate::entities::log_level::LogLevel;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use crate::entities::ttl_hash_map::TtlHashMap;
 use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::fs;
 use std::io::Write;
-use std::time::{Duration, SystemTime};
 use std::sync::mpsc::Sender;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
-    log_sender: Sender<String>,
+    log_sender: Sender<Log>,
 }
 
 impl Redis {
     #[allow(dead_code)]
-    pub fn new(log_sender: Sender<String>) -> Self {
+    pub fn new(log_sender: Sender<Log>) -> Self {
         let db = TtlHashMap::new();
 
         Self { db, log_sender }
@@ -94,6 +97,14 @@ impl Redis {
     }
 
     fn flushdb_method(&mut self) -> Re {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command FLUSHDB Received".to_string(),
+        ));
+
         self.db = TtlHashMap::new();
         Re::String("OK".to_string())
     }
@@ -117,6 +128,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn get_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command GET Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get(&key) {
             Some(return_value) => match return_value {
                 Re::String(s) => Ok(Re::String(s.to_string())),

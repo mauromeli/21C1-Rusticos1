@@ -1,34 +1,40 @@
-use std::sync::mpsc::Receiver;
-use std::fs;
-use std::io::Write;
-use std::fs::OpenOptions;
-use std::time::SystemTime;
+use crate::entities::log::Log;
 use std::fmt::Debug;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::sync::mpsc::Receiver;
+use std::thread;
 
 #[derive(Debug)]
 pub struct Logger {
-    receiver: Receiver<String>,
+    receiver: Receiver<Log>,
     path: String,
     level: u8,
 }
 
 impl Logger {
     #[allow(dead_code)]
-    pub fn new(receiver: Receiver<String>, path: String) -> Self {
-        Self { receiver, path, level: 1 }
+    pub fn new(receiver: Receiver<Log>, path: String) -> Self {
+        Self {
+            receiver,
+            path,
+            level: 1,
+        }
     }
 
+    #[allow(unused_must_use)]
     pub fn log(self) {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(self.path).expect("Fail Open logfile");
+        let _ = thread::spawn(move || {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(self.path)
+                .expect("Fail Open logfile");
 
-        for element in self.receiver.recv() {
-            let now = SystemTime::now();
-            println!("{:?}", now);
-            file.write((element + "\n").as_bytes());
-        }
+            while let Ok(log) = self.receiver.recv() {
+                file.write(log.to_string().as_bytes());
+            }
+        });
     }
 }

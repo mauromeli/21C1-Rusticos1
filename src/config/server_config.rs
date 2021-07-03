@@ -21,4 +21,8 @@ impl Config {
     pub fn get_port(&self) -> String {
         self.port.to_string()
     }
+
+    pub fn get_logfile(&self) -> String {
+        self.logfile.clone()
+    }
 }
