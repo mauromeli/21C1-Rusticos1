@@ -7,6 +7,9 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use std::time::Duration;
+
+static STORE_TIME_SEC: u64 = 120;
 
 #[derive(Debug)]
 pub struct Server {
@@ -22,7 +25,12 @@ impl Server {
         Self { redis, config }
     }
 
-    pub fn serve(self) {
+    pub fn serve(mut self) {
+        // load db
+        let command = Command::Load { path: self.config.get_dbfilename() };
+        let _ = self.redis.execute(command);
+        // endload db
+
         let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
         self.server_run(&address).unwrap();
     }
@@ -30,6 +38,10 @@ impl Server {
     fn server_run(self, address: &str) -> std::io::Result<()> {
         let listener = TcpListener::bind(address)?;
         let (db_sender, db_receiver) = mpsc::channel();
+
+        let db_filename = self.config.get_dbfilename();
+        let db_sender_maintenance = db_sender.clone();
+        let _ = thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
 
         self.db_thread(db_receiver);
 
@@ -96,5 +108,16 @@ impl Server {
                 let _ = sender.send(output_response);
             }
         });
+    }
+
+    fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<String>)>) {
+        loop {
+            let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
+            let command = Command::Store { path: file.to_string() };
+            let _ = db_receiver.send((command, client_sndr));
+            let _ = client_rcvr.recv();
+
+            thread::sleep(Duration::from_secs(STORE_TIME_SEC));
+        }
     }
 }

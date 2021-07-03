@@ -13,12 +13,17 @@ impl Config {
             verbose: 0,
             port: 8080,
             timeout: 0,
-            dbfilename: "dump.rdb".to_string(),
+            dbfilename: "jorge.txt".to_string(),
             logfile: "logger.log".to_string(),
         }
     }
 
     pub fn get_port(&self) -> String {
         self.port.to_string()
+    }
+
+    #[allow(dead_code)]
+    pub fn get_dbfilename(&self) -> String {
+        self.dbfilename.to_string()
     }
 }
