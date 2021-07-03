@@ -19,16 +19,15 @@ impl Server {
     #[allow(dead_code)]
     pub fn new(config: Config) -> Self {
         let redis = Redis::new();
-
         Self { redis, config }
     }
 
     pub fn serve(self) {
         let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
-        self.server_run(&address).unwrap();
+        self.server_run(&address);
     }
 
-    fn server_run(self, address: &str) -> std::io::Result<()> {
+    fn server_run(self, address: &str) {
         let listener = TcpListener::bind(address).expect("Could not bind");
         let (db_sender, db_receiver) = mpsc::channel();
         let timeout = self.config.get_timeout();
@@ -38,12 +37,13 @@ impl Server {
         while let Ok(connection) = listener.accept() {
             let (client, _) = connection;
             if timeout != 0 {
-                client.set_read_timeout(Option::from(Duration::from_secs(timeout))).expect("Could not set timeout");
+                client
+                    .set_read_timeout(Option::from(Duration::from_secs(timeout)))
+                    .expect("Could not set timeout");
             }
             let db_sender_clone = db_sender.clone();
             let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
         }
-        Ok(())
     }
 
     #[allow(clippy::while_let_on_iterator)]

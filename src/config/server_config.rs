@@ -1,10 +1,9 @@
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
-use std::iter::FromIterator;
 use std::path::Path;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Config {
     verbose: u8,
     port: u16,
@@ -42,23 +41,20 @@ impl Config {
             }
 
             // Separo el attributo de la config con el valor de la config.
-            let splited = Vec::from_iter(line.split_whitespace());
+            let splited: Vec<&str> = line.split_whitespace().collect();
             let name = splited.first().unwrap();
             let tokens = splited.get(1..).unwrap();
 
             let parameters = Config::clean_and_parse_lines(tokens);
+            let param = parameters[0].clone();
 
-            let param = parameters[0].parse();
-            if param.is_err() {
-                continue;
-            }
             // Setting the config parameters
             match name.to_lowercase().as_str() {
-                "verbose" => config.set_verbose(param.unwrap()),
-                "port" => config.set_port(param.unwrap() as u16),
-                "timeout" => config.set_timeout(param.unwrap() as u64),
-                "dbfilename" => config.set_dbfilename(param.unwrap().to_string()),
-                "logfile" => config.set_logfile(param.unwrap().to_string()),
+                "verbose" => config.set_verbose(param),
+                "port" => config.set_port(param),
+                "timeout" => config.set_timeout(param),
+                "dbfilename" => config.set_dbfilename(param),
+                "logfile" => config.set_logfile(param),
                 _ => (),
             }
         }
@@ -68,9 +64,9 @@ impl Config {
 
     fn clean_and_parse_lines(tokens: &[&str]) -> Vec<String> {
         // Remuevo si hay un signo =
-        let tokens = tokens.iter().filter(|t| !t.starts_with("="));
+        let tokens = tokens.iter().filter(|t| !t.starts_with('='));
         // Remuevo si hay comentarios al final de los params
-        let tokens = tokens.take_while(|t| !t.starts_with("#") && !t.starts_with(";"));
+        let tokens = tokens.take_while(|t| !t.starts_with('#') && !t.starts_with(';'));
 
         // Concat back the parameters into one string to split for separated parameters
         let mut parameters = String::new();
@@ -85,16 +81,25 @@ impl Config {
         parameters
     }
 
-    fn set_verbose(&mut self, verbose: u8) {
-        self.verbose = verbose;
+    fn set_verbose(&mut self, verbose: String) {
+        let val = verbose.parse::<u8>();
+        if let Ok(value) = val {
+            self.verbose = value
+        }
     }
 
-    fn set_port(&mut self, port: u16) {
-        self.port = port;
+    fn set_port(&mut self, port: String) {
+        let val = port.parse::<u16>();
+        if let Ok(value) = val {
+            self.port = value
+        }
     }
 
-    fn set_timeout(&mut self, timeout: u64) {
-        self.timeout = timeout;
+    fn set_timeout(&mut self, timeout: String) {
+        let val = timeout.parse::<u64>();
+        if let Ok(value) = val {
+            self.timeout = value
+        }
     }
 
     fn set_dbfilename(&mut self, dbfilename: String) {
@@ -127,5 +132,43 @@ impl Config {
 }
 
 fn is_invalid_line(line: &str) -> bool {
-    line.starts_with("#") || line.starts_with(";") || line.is_empty()
+    line.starts_with('#') || line.starts_with(';') || line.is_empty()
+}
+
+#[allow(unused_imports)]
+mod test {
+    use crate::config::server_config::{is_invalid_line, Config};
+    use std::iter::FromIterator;
+
+    #[test]
+    fn check_default_config_values() {
+        let config = Config::new();
+        assert_eq!("0", config.get_verbose());
+        assert_eq!("6379", config.get_port());
+        assert_eq!(0, config.get_timeout());
+        assert_eq!("dump.rdb".to_string(), config.get_dbfilename());
+        assert_eq!("log.log".to_string(), config.get_logfile());
+    }
+
+    #[test]
+    fn clean_and_parse_lines() {
+        let line: &str = "dbnombre.rbd # Listado de elementos comentados";
+        let splited = Vec::from_iter(line.split_whitespace());
+        let vec = splited.get(0..).unwrap();
+        let params = Config::clean_and_parse_lines(vec);
+
+        assert_eq!(1, params.len())
+    }
+
+    #[test]
+    fn check_line_is_valid_false() {
+        let line: &str = "#esta línea no es valida";
+        assert!(is_invalid_line(line));
+
+        let line: &str = ";esta línea no es valida";
+        assert!(is_invalid_line(line));
+
+        let line: &str = "esta línea es valida";
+        assert!(!is_invalid_line(line))
+    }
 }
