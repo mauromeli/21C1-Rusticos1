@@ -55,7 +55,7 @@ impl Server {
             file!().to_string(),
             "=======Server Start Running======".to_string(),
         ));
-        self.server_run(&address).unwrap();
+        self.server_run(&address);
         let _ = sender.send(Log::new(
             LogLevel::Debug,
             line!(),

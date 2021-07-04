@@ -178,12 +178,27 @@ impl Redis {
     }
 
     fn strlen_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command STRLEN Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get(&key) {
             Some(return_value) => match return_value {
                 Re::String(s) => Ok(Re::String(s.len().to_string())),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::String("0".to_string())),
         }
@@ -1364,7 +1379,7 @@ mod test {
 
     #[test]
     fn test_strlen_element_fail_if_is_not_string() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1378,7 +1393,7 @@ mod test {
 
     #[test]
     fn test_strlen_element_not_found() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let strlen: Result<Re, String> = redis.execute(Command::Strlen { key });
@@ -1389,7 +1404,7 @@ mod test {
 
     #[test]
     fn test_strlen_element_saved_before() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "hola".to_string();
