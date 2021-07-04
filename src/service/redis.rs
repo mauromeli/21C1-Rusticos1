@@ -9,9 +9,9 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fs;
 use std::io::Write;
+use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, SystemTime};
-use std::sync::mpsc;
 
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
 const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
@@ -387,7 +387,7 @@ impl Redis {
                     line!(),
                     column!(),
                     file!().to_string(),
-                    e.clone().to_string(),
+                    e.to_string(),
                 ));
                 Err(e)
             }
@@ -463,7 +463,10 @@ impl Redis {
             line!(),
             column!(),
             file!().to_string(),
-            "Command RENAME Received - key origin: ".to_string() + &*key_origin + " - key destination: " + &*key_destination,
+            "Command RENAME Received - key origin: ".to_string()
+                + &*key_origin
+                + " - key destination: "
+                + &*key_destination,
         ));
 
         match self.getdel_method(key_origin) {
