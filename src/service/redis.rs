@@ -57,6 +57,7 @@ impl Redis {
             Command::Mget { keys } => Ok(self.mget_method(keys)),
             Command::Mset { key_values } => Ok(Re::String(self.mset_method(key_values))),
             Command::Set { key, value } => Ok(Re::String(self.set_method(key, value))),
+            Command::Strlen { key } => self.strlen_method(key),
 
             // Keys
             Command::Copy {
@@ -173,6 +174,18 @@ impl Redis {
                 }
             },
             None => Ok(Re::Nil),
+        }
+    }
+
+    fn strlen_method(&mut self, key: String) -> Result<Re, String> {
+        match self.db.get(&key) {
+            Some(return_value) => match return_value {
+                Re::String(s) => Ok(Re::String(s.len().to_string())),
+                _ => Err(
+                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+                ),
+            },
+            None => Ok(Re::String("0".to_string())),
         }
     }
 
@@ -1348,6 +1361,46 @@ mod test {
     use std::io::Write;
     use std::thread::{self, sleep};
     use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_strlen_element_fail_if_is_not_string() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let value = vec!["value".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key: String = "key".to_string();
+        let strlen: Result<Re, String> = redis.execute(Command::Strlen { key });
+
+        assert!(strlen.is_err());
+    }
+
+    #[test]
+    fn test_strlen_element_not_found() {
+        let mut redis: Redis = Redis::new();
+
+        let key: String = "key".to_string();
+        let strlen: Result<Re, String> = redis.execute(Command::Strlen { key });
+
+        assert!(strlen.is_ok());
+        assert_eq!("0", strlen.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_strlen_element_saved_before() {
+        let mut redis: Redis = Redis::new();
+
+        let value: String = "value".to_string();
+        let key: String = "hola".to_string();
+
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key: String = "hola".to_string();
+        let strlen: Result<Re, String> = redis.execute(Command::Strlen { key });
+
+        assert_eq!("5".to_string(), strlen.unwrap().to_string());
+    }
 
     #[allow(unused_imports)]
     #[test]

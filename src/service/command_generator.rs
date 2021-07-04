@@ -30,6 +30,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "append" => generate_append(params),
         "mget" => generate_mget(params),
         "mset" => generate_mset(params),
+        "strlen" => generate_strlen(params),
 
         // Keys
         "copy" => generate_copy(params),
@@ -295,6 +296,15 @@ fn generate_mset(params: Vec<String>) -> Result<Command, String> {
         key_values.push(tuple);
     }
     Ok(Command::Mset { key_values })
+}
+
+fn generate_strlen(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'strlen' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Strlen { key })
 }
 
 fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
@@ -807,6 +817,27 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Mset { key_values: _pairs } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_strlen_without_param_err() {
+        let params = vec!["strlen".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_strlen_ok() {
+        let params = vec!["strlen".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Strlen { key: _key } => true,
             _ => false,
         });
     }
