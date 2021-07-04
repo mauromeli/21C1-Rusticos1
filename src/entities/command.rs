@@ -51,6 +51,9 @@ pub enum Command {
     Mset {
         key_values: Vec<(String, String)>,
     },
+    Strlen {
+        key: String,
+    },
 
     // Keys
     Copy {
@@ -135,6 +138,7 @@ pub enum Command {
         key: String,
         value: Vec<String>,
     },
+
     // Sets
     Sadd {
         key: String,
