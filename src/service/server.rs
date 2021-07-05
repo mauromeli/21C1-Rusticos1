@@ -74,8 +74,9 @@ impl Server {
 
         let db_filename = self.config.get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
-        let _ =
-            thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
+        let _ = thread::spawn(move ||
+            Server::maintenance_thread(db_filename, db_sender_maintenance)
+        );
 
         self.db_thread(db_receiver);
 
