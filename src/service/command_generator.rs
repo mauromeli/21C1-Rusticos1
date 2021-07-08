@@ -19,6 +19,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "dbsize" => generate_dbsize(params),
         "store" => generate_store(params),
         "load" => generate_load(params),
+        "monitor" => generate_monitor(params),
 
         // Strings
         "get" => generate_get(params),
@@ -75,6 +76,14 @@ fn generate_ping(params: Vec<String>) -> Result<Command, String> {
     }
 
     Ok(Command::Ping)
+}
+
+fn generate_monitor(params: Vec<String>) -> Result<Command, String> {
+    if params.len() > 1 {
+        return Err("ERR wrong number of arguments for 'monitor' command".to_string());
+    }
+
+    Ok(Command::Monitor)
 }
 
 fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
@@ -600,6 +609,18 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Ping => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_with_command_monitor() {
+        let params = vec!["monitor".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Monitor => true,
             _ => false,
         });
     }

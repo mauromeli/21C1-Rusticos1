@@ -33,6 +33,10 @@ impl Logger {
                 .expect("Fail Open logfile");
 
             while let Ok(log) = self.receiver.recv() {
+                if self.level == 1 {
+                    println!("{:?}", log.to_string());
+                }
+
                 file.write(log.to_string().as_bytes());
             }
         });

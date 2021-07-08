@@ -46,6 +46,7 @@ impl Redis {
             Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
             Command::Store { path } => self.store_method(path),
             Command::Load { path } => self.load_method(path),
+            Command::Monitor => Err("NotImplemented".to_string()),
 
             // Strings
             Command::Append { key, value } => self.append_method(key, value),

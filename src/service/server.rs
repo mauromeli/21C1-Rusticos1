@@ -74,9 +74,10 @@ impl Server {
 
         let db_filename = self.config.get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
-        let _ = thread::spawn(move ||
-            Server::maintenance_thread(db_filename, db_sender_maintenance)
-        );
+
+        //Todo: Agregar el handler.
+        let _ =
+            thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
 
         self.db_thread(db_receiver);
 
@@ -96,6 +97,7 @@ impl Server {
                     .expect("Could not set timeout");
             }
             let db_sender_clone = db_sender.clone();
+            //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
             let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
         }
     }
@@ -110,6 +112,7 @@ impl Server {
 
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(request) = lines.next() {
+            //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
 
             if request.is_err() {
@@ -138,7 +141,10 @@ impl Server {
             };
 
             let _ = output.write(output_response.as_ref());
+            //TODO: Ver que hacer con el error.
         }
+
+        //TODO: flag = false
     }
 
     fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>)>) {
@@ -160,12 +166,21 @@ impl Server {
         });
     }
 
+    //TODO: Return Result. -> Result<(), std::io::Error>
     fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<String>)>) {
         loop {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
             let command = Command::Store {
                 path: file.to_string(),
             };
+
+            /*
+            sender.send("hola")?;
+            client_recv.recv()?;
+            Ok(())
+
+            */
+            // Todo: Ver que pasa con  los errores.
             let _ = db_receiver.send((command, client_sndr));
             let _ = client_rcvr.recv();
 
