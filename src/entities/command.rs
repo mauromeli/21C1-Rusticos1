@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
+use std::sync::mpsc::Sender;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -144,4 +145,20 @@ pub enum Command {
         key: String,
         values: HashSet<String>,
     },
+    Pubsub {
+        args: Vec<String>
+    },
+    Subscribe {
+        channels: Vec<String>,
+        local_address: String,
+        sender: Sender<String>
+    },
+    Publish {
+        channel: String,
+        message: String
+    },
+    Unsubscribe {
+        local_address: String,
+        channels: Vec<String>
+    }
 }

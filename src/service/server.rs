@@ -34,14 +34,18 @@ impl Server {
         self.db_thread(db_receiver);
 
         while let connection = listener.accept()? {
-            let (client, _) = connection;
+
+            let (client, socket_addr) = connection;
             let db_sender_clone = db_sender.clone();
-            let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
+
+            let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone,
+                                                                 socket_addr.to_string()));
         }
         Ok(())
     }
 
-    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<String>)>) {
+    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<String>, String)>,
+                    local_address: String) {
         let client_input: TcpStream = client.try_clone().unwrap();
         let client_output: TcpStream = client;
         let input = BufReader::new(client_input);
@@ -51,7 +55,6 @@ impl Server {
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(request) = lines.next() {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
-
             //TODO: Agregar decode
             let mut vector: Vec<String> = vec![];
             for string in request.unwrap().split(" ") {
@@ -65,7 +68,7 @@ impl Server {
             // TODO: Agregar forma de escritura
             match command {
                 Ok(command) => {
-                    let _ = db_sender_clone.send((command, client_sndr));
+                    let _ = db_sender_clone.send((command, client_sndr, local_address.clone()));
                     let response = client_rcvr.recv();
                     output_response = response.unwrap() + "\n";
                 }
@@ -78,14 +81,14 @@ impl Server {
         }
     }
 
-    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>)>) {
+    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>, String)>) {
         let _ = thread::spawn(move || {
             while let msg = db_receiver.recv() {
                 if msg.is_err() {
                     panic!();
                 }
 
-                let (command, sender): (Command, Sender<String>) = msg.unwrap();
+                let (command, sender, local_addr): (Command, Sender<String>, String) = msg.unwrap();
                 let redis_response = self.redis.execute(command);
                 //TODO: Encode RedisResponse
                 let output_response;

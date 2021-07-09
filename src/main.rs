@@ -4,6 +4,7 @@ use crate::service::server::Server;
 mod config;
 mod entities;
 mod service;
+mod pubsub;
 
 fn main() {
     let config = Config::new();

@@ -4,10 +4,13 @@ use crate::entities::ttl_hash_map::TtlHashMap;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
+use crate::pubsub::pubsub::PubSub;
+use std::sync::mpsc::Sender;
 
 #[derive(Debug)]
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
+    pubsub: PubSub,
 }
 
 impl Redis {
@@ -15,11 +18,12 @@ impl Redis {
     pub fn new() -> Self {
         let map = TtlHashMap::new();
 
-        Self { db: map }
+        Self { db: map , pubsub: PubSub::new()}
     }
 
     #[allow(dead_code)]
-    pub fn execute(&mut self, command: Command) -> Result<Re, String> {
+    pub fn execute(&mut self, command: Command)
+        -> Result<Re, String> {
         match command {
             // Server
             Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
@@ -81,6 +85,12 @@ impl Redis {
             Command::Sismember { key, value } => self.sismember_method(key, value),
             Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
+
+            //PubSub
+            Command::Pubsub { args } => self.pubsub_method(args),
+            Command::Subscribe {channels, local_address, sender } => self.subscribe_method(channels, local_address, sender),
+            Command::Publish { channel, message } => self.publish_method(channel, message),
+            Command::Unsubscribe { local_address, channels } => self.unsubscribe_method(local_address, channels),
         }
     }
 
@@ -705,6 +715,57 @@ impl Redis {
             None => Ok(Re::String("0".to_string())),
         }
     }
+
+    fn pubsub_method(&mut self, args: Vec<String>) -> Result<RedisElement, String> {
+        let mut response = Vec::new();
+        match args.get(0) {
+            Some(arg) => match arg {
+               arg => {
+                    if arg == "channels" {
+                        if ! self.pubsub.channels.is_empty() {
+                            let channels = self.pubsub.channels.clone();
+                            for channel in channels {
+                               if ! channel.1.is_empty() {
+                                   response.push(channel.0);
+                               }
+                            }
+                        }
+                    } else if arg == "numsub" {
+                        if ! self.pubsub.channels.is_empty() {
+                            for channel in args {
+                                if let Some(subscribers) =  self.pubsub.channels.get(&channel) {
+                                    response.push(channel);
+                                    response.push(subscribers.len().to_string());
+                                }
+                            }
+                        }
+                    } else {
+                       return Err("The requested command is not available".to_string());
+                    }
+                   Ok(Re::List(response))
+                }
+            },
+            _ => Err("There are no existing channels".to_string()),
+        }
+    }
+
+    fn subscribe_method(&mut self, channels: Vec<String>, local_address: String,
+                        sender: Sender<String>) -> Result<Re, String> {
+        self.pubsub.add_client(sender, local_address.clone());
+
+        self.pubsub.subscribe(local_address.clone(), channels);
+        Ok(Re::String("subscribe".to_string()))
+    }
+
+    fn publish_method(&mut self, channel: String, message: String) -> Result<Re, String> {
+        self.pubsub.pub_message(channel, message);
+        Ok(Re::String("publish".to_string()))
+    }
+
+    fn unsubscribe_method(&mut self, local_address: String, channels: Vec<String>) -> Result<Re, String> {
+        self.pubsub.unsubscribe(local_address, channels);
+        Ok(Re::String("unsubscribe".to_string()))
+    }
 }
 
 #[allow(unused_imports)]
@@ -714,6 +775,9 @@ mod test {
     use std::collections::HashSet;
     use std::thread::{self, sleep};
     use std::time::{Duration, SystemTime};
+    use crate::entities::command::Command::Pubsub;
+    use crate::pubsub::pubsub::PubSub;
+    use std::sync::mpsc::{channel};
 
     #[allow(unused_imports)]
     #[test]
@@ -722,6 +786,8 @@ mod test {
 
         let value: String = "value".to_string();
         let key: String = "hola".to_string();
+
+        let (sender, _receiver) = channel();
 
         let _set = redis.execute(Command::Set { key, value });
 
@@ -737,6 +803,8 @@ mod test {
 
         let key: String = "hola".to_string();
         let value: String = "chau".to_string();
+
+        let (sender, _receiver) = channel();
 
         let _set = redis.execute(Command::Set { key, value });
 
@@ -754,6 +822,8 @@ mod test {
     fn test_get_on_empty_key_returns_nil() {
         let mut redis: Redis = Redis::new();
 
+        let (sender, _receiver) = channel();
+
         let key = "hola".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
 
@@ -763,6 +833,8 @@ mod test {
     #[test]
     fn test_get_element_fail_if_is_not_string() {
         let mut redis: Redis = Redis::new();
+
+        let (sender, _receiver) = channel();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -777,6 +849,8 @@ mod test {
     #[test]
     fn test_getset_fails_if_is_not_string() {
         let mut redis: Redis = Redis::new();
+
+        let (sender, _receiver) = channel();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -793,6 +867,8 @@ mod test {
     fn test_getset_on_empty_key_returns_nil() {
         let mut redis: Redis = Redis::new();
 
+        let (sender, _receiver) = channel();
+
         let key: String = "key".to_string();
         let value: String = "value".to_string();
         let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
@@ -803,6 +879,8 @@ mod test {
     #[test]
     fn test_getset_ok() {
         let mut redis: Redis = Redis::new();
+
+        let (sender, _receiver) = channel();
 
         let key: String = "key".to_string();
         let value: String = "1".to_string();
@@ -821,6 +899,8 @@ mod test {
     #[test]
     fn test_ping_returns_pong() {
         let mut redis: Redis = Redis::new();
+
+        let (sender, _receiver) = channel();
 
         let ping: Result<Re, String> = redis.execute(Command::Ping);
 
@@ -1165,7 +1245,7 @@ mod test {
         let copy = redis.execute(Command::Copy {
             key_destination,
             key_origin,
-        });
+        }, ());
 
         assert_eq!("0".to_string(), copy.unwrap().to_string());
     }
@@ -1183,7 +1263,7 @@ mod test {
         let _copy = redis.execute(Command::Copy {
             key_destination,
             key_origin,
-        });
+        }, ());
 
         let key: String = "key2".to_string();
         let get = redis.execute(Command::Get { key });
@@ -2660,4 +2740,24 @@ mod test {
         assert!(lrem.clone().is_ok());
         assert_eq!(Re::String("0".to_string()), lrem.clone().unwrap());
     }
+
+    #[test]
+    fn test_pubsub_ok() {
+        let mut redis: Redis = Redis::new();
+
+        let (sender, _receiver) = channel();
+
+        let mut args = Vec::new();
+        args.push("channels".to_string());
+
+        let pubsub = redis.execute(Command::Pubsub {
+            args,
+        });
+        assert!(pubsub.clone().is_ok());
+
+        let mut vector = Vec::new();
+
+        assert_eq!(Re::List(vector), pubsub.clone().unwrap());
+    }
+
 }

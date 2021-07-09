@@ -59,6 +59,13 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "sismember" => generate_sismember(params),
         "smembers" => generate_smembers(params),
         "srem" => generate_srem(params),
+
+        //PubSub
+        "pubsub" => generate_pubsub(params),
+        "subscribe" => generate_subscribe(params),
+        "publish" => generate_publish(params),
+        "unsubscribe" => generate_unsubscribe(params),
+
         _ => Err("Command not valid".to_string()),
     }
 }
@@ -517,6 +524,35 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
 
     let key = params[0].clone();
     Ok(Command::Smembers { key })
+}
+
+fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'pubsub' command".to_string());
+    }
+    let args = params.clone();
+    Ok(Command::Pubsub { args })
+}
+
+fn generate_subscribe(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
+    }
+    let channels = params.clone();
+    Ok(Command::Subscribe { channels })
+}
+
+fn generate_publish(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 2 {
+        return Err("ERR wrong number of arguments for 'publish' command".to_string());
+    }
+    let channel = params[0].clone();
+    let message = params[1].clone();
+    Ok(Command::Publish { channel, message })
+}
+
+fn generate_unsubscribe(params: Vec<String>) {
+    Ok(Command::Unsubscribe { channels: params });
 }
 
 #[allow(unused_imports)]
