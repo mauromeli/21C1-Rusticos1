@@ -2,6 +2,9 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
+use crate::entities::log_level::LogLevel;
+
+// Struct usado para representar la configuración posible de nuestra base de datos Redis.
 
 #[derive(Debug)]
 pub struct Config {
@@ -10,6 +13,7 @@ pub struct Config {
     timeout: u64,
     dbfilename: String,
     logfile: String,
+    loglevel: LogLevel,
 }
 
 #[allow(dead_code)]
@@ -21,6 +25,7 @@ impl Config {
             timeout: 0,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
+            loglevel: LogLevel::Debug,
         }
     }
 
@@ -55,6 +60,7 @@ impl Config {
                 "timeout" => config.set_timeout(param),
                 "dbfilename" => config.set_dbfilename(param),
                 "logfile" => config.set_logfile(param),
+                "loglevel" => config.set_loglevel(param),
                 _ => (),
             }
         }
@@ -110,6 +116,14 @@ impl Config {
         self.logfile = logfile;
     }
 
+    fn set_loglevel(&mut self, loglevel: String) {
+        match loglevel.to_lowercase().as_str() {
+            "error" => self.loglevel = LogLevel::Error,
+            "info" => self.loglevel = LogLevel::Info,
+            _ => self.loglevel = LogLevel::Debug,
+        }
+    }
+
     pub fn get_port(&self) -> String {
         self.port.to_string()
     }
@@ -129,6 +143,7 @@ impl Config {
     pub fn get_logfile(&self) -> String {
         self.logfile.to_string()
     }
+
 }
 
 fn is_invalid_line(line: &str) -> bool {
@@ -139,6 +154,7 @@ fn is_invalid_line(line: &str) -> bool {
 mod test {
     use crate::config::server_config::{is_invalid_line, Config};
     use std::iter::FromIterator;
+    use crate::entities::log_level::LogLevel;
 
     #[test]
     fn check_default_config_values() {
@@ -148,6 +164,7 @@ mod test {
         assert_eq!(0, config.get_timeout());
         assert_eq!("dump.rdb".to_string(), config.get_dbfilename());
         assert_eq!("log.log".to_string(), config.get_logfile());
+        assert_eq!(LogLevel::Debug, config.loglevel);
     }
 
     #[test]

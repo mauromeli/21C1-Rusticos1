@@ -9,7 +9,7 @@ use std::thread;
 pub struct Logger {
     receiver: Receiver<Log>,
     path: String,
-    level: u8,
+    verbose: u8,
 }
 
 impl Logger {
@@ -18,7 +18,7 @@ impl Logger {
         Self {
             receiver,
             path,
-            level: 1,
+            verbose: 1,
         }
     }
 
@@ -33,7 +33,7 @@ impl Logger {
                 .expect("Fail Open logfile");
 
             while let Ok(log) = self.receiver.recv() {
-                if self.level == 1 {
+                if self.verbose == 1 {
                     println!("{:?}", log.to_string());
                 }
 

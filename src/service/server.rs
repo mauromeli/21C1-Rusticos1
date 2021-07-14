@@ -7,10 +7,14 @@ use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use std::thread::JoinHandle;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use crate::entities::response::Response;
 
 static STORE_TIME_SEC: u64 = 120;
 
@@ -67,7 +71,7 @@ impl Server {
 
     fn server_run(self, address: &str) {
         let listener = TcpListener::bind(address).expect("Could not bind");
-        let (db_sender, db_receiver) = mpsc::channel();
+        let (db_sender, db_receiver) : (Sender<(Command, Sender<(String,bool)>)>, Receiver<(Command, Sender<(String,bool)>)>)= mpsc::channel();
 
         let log_sender = self.log_sender.clone();
         let timeout = self.config.get_timeout();
@@ -76,12 +80,14 @@ impl Server {
         let db_sender_maintenance = db_sender.clone();
 
         //Todo: Agregar el handler.
-        let _ =
-            thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
+        let _ = thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
 
         self.db_thread(db_receiver);
 
+        let mut handlers: Vec<(JoinHandle<()>, Arc<AtomicBool>)> = vec![];
+
         while let Ok(connection) = listener.accept() {
+            //accepter thread
             let _ = log_sender.send(Log::new(
                 LogLevel::Info,
                 line!(),
@@ -92,18 +98,28 @@ impl Server {
 
             let (client, _) = connection;
             if timeout != 0 {
-                client
-                    .set_read_timeout(Option::from(Duration::from_secs(timeout)))
+                client.set_read_timeout(Option::from(Duration::from_secs(timeout)))
                     .expect("Could not set timeout");
             }
-            let db_sender_clone = db_sender.clone();
+            let db_sender_clone: Sender<(Command, Sender<(String,bool)>)> = db_sender.clone();
             //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
-            let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
+            //let used = Arc::clone(&shared);
+            let flag = Arc::new(AtomicBool::new(true));
+            let used_flag = flag.clone();
+            let handler = thread::spawn(move || Server::client_handler(client, db_sender_clone, &used_flag));
+            handlers.push((handler, flag));
+
+            //antes de hacer el join me quedo con los true y luego los false para hacerle join.
+            // if vive lo guardo else join.
+            //let vec = handlers.iter().filter(|h| h.1 == false).map().collect();
+            /*for handler in handlers.filter(used==false).iter() {
+                handler.join()
+            }*/
         }
     }
 
     #[allow(clippy::while_let_on_iterator)]
-    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<String>)>) {
+    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<(String,bool)>)>, used: &AtomicBool) {
         let client_input: TcpStream = client.try_clone().unwrap();
         let client_output: TcpStream = client;
         let input = BufReader::new(client_input);
@@ -113,11 +129,12 @@ impl Server {
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(request) = lines.next() {
             //TODO: Wrappear esto a una func -> Result
-            let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
+            let (client_sndr, client_rcvr): (Sender<(String,bool)>, Receiver<(String,bool)>) = mpsc::channel();
 
             if request.is_err() {
                 break;
             }
+            println!("{:?}", request);
             //TODO: Agregar decode
             let mut vector: Vec<String> = vec![];
             for string in request.unwrap().split_whitespace() {
@@ -133,7 +150,15 @@ impl Server {
                 Ok(command) => {
                     let _ = db_sender_clone.send((command, client_sndr));
                     let response = client_rcvr.recv();
-                    output_response = response.unwrap() + "\n";
+                    let (str, bool) = response.unwrap();
+                    output_response = str + "\n";
+                    if bool {
+                        let _ = output.write(output_response.as_ref());
+                        while let response = client_rcvr.recv() {
+                            let (str, _) = response.unwrap();
+                            let _ = output.write((str + "\n").as_ref());
+                        }
+                    }
                 }
                 _ => {
                     output_response = command.err().unwrap() + "\n";
@@ -145,34 +170,42 @@ impl Server {
         }
 
         //TODO: flag = false
+        used.swap(false, Ordering::Relaxed);
     }
 
-    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>)>) {
+    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<(String, bool)>)>) {
         let _ = thread::spawn(move || {
             while let Ok((command, sender)) = db_receiver.recv() {
                 let redis_response = self.redis.execute(command);
                 //TODO: Encode RedisResponse
-                let output_response;
+                let mut output_response = "".to_string();
                 match redis_response {
                     Ok(value) => {
-                        output_response = value.to_string();
+                        match value {
+                            Response::Normal(redisString) => {
+                                output_response = redisString.to_string()
+                            },
+                            Response::Stream(rec) => {
+                                while let Ok(redis_element) = rec.recv() {
+                                    let _ = sender.send((redis_element.to_string(), true));
+                                }
+                            }
+                        }
                     }
                     Err(error_msg) => {
                         output_response = error_msg;
                     }
                 };
-                let _ = sender.send(output_response);
+                let _ = sender.send((output_response, false));
             }
         });
     }
 
     //TODO: Return Result. -> Result<(), std::io::Error>
-    fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<String>)>) {
+    fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<(String, bool)>)>) {
         loop {
-            let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
-            let command = Command::Store {
-                path: file.to_string(),
-            };
+            let (client_sndr, client_rcvr): (Sender<(String, bool)>, Receiver<(String, bool)>) = mpsc::channel();
+            let command = Command::Store { path: file.to_string() };
 
             /*
             sender.send("hola")?;

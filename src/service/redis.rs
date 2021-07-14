@@ -10,8 +10,10 @@ use std::fmt::Debug;
 use std::fs;
 use std::io::Write;
 use std::sync::mpsc;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, Receiver};
 use std::time::{Duration, SystemTime};
+use crate::entities::response::Response;
+use std::thread;
 
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
 const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
@@ -20,6 +22,7 @@ const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
     log_sender: Sender<Log>,
+    //vec_senders: Vec<Sender<Response>>pubsub
 }
 
 impl Redis {
@@ -37,6 +40,61 @@ impl Redis {
         Self { db, log_sender }
     }
 
+    #[allow(dead_code)]
+    pub fn execute(&mut self, command: Command) -> Result<Response, String> {
+        /*
+            let empty_vec = vec<sender>
+            for sender in vec_senders {
+                match let result = sender.send(command.to_string()) {
+                    Ok(_) => empty_vec.push(sender),
+                    Err(_) => _,
+                }
+            }
+            Similar al flag del otro.
+        */
+        match command {
+            // Server
+            Command::Ping => Ok(Response::Normal(Re::String("PONG".to_string()))),
+            Command::Flushdb => Ok(self.flushdb_method_poc()),
+            Command::Monitor => Ok(self.monitor_method()),
+            _ => Err("NotImplemented".to_string()),
+        }
+    }
+
+    fn flushdb_method_poc(&mut self) -> Response {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command FLUSHDB Received".to_string(),
+        ));
+
+        self.db = TtlHashMap::new();
+        Response::Normal(Re::String("OK".to_string()))
+    }
+
+    fn monitor_method(&mut self) -> Response {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command MONITOR Received".to_string(),
+        ));
+
+        let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
+        /*
+        thread::spawn(move || {
+            loop {
+                let _ = sen.send(Re::String("Hola".to_string()));
+                thread::sleep(Duration::from_secs(3));
+            }
+        });*/
+        //self.vec_senders.push("ok");
+        Response::Stream(rec)
+    }
+    /*
     #[allow(dead_code)]
     pub fn execute(&mut self, command: Command) -> Result<Re, String> {
         match command {
@@ -107,7 +165,7 @@ impl Redis {
             Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
         }
-    }
+    }*/
 
     fn flushdb_method(&mut self) -> Re {
         let _ = self.log_sender.send(Log::new(

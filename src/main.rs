@@ -6,6 +6,7 @@ mod config;
 mod entities;
 mod service;
 
+
 fn main() -> Result<(), ()> {
     let argv: Vec<String> = env::args().collect();
     let config: Config;
