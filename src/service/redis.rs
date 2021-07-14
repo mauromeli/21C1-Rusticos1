@@ -84,13 +84,13 @@ impl Redis {
         ));
 
         let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
-        /*
+
         thread::spawn(move || {
             loop {
                 let _ = sen.send(Re::String("Hola".to_string()));
                 thread::sleep(Duration::from_secs(3));
             }
-        });*/
+        });
         //self.vec_senders.push("ok");
         Response::Stream(rec)
     }

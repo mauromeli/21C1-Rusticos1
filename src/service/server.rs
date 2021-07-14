@@ -71,7 +71,7 @@ impl Server {
 
     fn server_run(self, address: &str) {
         let listener = TcpListener::bind(address).expect("Could not bind");
-        let (db_sender, db_receiver) : (Sender<(Command, Sender<(String,bool)>)>, Receiver<(Command, Sender<(String,bool)>)>)= mpsc::channel();
+        let (db_sender, db_receiver) : (Sender<(Command, Sender<Response>)>, Receiver<(Command, Sender<Response>)>)= mpsc::channel();
 
         let log_sender = self.log_sender.clone();
         let timeout = self.config.get_timeout();
@@ -101,7 +101,7 @@ impl Server {
                 client.set_read_timeout(Option::from(Duration::from_secs(timeout)))
                     .expect("Could not set timeout");
             }
-            let db_sender_clone: Sender<(Command, Sender<(String,bool)>)> = db_sender.clone();
+            let db_sender_clone: Sender<(Command, Sender<Response>)> = db_sender.clone();
             //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
             //let used = Arc::clone(&shared);
             let flag = Arc::new(AtomicBool::new(true));
@@ -119,7 +119,7 @@ impl Server {
     }
 
     #[allow(clippy::while_let_on_iterator)]
-    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<(String,bool)>)>, used: &AtomicBool) {
+    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<Response>)>, used: &AtomicBool) {
         let client_input: TcpStream = client.try_clone().unwrap();
         let client_output: TcpStream = client;
         let input = BufReader::new(client_input);
@@ -129,7 +129,7 @@ impl Server {
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(request) = lines.next() {
             //TODO: Wrappear esto a una func -> Result
-            let (client_sndr, client_rcvr): (Sender<(String,bool)>, Receiver<(String,bool)>) = mpsc::channel();
+            let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
             if request.is_err() {
                 break;
@@ -143,29 +143,40 @@ impl Server {
             //TODO: FIN Agregar decode
 
             let command = generate(vector);
-            let output_response;
 
             // TODO: Agregar forma de escritura por cada tipo.
             match command {
                 Ok(command) => {
                     let _ = db_sender_clone.send((command, client_sndr));
-                    let response = client_rcvr.recv();
-                    let (str, bool) = response.unwrap();
-                    output_response = str + "\n";
-                    if bool {
+                    let response = client_rcvr.recv().unwrap();
+                    /*if bool {
                         let _ = output.write(output_response.as_ref());
                         while let response = client_rcvr.recv() {
                             let (str, _) = response.unwrap();
                             let _ = output.write((str + "\n").as_ref());
                         }
-                    }
+                    }*/
+
+                    match response {
+                            Response::Normal(redisString) => {
+                                let _ = output.write((redisString.to_string() + "\n").as_ref());
+
+                            },
+                            Response::Stream(rec) => {
+                                while let Ok(redis_element) = rec.recv() {
+                                    let _ = output.write((redis_element.to_string() + "\n").as_ref());
+                                }
+                            },
+                            Response::Error(msg)=> {
+                                let _ = output.write((msg + "\n").as_ref());
+                            }
+                        }
                 }
                 _ => {
-                    output_response = command.err().unwrap() + "\n";
+                    let _ = output.write((command.err().unwrap() + "\n").as_ref());
                 }
             };
 
-            let _ = output.write(output_response.as_ref());
             //TODO: Ver que hacer con el error.
         }
 
@@ -173,38 +184,27 @@ impl Server {
         used.swap(false, Ordering::Relaxed);
     }
 
-    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<(String, bool)>)>) {
+    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<(Response)>)>) {
         let _ = thread::spawn(move || {
             while let Ok((command, sender)) = db_receiver.recv() {
                 let redis_response = self.redis.execute(command);
                 //TODO: Encode RedisResponse
-                let mut output_response = "".to_string();
                 match redis_response {
                     Ok(value) => {
-                        match value {
-                            Response::Normal(redisString) => {
-                                output_response = redisString.to_string()
-                            },
-                            Response::Stream(rec) => {
-                                while let Ok(redis_element) = rec.recv() {
-                                    let _ = sender.send((redis_element.to_string(), true));
-                                }
-                            }
-                        }
+                        let _ = sender.send(value);
                     }
                     Err(error_msg) => {
-                        output_response = error_msg;
+                        let _ = sender.send(Response::Error(error_msg));
                     }
                 };
-                let _ = sender.send((output_response, false));
             }
         });
     }
 
     //TODO: Return Result. -> Result<(), std::io::Error>
-    fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<(String, bool)>)>) {
+    fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<Response>)>) {
         loop {
-            let (client_sndr, client_rcvr): (Sender<(String, bool)>, Receiver<(String, bool)>) = mpsc::channel();
+            let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
             let command = Command::Store { path: file.to_string() };
 
             /*

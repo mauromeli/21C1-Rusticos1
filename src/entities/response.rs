@@ -5,5 +5,6 @@ use crate::entities::redis_element::RedisElement;
 #[derive(Debug)]
 pub enum Response {
     Normal(RedisElement),
-    Stream(Receiver<RedisElement>)
+    Stream(Receiver<RedisElement>),
+    Error(String)
 }
