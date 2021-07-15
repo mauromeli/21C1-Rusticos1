@@ -14,6 +14,7 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::time::{Duration, SystemTime};
 use crate::entities::response::Response;
 use std::thread;
+use std::any::Any;
 
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
 const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
@@ -22,120 +23,78 @@ const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
     log_sender: Sender<Log>,
-    //vec_senders: Vec<Sender<Response>>pubsub
+    vec_senders: Vec<Sender<Re>>,//pubsub
 }
 
 impl Redis {
     #[allow(dead_code)]
     pub fn new(log_sender: Sender<Log>) -> Self {
         let db = TtlHashMap::new();
+        let vec_senders: Vec<Sender<Re>> = Vec::new();
 
-        Self { db, log_sender }
+        Self { db, log_sender, vec_senders }
     }
 
     #[allow(dead_code)]
     fn new_for_test() -> Self {
         let db = TtlHashMap::new();
         let (log_sender, _): (Sender<Log>, _) = mpsc::channel();
-        Self { db, log_sender }
+        let vec_senders: Vec<Sender<Re>> = Vec::new();
+
+        Self { db, log_sender, vec_senders }
     }
 
     #[allow(dead_code)]
     pub fn execute(&mut self, command: Command) -> Result<Response, String> {
-        /*
-            let empty_vec = vec<sender>
-            for sender in vec_senders {
-                match let result = sender.send(command.to_string()) {
-                    Ok(_) => empty_vec.push(sender),
-                    Err(_) => _,
-                }
-            }
-            Similar al flag del otro.
-        */
+
+        self.notify_monitor(&command);
+
         match command {
             // Server
-            Command::Ping => Ok(Response::Normal(Re::String("PONG".to_string()))),
-            Command::Flushdb => Ok(self.flushdb_method_poc()),
-            Command::Monitor => Ok(self.monitor_method()),
-            _ => Err("NotImplemented".to_string()),
-        }
-    }
-
-    fn flushdb_method_poc(&mut self) -> Response {
-        let _ = self.log_sender.send(Log::new(
-            LogLevel::Debug,
-            line!(),
-            column!(),
-            file!().to_string(),
-            "Command FLUSHDB Received".to_string(),
-        ));
-
-        self.db = TtlHashMap::new();
-        Response::Normal(Re::String("OK".to_string()))
-    }
-
-    fn monitor_method(&mut self) -> Response {
-        let _ = self.log_sender.send(Log::new(
-            LogLevel::Debug,
-            line!(),
-            column!(),
-            file!().to_string(),
-            "Command MONITOR Received".to_string(),
-        ));
-
-        let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
-
-        thread::spawn(move || {
-            loop {
-                let _ = sen.send(Re::String("Hola".to_string()));
-                thread::sleep(Duration::from_secs(3));
-            }
-        });
-        //self.vec_senders.push("ok");
-        Response::Stream(rec)
-    }
-    /*
-    #[allow(dead_code)]
-    pub fn execute(&mut self, command: Command) -> Result<Re, String> {
-        match command {
-            // Server
-            Command::Ping => Ok(Re::String("PONG".to_string())),
+            Command::Ping => self.ping_method(),
             Command::Flushdb => Ok(self.flushdb_method()),
-            Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
+            Command::Dbsize => Ok(self.dbsize_method()),
             Command::Store { path } => self.store_method(path),
             Command::Load { path } => self.load_method(path),
-            Command::Monitor => Err("NotImplemented".to_string()),
+            Command::Monitor => Ok(self.monitor_method()),
 
             // Strings
             Command::Append { key, value } => self.append_method(key, value),
             Command::Decrby { key, decrement } => self.incrby_method(key, -(decrement as i32)),
-            Command::Get { key } => self.get_method(key),
-            Command::Getdel { key } => self.getdel_method(key),
+            Command::Get { key } => {
+                match self.get_method(key) {
+                    Ok(re) => Ok(Response::Normal(re)),
+                    Err(e) => Err(e)
+                }
+            },
+            Command::Getdel { key } => {
+                match self.getdel_method(key) {
+                    Ok(re) => Ok(Response::Normal(re)),
+                    Err(e) => Err(e)
+                }
+            },
             Command::Getset { key, value } => self.getset_method(key, value),
             Command::Incrby { key, increment } => self.incrby_method(key, increment as i32),
             Command::Mget { keys } => Ok(self.mget_method(keys)),
-            Command::Mset { key_values } => Ok(Re::String(self.mset_method(key_values))),
-            Command::Set { key, value } => Ok(Re::String(self.set_method(key, value))),
+            Command::Mset { key_values } => Ok(self.mset_method(key_values)),
+            Command::Set { key, value } => Ok(Response::Normal(Re::String(self.set_method(key, value)))),
             Command::Strlen { key } => self.strlen_method(key),
 
             // Keys
             Command::Copy {
                 key_origin,
                 key_destination,
-            } => Ok(Re::String(self.copy_method(key_origin, key_destination))),
-            Command::Del { keys } => Ok(Re::String(self.del_method(keys))),
-            Command::Exists { keys } => Ok(Re::String(self.exists_method(keys))),
-            Command::Expire { key, ttl } => Ok(Re::String(self.expire_method(key, ttl))),
-            Command::Expireat { key, ttl } => Ok(Re::String(self.expireat_method(key, ttl))),
-            Command::Persist { key } => Ok(Re::String(self.persist_method(key))),
-            Command::Rename {
-                key_origin,
-                key_destination,
-            } => self.rename_method(key_origin, key_destination),
-            Command::Keys { pattern } => Ok(Re::List(self.keys_method(pattern))),
-            Command::Touch { keys } => Ok(Re::String(self.touch_method(keys))),
-            Command::Ttl { key } => Ok(Re::String(self.ttl_method(key))),
-            Command::Type { key } => Ok(Re::String(self.type_method(key))),
+            } => Ok(self.copy_method(key_origin, key_destination)),
+            Command::Del { keys } => Ok(Response::Normal(Re::String(self.del_method(keys)))),
+            Command::Exists{ keys } => Ok(self.exists_method(keys)),
+            Command::Expire { key, ttl } => Ok(Response::Normal(Re::String(self.expire_method(key, ttl)))),
+            Command::Expireat { key, ttl } => Ok(Response::Normal(Re::String(self.expireat_method(key, ttl)))),
+            Command::Persist { key } => Ok(Response::Normal(Re::String(self.persist_method(key)))),
+            Command::Rename { key_origin, key_destination} => self.rename_method(key_origin, key_destination),
+            Command::Keys { pattern } => Ok(Response::Normal(Re::List(self.keys_method(pattern)))),
+            Command::Touch { keys } => Ok(Response::Normal(Re::String(self.touch_method(keys)))),
+            Command::Ttl { key } => Ok(Response::Normal(Re::String(self.ttl_method(key)))),
+            Command::Type { key } => Ok(Response::Normal(Re::String(self.type_method(key)))),
 
             // Lists
             Command::Lindex { key, index } => self.lindex_method(key, index),
@@ -165,9 +124,57 @@ impl Redis {
             Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
         }
-    }*/
+    }
 
-    fn flushdb_method(&mut self) -> Re {
+    fn dbsize_method(&mut self) -> Response {
+        Response::Normal(Re::String(self.db.len().to_string()))
+    }
+
+    fn ping_method(&mut self) -> Result<Response, String> {
+        Ok(Response::Normal(Re::String("PONG".to_string())))
+    }
+
+    fn notify_monitor(&mut self, command: &Command) {
+        /*
+            let empty_vec = vec<sender>
+            for sender in vec_senders {
+                match let result = sender.send(command.to_string()) {
+                    Ok(_) => empty_vec.push(sender),
+                    Err(_) => _,
+                }
+            }
+            Similar al flag del otro.
+        */
+
+        for sender in &self.vec_senders {
+            // TODO: Revisar que hacer con este porque queda viviendo y el send no muere
+            let result = sender.send(
+                Re::String(command.as_str().to_string())
+            );
+        }
+    }
+
+
+    fn monitor_method(&mut self) -> Response {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command MONITOR Received".to_string(),
+        ));
+
+        let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
+
+        let sen_clone = sen.clone();
+        // TODO: Revisar que hacer con este
+        let _ = sen_clone.send(Re::String("OK".to_string()));
+        self.vec_senders.push(sen);
+
+        Response::Stream(rec)
+    }
+
+    fn flushdb_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -177,11 +184,11 @@ impl Redis {
         ));
 
         self.db = TtlHashMap::new();
-        Re::String("OK".to_string())
+        Response::Normal(Re::String("OK".to_string()))
     }
 
     #[allow(dead_code)]
-    fn copy_method(&mut self, key_origin: String, key_destination: String) -> String {
+    fn copy_method(&mut self, key_origin: String, key_destination: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -196,14 +203,14 @@ impl Redis {
         let value_origin;
         match self.db.get(&key_origin) {
             Some(value) => value_origin = value.clone(),
-            None => return "0".to_string(),
+            None => return Response::Normal(Re::String("0".to_string())),
         };
 
         match self.db.get(&key_destination) {
-            Some(_) => "0".to_string(),
+            Some(_) => Response::Normal(Re::String("0".to_string())),
             None => {
                 self.db.insert(key_destination, value_origin);
-                "1".to_string()
+                Response::Normal(Re::String("1".to_string()))
             }
         }
     }
@@ -236,7 +243,7 @@ impl Redis {
         }
     }
 
-    fn strlen_method(&mut self, key: String) -> Result<Re, String> {
+    fn strlen_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -247,7 +254,7 @@ impl Redis {
 
         match self.db.get(&key) {
             Some(return_value) => match return_value {
-                Re::String(s) => Ok(Re::String(s.len().to_string())),
+                Re::String(s) => Ok(Response::Normal(Re::String(s.len().to_string()))),
                 _ => {
                     let _ = self.log_sender.send(Log::new(
                         LogLevel::Error,
@@ -259,12 +266,12 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::String("0".to_string())),
+            None => Ok(Response::Normal(Re::String("0".to_string()))),
         }
     }
 
     #[allow(dead_code)]
-    fn getset_method(&mut self, key: String, value: String) -> Result<Re, String> {
+    fn getset_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -276,7 +283,7 @@ impl Redis {
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 self.set_method(key, value);
-                Ok(Re::String(return_value.to_string()))
+                Ok(Response::Normal(Re::String(return_value.to_string())))
             }
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
@@ -307,7 +314,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    fn incrby_method(&mut self, key: String, increment: i32) -> Result<Re, String> {
+    fn incrby_method(&mut self, key: String, increment: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -333,9 +340,9 @@ impl Redis {
                     }
 
                     let my_int = my_int.unwrap() + increment;
-                    Ok(Re::String(self.set_method(key, my_int.to_string())))
+                    Ok(Response::Normal(Re::String(self.set_method(key, my_int.to_string()))))
                 }
-                Re::Nil => Ok(Re::String(self.set_method(key, increment.to_string()))),
+                Re::Nil => Ok(Response::Normal(Re::String(self.set_method(key, increment.to_string())))),
                 _ => {
                     let _ = self.log_sender.send(Log::new(
                         LogLevel::Error,
@@ -347,12 +354,12 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            Err(_) => Ok(Re::String(self.set_method(key, increment.to_string()))),
+            Err(_) => Ok(Response::Normal(Re::String(self.set_method(key, increment.to_string())))),
         }
     }
 
     #[allow(dead_code)]
-    fn mget_method(&mut self, keys: Vec<String>) -> Re {
+    fn mget_method(&mut self, keys: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -369,11 +376,11 @@ impl Redis {
                     .to_string(),
             );
         }
-        Re::List(elements)
+        Response::Normal(Re::List(elements))
     }
 
     #[allow(dead_code)]
-    fn mset_method(&mut self, key_values: Vec<(String, String)>) -> String {
+    fn mset_method(&mut self, key_values: Vec<(String, String)>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -385,7 +392,8 @@ impl Redis {
         for (key, value) in key_values.iter() {
             self.set_method(key.to_string(), value.to_string());
         }
-        "Ok".to_string()
+
+        Response::Normal(Re::String("Ok".to_string()))
     }
 
     #[allow(dead_code)]
@@ -441,7 +449,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    fn append_method(&mut self, key: String, value: String) -> Result<Re, String> {
+    fn append_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -454,9 +462,9 @@ impl Redis {
             Ok(redis_element) => match redis_element {
                 Re::String(s) => {
                     let value = s + &value;
-                    Ok(Re::String(self.set_method(key, value)))
+                    Ok(Response::Normal(Re::String(self.set_method(key, value))))
                 }
-                Re::Nil => Ok(Re::String(self.set_method(key, value))),
+                Re::Nil => Ok(Response::Normal(Re::String(self.set_method(key, value)))),
                 _ => {
                     let _ = self.log_sender.send(Log::new(
                         LogLevel::Error,
@@ -481,7 +489,7 @@ impl Redis {
         }
     }
 
-    fn exists_method(&mut self, keys: Vec<String>) -> String {
+    fn exists_method(&mut self, keys: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -496,7 +504,8 @@ impl Redis {
                 count += 1;
             }
         }
-        count.to_string()
+
+        Response::Normal(Re::String(count.to_string()))
     }
 
     fn expire_method(&mut self, key: String, ttl: Duration) -> String {
@@ -544,7 +553,7 @@ impl Redis {
         }
     }
 
-    fn rename_method(&mut self, key_origin: String, key_destination: String) -> Result<Re, String> {
+    fn rename_method(&mut self, key_origin: String, key_destination: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -557,9 +566,9 @@ impl Redis {
         ));
 
         match self.getdel_method(key_origin) {
-            Ok(value) => Ok(Re::String(
+            Ok(value) => Ok(Response::Normal(Re::String(
                 self.set_method(key_destination, value.to_string()),
-            )),
+            ))),
             Err(msg) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
@@ -632,7 +641,7 @@ impl Redis {
         }
     }
 
-    fn lindex_method(&mut self, key: String, index: i32) -> Result<Re, String> {
+    fn lindex_method(&mut self, key: String, index: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -652,8 +661,8 @@ impl Redis {
                     }
 
                     match value.get(position as usize) {
-                        Some(saved_value) => Ok(Re::String(saved_value.to_string())),
-                        None => Ok(Re::Nil),
+                        Some(saved_value) => Ok(Response::Normal(Re::String(saved_value.to_string()))),
+                        None => Ok(Response::Normal(Re::Nil)),
                     }
                 }
                 _ => {
@@ -667,11 +676,11 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::Nil),
+            None => Ok(Response::Normal(Re::Nil)),
         }
     }
 
-    fn llen_method(&mut self, key: String) -> Result<Re, String> {
+    fn llen_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -682,7 +691,7 @@ impl Redis {
 
         match self.db.get_mut(&key) {
             Some(value) => match value {
-                Re::List(value) => Ok(Re::String(value.len().to_string())),
+                Re::List(value) => Ok(Response::Normal(Re::String(value.len().to_string()))),
                 _ => {
                     let _ = self.log_sender.send(Log::new(
                         LogLevel::Error,
@@ -694,11 +703,11 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::String("0".to_string())),
+            None => Ok(Response::Normal(Re::String("0".to_string()))),
         }
     }
 
-    fn lpop_method(&mut self, key: String, count: usize) -> Result<Re, String> {
+    fn lpop_method(&mut self, key: String, count: usize) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -728,12 +737,12 @@ impl Redis {
 
                     if return_value.len() == 1 && return_value.first().is_some() {
                         let value = return_value.first();
-                        return Ok(Re::String(value.unwrap().to_string()));
+                        return Ok(Response::Normal(Re::String(value.unwrap().to_string())));
                     }
 
                     match return_value.len() {
-                        x if x > 0 => Ok(Re::List(return_value.to_vec())),
-                        _ => Ok(Re::Nil),
+                        x if x > 0 => Ok(Response::Normal(Re::List(return_value.to_vec()))),
+                        _ => Ok(Response::Normal(Re::Nil)),
                     }
                 }
                 _ => {
@@ -747,11 +756,11 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::Nil),
+            None => Ok(Response::Normal(Re::Nil)),
         }
     }
 
-    fn lpush_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+    fn lpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -770,7 +779,7 @@ impl Redis {
                     redis_element.extend(saved_vector);
                     self.db.insert(key, Re::List(redis_element.clone()));
 
-                    Ok(Re::String(redis_element.len().to_string()))
+                    Ok(Response::Normal(Re::String(redis_element.len().to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -786,12 +795,12 @@ impl Redis {
             None => {
                 self.db.insert(key, Re::List(redis_element.clone()));
 
-                Ok(Re::String(redis_element.len().to_string()))
+                Ok(Response::Normal(Re::String(redis_element.len().to_string())))
             }
         }
     }
 
-    fn lpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+    fn lpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -811,7 +820,7 @@ impl Redis {
                     self.db
                         .insert(key, RedisElement::List(redis_element.clone()));
 
-                    Ok(Re::String(redis_element.len().to_string()))
+                    Ok(Response::Normal(Re::String(redis_element.len().to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -826,12 +835,12 @@ impl Redis {
             },
             None => {
                 self.db.insert(key, Re::List(vec![]));
-                Ok(Re::String("0".to_string()))
+                Ok(Response::Normal(Re::String("0".to_string())))
             }
         }
     }
 
-    fn lrange_method(&mut self, key: String, begin: i32, end: i32) -> Result<Re, String> {
+    fn lrange_method(&mut self, key: String, begin: i32, end: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -860,10 +869,10 @@ impl Redis {
                     let end_position: usize = end_position as usize;
                     let return_value = value.get(begin_position..end_position);
                     if return_value.is_none() {
-                        return Ok(Re::List(vec![]));
+                        return Ok(Response::Normal(Re::List(vec![])));
                     }
 
-                    Ok(Re::List(return_value.unwrap().to_vec()))
+                    Ok(Response::Normal(Re::List(return_value.unwrap().to_vec())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -876,11 +885,11 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::List(vec![])),
+            None => Ok(Response::Normal(Re::List(vec![]))),
         }
     }
 
-    fn lrem_method(&mut self, key: String, count: i32, element: String) -> Result<Re, String> {
+    fn lrem_method(&mut self, key: String, count: i32, element: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -896,7 +905,7 @@ impl Redis {
                         let (final_vector, deleted) =
                             Self::remove_repeats(count as usize, element, value.clone());
                         self.db.insert(key.clone(), Re::List(final_vector));
-                        Ok(Re::String(deleted.to_string()))
+                        Ok(Response::Normal(Re::String(deleted.to_string())))
                     }
                     Ordering::Less => {
                         value.reverse();
@@ -904,13 +913,13 @@ impl Redis {
                             Self::remove_repeats(count as usize, element, value.clone());
                         final_vector.reverse();
                         self.db.insert(key.clone(), Re::List(final_vector));
-                        Ok(Re::String(deleted.to_string()))
+                        Ok(Response::Normal(Re::String(deleted.to_string())))
                     }
                     Ordering::Equal => {
                         let (final_vector, deleted) =
                             Self::remove_all_repeats(element, value.clone());
                         self.db.insert(key.clone(), Re::List(final_vector));
-                        Ok(Re::String(deleted.to_string()))
+                        Ok(Response::Normal(Re::String(deleted.to_string())))
                     }
                 },
                 _ => {
@@ -924,7 +933,7 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::String("0".to_string())),
+            None => Ok(Response::Normal(Re::String("0".to_string()))),
         }
     }
 
@@ -954,7 +963,7 @@ impl Redis {
         (vector, n)
     }
 
-    fn lset_method(&mut self, key: String, index: i32, element: String) -> Result<Re, String> {
+    fn lset_method(&mut self, key: String, index: i32, element: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -988,7 +997,7 @@ impl Redis {
 
                     saved_value[position as usize] = element;
 
-                    Ok(Re::String("Ok".to_string()))
+                    Ok(Response::Normal(Re::String("Ok".to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1014,7 +1023,7 @@ impl Redis {
         }
     }
 
-    fn rpop_method(&mut self, key: String, count: usize) -> Result<Re, String> {
+    fn rpop_method(&mut self, key: String, count: usize) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1047,12 +1056,12 @@ impl Redis {
 
                     if return_value.len() == 1 && return_value.first().is_some() {
                         let value = return_value.first();
-                        return Ok(Re::String(value.unwrap().to_string()));
+                        return Ok(Response::Normal(Re::String(value.unwrap().to_string())));
                     }
 
                     match return_value.len() {
-                        x if x > 0 => Ok(Re::List(return_value.to_vec())),
-                        _ => Ok(Re::Nil),
+                        x if x > 0 => Ok(Response::Normal(Re::List(return_value.to_vec()))),
+                        _ => Ok(Response::Normal(Re::Nil)),
                     }
                 }
                 _ => {
@@ -1066,11 +1075,11 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::Nil),
+            None => Ok(Response::Normal(Re::Nil)),
         }
     }
 
-    fn rpush_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+    fn rpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1086,7 +1095,7 @@ impl Redis {
                     saved_vector.extend(values);
                     self.db.insert(key, Re::List(saved_vector.clone()));
 
-                    Ok(Re::String(saved_vector.len().to_string()))
+                    Ok(Response::Normal(Re::String(saved_vector.len().to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1102,12 +1111,12 @@ impl Redis {
             None => {
                 self.db.insert(key, Re::List(values.clone()));
 
-                Ok(Re::String(values.len().to_string()))
+                Ok(Response::Normal(Re::String(values.len().to_string())))
             }
         }
     }
 
-    fn rpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+    fn rpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1124,7 +1133,7 @@ impl Redis {
                     self.db
                         .insert(key, RedisElement::List(saved_vector.clone()));
 
-                    Ok(Re::String(saved_vector.len().to_string()))
+                    Ok(Response::Normal(Re::String(saved_vector.len().to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1137,11 +1146,11 @@ impl Redis {
                     Err(WRONGTYPE_MSG.to_string())
                 }
             },
-            None => Ok(Re::String("0".to_string())),
+            None => Ok(Response::Normal(Re::String("0".to_string()))),
         }
     }
 
-    fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
+    fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1159,7 +1168,7 @@ impl Redis {
                     let final_set_len = set.len();
                     self.db.insert(key, RedisElement::Set(set));
 
-                    Ok(Re::String((final_set_len - start_set_len).to_string()))
+                    Ok(Response::Normal(Re::String((final_set_len - start_set_len).to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1174,12 +1183,12 @@ impl Redis {
             },
             None => {
                 self.db.insert(key, RedisElement::Set(values.clone()));
-                Ok(Re::String(values.len().to_string()))
+                Ok(Response::Normal(Re::String(values.len().to_string())))
             }
         }
     }
 
-    fn scard_method(&mut self, key: String) -> Result<Re, String> {
+    fn scard_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1192,7 +1201,7 @@ impl Redis {
             Some(value) => match value {
                 RedisElement::Set(value) => {
                     let set = value.clone();
-                    Ok(Re::String(set.len().to_string()))
+                    Ok(Response::Normal(Re::String(set.len().to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1206,11 +1215,11 @@ impl Redis {
                     Err("WRONGTYPE A hashset data type expected".to_string())
                 }
             },
-            None => Ok(Re::String("0".to_string())),
+            None => Ok(Response::Normal(Re::String("0".to_string()))),
         }
     }
 
-    fn sismember_method(&mut self, key: String, value: String) -> Result<Re, String> {
+    fn sismember_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1224,9 +1233,9 @@ impl Redis {
                 RedisElement::Set(redis_element) => {
                     let set = redis_element.clone();
                     if set.contains(&value) {
-                        Ok(Re::String("1".to_string()))
+                        Ok(Response::Normal(Re::String("1".to_string())))
                     } else {
-                        Ok(Re::String("0".to_string()))
+                        Ok(Response::Normal(Re::String("0".to_string())))
                     }
                 }
                 _ => {
@@ -1254,7 +1263,7 @@ impl Redis {
         }
     }
 
-    fn smembers_method(&mut self, key: String) -> Result<RedisElement, String> {
+    fn smembers_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1265,7 +1274,7 @@ impl Redis {
 
         match self.db.get_mut(&key) {
             Some(redis_element) => match redis_element {
-                RedisElement::Set(redis_element) => Ok(Re::Set(redis_element.clone())),
+                RedisElement::Set(redis_element) => Ok(Response::Normal(Re::Set(redis_element.clone()))),
 
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1291,7 +1300,7 @@ impl Redis {
         }
     }
 
-    fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
+    fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1311,7 +1320,7 @@ impl Redis {
                         }
                     }
                     self.db.insert(key.clone(), RedisElement::Set(set));
-                    Ok(Re::String(count.to_string()))
+                    Ok(Response::Normal(Re::String(count.to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1324,7 +1333,7 @@ impl Redis {
                     Err("WRONGTYPE A hashset data type expected".to_string())
                 }
             },
-            None => Ok(Re::String("0".to_string())),
+            None => Ok(Response::Normal(Re::String("0".to_string()))),
         }
     }
 
@@ -1347,7 +1356,7 @@ impl Redis {
         vector
     }
 
-    fn store_method(&self, path: String) -> Result<Re, String> {
+    fn store_method(&self, path: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1371,7 +1380,7 @@ impl Redis {
         };
 
         match file.write_all(self.db.serialize().as_bytes()) {
-            Ok(_) => Ok(RedisElement::String("Ok".to_string())),
+            Ok(_) => Ok(Response::Normal(RedisElement::String("Ok".to_string()))),
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
@@ -1385,7 +1394,7 @@ impl Redis {
         }
     }
 
-    fn load_method(&mut self, path: String) -> Result<Re, String> {
+    fn load_method(&mut self, path: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1410,7 +1419,7 @@ impl Redis {
         match TtlHashMap::deserialize(text) {
             Ok(map) => {
                 self.db = map;
-                Ok(RedisElement::String("Ok".to_string()))
+                Ok(Response::Normal(RedisElement::String("Ok".to_string())))
             }
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
