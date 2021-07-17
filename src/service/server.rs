@@ -2,19 +2,18 @@ use crate::config::server_config::Config;
 use crate::entities::command::Command;
 use crate::entities::log::Log;
 use crate::entities::log_level::LogLevel;
+use crate::entities::response::Response;
 use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{mpsc, Arc};
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
-use std::time::Duration;
-use std::thread::JoinHandle;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::entities::response::Response;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc};
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 static STORE_TIME_SEC: u64 = 120;
 
@@ -71,7 +70,10 @@ impl Server {
 
     fn server_run(self, address: &str) {
         let listener = TcpListener::bind(address).expect("Could not bind");
-        let (db_sender, db_receiver) : (Sender<(Command, Sender<Response>)>, Receiver<(Command, Sender<Response>)>)= mpsc::channel();
+        let (db_sender, db_receiver): (
+            Sender<(Command, Sender<Response>)>,
+            Receiver<(Command, Sender<Response>)>,
+        ) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
         let timeout = self.config.get_timeout();
@@ -80,7 +82,8 @@ impl Server {
         let db_sender_maintenance = db_sender.clone();
 
         //Todo: Agregar el handler.
-        let _ = thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
+        let _ =
+            thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
 
         self.db_thread(db_receiver);
 
@@ -98,7 +101,8 @@ impl Server {
 
             let (client, _) = connection;
             if timeout != 0 {
-                client.set_read_timeout(Option::from(Duration::from_secs(timeout)))
+                client
+                    .set_read_timeout(Option::from(Duration::from_secs(timeout)))
                     .expect("Could not set timeout");
             }
             let db_sender_clone: Sender<(Command, Sender<Response>)> = db_sender.clone();
@@ -106,30 +110,50 @@ impl Server {
             //let used = Arc::clone(&shared);
             let flag = Arc::new(AtomicBool::new(true));
             let used_flag = flag.clone();
-            let handler = thread::spawn(move || Server::client_handler(client, db_sender_clone, &used_flag));
+            let handler =
+                thread::spawn(move || Server::client_handler(client, db_sender_clone, &used_flag));
             handlers.push((handler, flag));
-
+            println!("handlers {:?}", handlers);
             //antes de hacer el join me quedo con los true y luego los false para hacerle join.
             // if vive lo guardo else join.
             //let vec = handlers.iter().filter(|h| h.1 == false).map().collect();
             /*for handler in handlers.filter(used==false).iter() {
                 handler.join()
             }*/
+            //let mut handlers_actives: Vec<(JoinHandle<()>, Arc<AtomicBool>)> = vec![];
+            //let handlers_actives: Vec<(JoinHandle<()>, Arc<AtomicBool>)>= handlers.iter().filter(|&x| x.1.load(Ordering::Relaxed)).collect();
+            /*for x in &handlers {
+                if x.1.load(Ordering::Relaxed) {
+                    handlers_actives.push(x);
+                } else {
+                    //TODO lanzar este result
+                    let result = x.0.join();
+                }
+            }*/
+            println!("index {:?}", handlers);
         }
     }
 
     #[allow(clippy::while_let_on_iterator)]
-    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<Response>)>, used: &AtomicBool) {
+    fn client_handler(
+        client: TcpStream,
+        db_sender_clone: Sender<(Command, Sender<Response>)>,
+        used: &AtomicBool,
+    ) {
         let client_input: TcpStream = client.try_clone().unwrap();
         let client_output: TcpStream = client;
         let input = BufReader::new(client_input);
         let mut output = client_output;
         let mut lines = input.lines();
 
+        //TODO: ver error
+        Server::connected_user(&db_sender_clone);
+
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(request) = lines.next() {
             //TODO: Wrappear esto a una func -> Result
-            let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
+            let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
+                mpsc::channel();
 
             if request.is_err() {
                 break;
@@ -149,28 +173,20 @@ impl Server {
                 Ok(command) => {
                     let _ = db_sender_clone.send((command, client_sndr));
                     let response = client_rcvr.recv().unwrap();
-                    /*if bool {
-                        let _ = output.write(output_response.as_ref());
-                        while let response = client_rcvr.recv() {
-                            let (str, _) = response.unwrap();
-                            let _ = output.write((str + "\n").as_ref());
-                        }
-                    }*/
 
                     match response {
-                            Response::Normal(redisString) => {
-                                let _ = output.write((redisString.to_string() + "\n").as_ref());
-
-                            },
-                            Response::Stream(rec) => {
-                                while let Ok(redis_element) = rec.recv() {
-                                    let _ = output.write((redis_element.to_string() + "\n").as_ref());
-                                }
-                            },
-                            Response::Error(msg)=> {
-                                let _ = output.write((msg + "\n").as_ref());
+                        Response::Normal(redis_string) => {
+                            let _ = output.write((redis_string.to_string() + "\n").as_ref());
+                        }
+                        Response::Stream(rec) => {
+                            while let Ok(redis_element) = rec.recv() {
+                                let _ = output.write((redis_element.to_string() + "\n").as_ref());
                             }
                         }
+                        Response::Error(msg) => {
+                            let _ = output.write((msg + "\n").as_ref());
+                        }
+                    }
                 }
                 _ => {
                     let _ = output.write((command.err().unwrap() + "\n").as_ref());
@@ -182,13 +198,27 @@ impl Server {
 
         //TODO: flag = false
         used.swap(false, Ordering::Relaxed);
+        Server::disconnected_user(&db_sender_clone);
     }
 
-    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<(Response)>)>) {
+    fn connected_user(db_sender_clone: &Sender<(Command, Sender<Response>)>) {
+        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
+            mpsc::channel();
+        let _ = db_sender_clone.send((Command::AddClient, client_sndr));
+        let _ = client_rcvr.recv();
+    }
+
+    fn disconnected_user(db_sender_clone: &Sender<(Command, Sender<Response>)>) {
+        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
+            mpsc::channel();
+        let _ = db_sender_clone.send((Command::RemoveClient, client_sndr));
+        let _ = client_rcvr.recv();
+    }
+
+    fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<Response>)>) {
         let _ = thread::spawn(move || {
             while let Ok((command, sender)) = db_receiver.recv() {
                 let redis_response = self.redis.execute(command);
-                //TODO: Encode RedisResponse
                 match redis_response {
                     Ok(value) => {
                         let _ = sender.send(value);
@@ -204,8 +234,11 @@ impl Server {
     //TODO: Return Result. -> Result<(), std::io::Error>
     fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<Response>)>) {
         loop {
-            let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
-            let command = Command::Store { path: file.to_string() };
+            let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
+                mpsc::channel();
+            let command = Command::Store {
+                path: file.to_string(),
+            };
 
             /*
             sender.send("hola")?;

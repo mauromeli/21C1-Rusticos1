@@ -1,4 +1,4 @@
-use crate::entities::command::Command;
+use crate::entities::command::{Command, InfoParam};
 use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
@@ -17,9 +17,11 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "ping" => generate_ping(params),
         "flushdb" => generate_flushdb(params),
         "dbsize" => generate_dbsize(params),
+        "monitor" => generate_monitor(params),
+        "info" => generate_info(params),
+
         "store" => generate_store(params),
         "load" => generate_load(params),
-        "monitor" => generate_monitor(params),
 
         // Strings
         "get" => generate_get(params),
@@ -84,6 +86,24 @@ fn generate_monitor(params: Vec<String>) -> Result<Command, String> {
     }
 
     Ok(Command::Monitor)
+}
+
+fn generate_info(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'info' command".to_string());
+    }
+
+    match params[0].to_lowercase().as_str() {
+        "processid" => Ok(Command::Info {param: InfoParam::ProcessID}),
+        "port" => Ok(Command::Info {param: InfoParam::Port}),
+        "servertime" => Ok(Command::Info {param: InfoParam::ServerTime}),
+        "uptime" => Ok(Command::Info {param: InfoParam::Uptime}),
+        "configfile" => Ok(Command::Info {param: InfoParam::ConfigFile}),
+        "connectedclients" => Ok(Command::Info {param: InfoParam::ConnectedClients}),
+        _ => Err("ERR wrong command param".to_string())
+
+    }
+
 }
 
 fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {

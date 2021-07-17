@@ -1,8 +1,8 @@
+use crate::entities::log_level::LogLevel;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
-use crate::entities::log_level::LogLevel;
 
 // Struct usado para representar la configuración posible de nuestra base de datos Redis.
 
@@ -143,7 +143,6 @@ impl Config {
     pub fn get_logfile(&self) -> String {
         self.logfile.to_string()
     }
-
 }
 
 fn is_invalid_line(line: &str) -> bool {
@@ -153,8 +152,8 @@ fn is_invalid_line(line: &str) -> bool {
 #[allow(unused_imports)]
 mod test {
     use crate::config::server_config::{is_invalid_line, Config};
-    use std::iter::FromIterator;
     use crate::entities::log_level::LogLevel;
+    use std::iter::FromIterator;
 
     #[test]
     fn check_default_config_values() {
