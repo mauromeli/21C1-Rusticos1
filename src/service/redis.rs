@@ -787,8 +787,6 @@ mod test {
         let value: String = "value".to_string();
         let key: String = "hola".to_string();
 
-        let (sender, _receiver) = channel();
-
         let _set = redis.execute(Command::Set { key, value });
 
         let key: String = "hola".to_string();
@@ -803,8 +801,6 @@ mod test {
 
         let key: String = "hola".to_string();
         let value: String = "chau".to_string();
-
-        let (sender, _receiver) = channel();
 
         let _set = redis.execute(Command::Set { key, value });
 
@@ -822,8 +818,6 @@ mod test {
     fn test_get_on_empty_key_returns_nil() {
         let mut redis: Redis = Redis::new();
 
-        let (sender, _receiver) = channel();
-
         let key = "hola".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
 
@@ -833,8 +827,6 @@ mod test {
     #[test]
     fn test_get_element_fail_if_is_not_string() {
         let mut redis: Redis = Redis::new();
-
-        let (sender, _receiver) = channel();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -849,8 +841,6 @@ mod test {
     #[test]
     fn test_getset_fails_if_is_not_string() {
         let mut redis: Redis = Redis::new();
-
-        let (sender, _receiver) = channel();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -867,8 +857,6 @@ mod test {
     fn test_getset_on_empty_key_returns_nil() {
         let mut redis: Redis = Redis::new();
 
-        let (sender, _receiver) = channel();
-
         let key: String = "key".to_string();
         let value: String = "value".to_string();
         let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
@@ -879,8 +867,6 @@ mod test {
     #[test]
     fn test_getset_ok() {
         let mut redis: Redis = Redis::new();
-
-        let (sender, _receiver) = channel();
 
         let key: String = "key".to_string();
         let value: String = "1".to_string();
@@ -899,8 +885,6 @@ mod test {
     #[test]
     fn test_ping_returns_pong() {
         let mut redis: Redis = Redis::new();
-
-        let (sender, _receiver) = channel();
 
         let ping: Result<Re, String> = redis.execute(Command::Ping);
 
@@ -1245,7 +1229,7 @@ mod test {
         let copy = redis.execute(Command::Copy {
             key_destination,
             key_origin,
-        }, ());
+        });
 
         assert_eq!("0".to_string(), copy.unwrap().to_string());
     }
@@ -1263,7 +1247,7 @@ mod test {
         let _copy = redis.execute(Command::Copy {
             key_destination,
             key_origin,
-        }, ());
+        });
 
         let key: String = "key2".to_string();
         let get = redis.execute(Command::Get { key });
@@ -2744,8 +2728,6 @@ mod test {
     #[test]
     fn test_pubsub_ok() {
         let mut redis: Redis = Redis::new();
-
-        let (sender, _receiver) = channel();
 
         let mut args = Vec::new();
         args.push("channels".to_string());

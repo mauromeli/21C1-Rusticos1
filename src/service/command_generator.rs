@@ -3,6 +3,8 @@ use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::time::SystemTime;
+use std::sync::mpsc::Sender;
+use std::sync::mpsc;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
@@ -539,7 +541,8 @@ fn generate_subscribe(params: Vec<String>) -> Result<Command, String> {
         return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
     }
     let channels = params.clone();
-    Ok(Command::Subscribe { channels })
+    let (sender, db_receiver) = mpsc::channel();
+    Ok(Command::Subscribe { channels, local_address: "".to_string(), sender })
 }
 
 fn generate_publish(params: Vec<String>) -> Result<Command, String> {
@@ -551,8 +554,8 @@ fn generate_publish(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Publish { channel, message })
 }
 
-fn generate_unsubscribe(params: Vec<String>) {
-    Ok(Command::Unsubscribe { channels: params });
+fn generate_unsubscribe(params: Vec<String>) -> Result<Command, String> {
+    Ok(Command::Unsubscribe { local_address: "".to_string(), channels: params })
 }
 
 #[allow(unused_imports)]

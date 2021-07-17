@@ -1,4 +1,4 @@
-use crate::decode::TypeData;
+use crate::protocol::decode::TypeData;
 
 pub fn encode(data: &TypeData) -> Vec<u8> {
     match data {

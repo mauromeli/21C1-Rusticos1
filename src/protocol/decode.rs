@@ -59,57 +59,68 @@ pub fn decode(bytes: &[u8], start: usize) -> Result<(TypeData, usize)> {
 #[allow(dead_code)]
 pub fn parse(bytes: &[u8], pos: usize) -> (String, usize) {
     let index: Option<usize> = String::from_utf8(Vec::from(&bytes[pos..])).unwrap().find("\r\n");
-    (String::from_utf8(bytes[pos..index.unwrap()+pos].to_vec()).unwrap(), index.unwrap()+pos+CRLF)
+    (String::from_utf8(bytes[pos..index.unwrap() + pos].to_vec()).unwrap(), index.unwrap() + pos + CRLF)
 }
 
-#[test]
-fn test_decode_string(){
-    let bytes = "+OK\r\n";
-    assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
-               TypeData::String("OK".to_string()))
-}
+mod test {
+    use crate::protocol::decode::{decode, TypeData};
 
-#[test]
-fn test_decode_error(){
-    let bytes = "-Error message\r\n";
-    assert_eq!(decode(bytes.as_bytes(),0).ok().unwrap().0
-               , TypeData::Error("Error message".to_string()))
-}
+    #[test]
+    fn test_decode_string() {
+        let bytes = "+OK\r\n";
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
+                   TypeData::String("OK".to_string()))
+    }
 
-#[test]
-fn test_decode_integer(){
-    let bytes = ":1000\r\n";
-    assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
-               TypeData::Integer(1000))
-}
+    #[test]
+    fn test_decode_error() {
+        let bytes = "-Error message\r\n";
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0
+                   , TypeData::Error("Error message".to_string()))
+    }
 
-#[test]
-fn test_decode_bulk_string(){
-    let bytes = "$6\r\nfoobar\r\n";
-    assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
-               TypeData::BulkString("foobar".to_string()))
-}
+    #[test]
+    fn test_decode_integer() {
+        let bytes = ":1000\r\n";
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
+                   TypeData::Integer(1000))
+    }
 
-#[test]
-fn test_decode_bulk_empty_string(){
-    let bytes = "$0\r\n\r\n";
-    assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
-               TypeData::BulkString("".to_string()))
-}
+    #[test]
+    fn test_decode_bulk_string() {
+        let bytes = "$6\r\nfoobar\r\n";
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
+                   TypeData::BulkString("foobar".to_string()))
+    }
 
-#[test]
-fn test_decode_array(){
-    let bytes = "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n";
+    #[test]
+    fn test_decode_bulk_empty_string() {
+        let bytes = "$0\r\n\r\n";
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
+                   TypeData::BulkString("".to_string()))
+    }
 
-    let array = vec![TypeData::BulkString("foo".to_string()),
-                     TypeData::BulkString("bar".to_string())];
-    assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
-               TypeData::Array(array))
-}
+    #[test]
+    fn test_decode_array() {
+        let bytes = "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n";
 
-#[test]
-fn test_decode_nil(){
-    let bytes = "!3\r\nfoo\r\n";
-    assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
-               TypeData::Nil)
+        let array = vec![TypeData::BulkString("foo".to_string()),
+                         TypeData::BulkString("bar".to_string())];
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
+                   TypeData::Array(array))
+    }
+
+    #[test]
+    fn test_decode_nil() {
+        let bytes = "!3\r\nfoo\r\n";
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
+                   TypeData::Nil)
+    }
+
+    #[test]
+    fn test_decode_() {
+        let bytes = "*3\r\n$3\r\nset\r\n$5\r\nmykey\r\n$1\r\n1\r\n";
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0,
+                   TypeData::Nil)
+    }
 }

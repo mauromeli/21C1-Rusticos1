@@ -5,6 +5,8 @@ mod config;
 mod entities;
 mod service;
 mod pubsub;
+mod protocol;
+
 
 fn main() {
     let config = Config::new();

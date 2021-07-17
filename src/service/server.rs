@@ -2,11 +2,15 @@ use crate::config::server_config::Config;
 use crate::entities::command::Command;
 use crate::service::command_generator::generate;
 use crate::service::redis::Redis;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write, Lines, Read, Error};
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use crate::protocol::parse_data::parse_data;
+use std::borrow::BorrowMut;
+
+pub const CRLF: &[u8] = b"\r\n";
 
 #[derive(Debug)]
 pub struct Server {
@@ -48,18 +52,26 @@ impl Server {
                     local_address: String) {
         let client_input: TcpStream = client.try_clone().unwrap();
         let client_output: TcpStream = client;
-        let input = BufReader::new(client_input);
+        let mut input = BufReader::new(client_input);
         let mut output = client_output;
         let mut lines = input.lines();
 
         // iteramos las lineas que recibimos de nuestro cliente
-        while let Some(request) = lines.next() {
+        while let Some(line) = LinesIterator::new(&mut lines).next() {
+
+            println!("line: {:?}", line);
+
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
             //TODO: Agregar decode
-            let mut vector: Vec<String> = vec![];
-            for string in request.unwrap().split(" ") {
-                vector.push(string.to_string())
-            }
+
+            let vector = parse_data(&line);
+            println!("vector: {:?}", vector);
+
+            //for string in request.unwrap().split(" ") {
+                //vector.push(request.unwrap().to_string());
+            //}
+
+           // let vector = parse_data(request.unwrap().as_bytes());
             //TODO: FIN Agregar decode
 
             let command = generate(vector);
@@ -79,6 +91,7 @@ impl Server {
 
             let _ = output.write(output_response.as_ref());
         }
+
     }
 
     fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>, String)>) {
@@ -104,4 +117,34 @@ impl Server {
             }
         });
     }
+
 }
+
+pub struct LinesIterator<'a>{
+    lines: &'a mut Lines<BufReader<TcpStream>>
+}
+
+
+    impl<'a> LinesIterator<'a> {
+        pub fn new(lines: &'a mut Lines<BufReader<TcpStream>>) -> Self {
+            let lines = lines;
+            Self {lines}
+        }
+    }
+
+    impl Iterator for LinesIterator<'_> {
+        type Item = Vec<u8>;
+
+        fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+            let mut bytes = Vec::new();
+
+            while let Some(line) = self.lines.next() {
+                println!("next");
+                let read = line.unwrap();
+                println!("read: {:?}", read.clone());
+                bytes = [bytes, read.as_bytes().to_vec(), "\r\n".as_bytes().to_vec()].concat();
+            }
+            Some(bytes)
+        }
+    }
+

@@ -28,7 +28,7 @@ impl PubSub {
         self.clients.remove(&client.clone());
         for subscribed_clients in self.channels.values_mut() {
             for i in 0..subscribed_clients.len() {
-                if subscribed_clients.get(i).unwrap() == client {
+                if subscribed_clients[i].clone() == client {
                     subscribed_clients.remove(i);
                 }
             }
@@ -56,7 +56,7 @@ impl PubSub {
     pub fn unsubscribe_client(&mut self, client: String, channel: String) {
         if let Some(subscribed_clients) = self.channels.get_mut(&channel) {
             for i in 0..subscribed_clients.len() {
-                if subscribed_clients.get(i).unwrap() == client {
+                if subscribed_clients[i].clone() == client {
                     subscribed_clients.remove(i);
                 }
             }
@@ -64,8 +64,9 @@ impl PubSub {
     }
 
     pub fn unsubscribe(&mut self, local_add: String, channels: Vec<String>) {
+        let actual_channels = self.channels.clone();
         if channels.is_empty() {
-            for channel in self.channels.keys() {
+            for channel in actual_channels.keys() {
                 self.unsubscribe_client(local_add.clone(), channel.clone());
             }
         } else {
