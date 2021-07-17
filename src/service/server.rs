@@ -54,10 +54,10 @@ impl Server {
         let client_output: TcpStream = client;
         let mut input = BufReader::new(client_input);
         let mut output = client_output;
-        let mut lines = input.lines();
+        //let mut lines = input.lines();
 
         // iteramos las lineas que recibimos de nuestro cliente
-        while let Some(line) = LinesIterator::new(&mut lines).next() {
+        while let Some(line) = LinesIterator::new(&mut input).next() {
 
             println!("line: {:?}", line);
 
@@ -121,12 +121,12 @@ impl Server {
 }
 
 pub struct LinesIterator<'a>{
-    lines: &'a mut Lines<BufReader<TcpStream>>
+    lines: &'a mut BufReader<TcpStream>
 }
 
 
     impl<'a> LinesIterator<'a> {
-        pub fn new(lines: &'a mut Lines<BufReader<TcpStream>>) -> Self {
+        pub fn new(lines: &'a mut BufReader<TcpStream>) -> Self {
             let lines = lines;
             Self {lines}
         }
@@ -136,15 +136,11 @@ pub struct LinesIterator<'a>{
         type Item = Vec<u8>;
 
         fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-            let mut bytes = Vec::new();
-
-            while let Some(line) = self.lines.next() {
-                println!("next");
-                let read = line.unwrap();
-                println!("read: {:?}", read.clone());
-                bytes = [bytes, read.as_bytes().to_vec(), "\r\n".as_bytes().to_vec()].concat();
+            let mut buf = String::new();
+            while self.lines.read_line(&mut buf).unwrap() != 0 {
+                println!("read: {:?}", buf);
             }
-            Some(bytes)
+            Some(Vec::from(buf.as_bytes()))
         }
     }
 
