@@ -121,14 +121,14 @@ impl Server {
 }
 
 pub struct LinesIterator<'a>{
-    lines: &'a mut BufReader<TcpStream>
+    input: &'a mut BufReader<TcpStream>
 }
 
 
     impl<'a> LinesIterator<'a> {
-        pub fn new(lines: &'a mut BufReader<TcpStream>) -> Self {
-            let lines = lines;
-            Self {lines}
+        pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
+            let input = input;
+            Self {input}
         }
     }
 
@@ -137,7 +137,7 @@ pub struct LinesIterator<'a>{
 
         fn next(&mut self) -> Option<<Self as Iterator>::Item> {
             let mut buf = String::new();
-            while self.lines.read_line(&mut buf).unwrap() != 0 {
+            while self.input.read_line(&mut buf).unwrap() != 0 {
                 println!("read: {:?}", buf);
             }
             Some(Vec::from(buf.as_bytes()))
