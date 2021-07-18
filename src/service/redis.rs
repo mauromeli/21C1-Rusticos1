@@ -1340,13 +1340,13 @@ impl Redis {
 
     fn load_method(&mut self, path: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
-            //ACA, revisar error sender
             LogLevel::Debug,
             line!(),
             column!(),
             file!().to_string(),
             "Command LOAD Received - path: ".to_string() + &*path,
         ));
+
         let text = match fs::read_to_string(path) {
             Ok(text) => text,
             Err(e) => {
@@ -3399,6 +3399,31 @@ mod test {
         let keys = redis.execute(Command::Keys { pattern });
 
         assert!(keys.is_ok());
+    }
+
+    #[ignore]
+    #[test]
+    fn test_touch_deletes_expired_key() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(1);
+        let _expire = redis.execute(Command::Expire { key, ttl });
+
+        thread::sleep(Duration::from_secs(1));
+
+        let keys = vec!["key".to_string()];
+        let touch = redis.execute(Command::Touch { keys });
+
+        let pattern = "k**".to_string();
+        let keys = redis.execute(Command::Keys { pattern });
+
+        assert_eq!(touch.unwrap().to_string(), "1");
+        assert_eq!(keys.unwrap().to_string(), "0");
     }
 
     #[test]
