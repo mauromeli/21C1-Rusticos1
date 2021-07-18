@@ -166,6 +166,24 @@ pub enum Command {
         key: String,
         values: HashSet<String>,
     },
+
+    // pubsub
+
+    Pubsub {
+        args: Vec<String>
+    },
+    Subscribe {
+        channels: String,
+        //local_address: String,
+    },
+    Publish {
+        channel: String,
+        message: String
+    },
+    Unsubscribe {
+        channels: Vec<String>
+        //local_address: String,
+    }
 }
 
 #[derive(Debug)]

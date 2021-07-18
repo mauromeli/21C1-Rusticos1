@@ -6,9 +6,9 @@ use crate::entities::response::Response;
 use crate::entities::ttl_hash_map::TtlHashMap;
 use regex::Regex;
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fmt::Debug;
-use std::fs;
+use std::{fs, process};
 use std::io::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -21,8 +21,11 @@ const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
     log_sender: Sender<Log>,
-    vec_senders: Vec<Sender<Re>>, //pubsub
+    vec_senders: Vec<Sender<Re>>,
+    //pubsub
+    subscribers: HashMap<String, Vec<Sender<Re>>>,
     users_connected: u64,
+    server_time: SystemTime,
 }
 
 impl Redis {
@@ -35,7 +38,9 @@ impl Redis {
             db,
             log_sender,
             vec_senders,
-            users_connected : 0,
+            users_connected: 0,
+            subscribers: HashMap::new(),
+            server_time: SystemTime::now(),
         }
     }
 
@@ -49,7 +54,9 @@ impl Redis {
             db,
             log_sender,
             vec_senders,
-            users_connected : 0,
+            users_connected: 0,
+            subscribers: HashMap::new(),
+            server_time: SystemTime::now(),
         }
     }
 
@@ -62,14 +69,14 @@ impl Redis {
             Command::Ping => self.ping_method(),
             Command::Flushdb => Ok(self.flushdb_method()),
             Command::Dbsize => Ok(self.dbsize_method()),
-            Command::Monitor => Ok(self.monitor_method()),
-            Command::Info {param} => self.info_method(param),
+            Command::Monitor => self.monitor_method(),
+            Command::Info { param } => self.info_method(param),
 
             // System
             Command::Store { path } => self.store_method(path),
             Command::Load { path } => self.load_method(path),
             Command::AddClient => Ok(self.addclient_method()),
-            Command::RemoveClient =>Ok(self.removeclient_method()),
+            Command::RemoveClient => Ok(self.removeclient_method()),
 
             // Strings
             Command::Append { key, value } => self.append_method(key, value),
@@ -141,7 +148,47 @@ impl Redis {
             Command::Sismember { key, value } => self.sismember_method(key, value),
             Command::Smembers { key } => self.smembers_method(key),
             Command::Srem { key, values } => self.srem_method(key, values),
+
+            // Pubsub
+            Command::Pubsub { args } => Err("Method not implemented".to_string()),
+            Command::Subscribe { channels } => self.subscribe_method(channels),
+            Command::Publish { channel, message } => self.publish_method(channel, message),
+            Command::Unsubscribe { channels } => Err("Method not implemented".to_string()),
         }
+    }
+
+    fn subscribe_method(&mut self, channel: String) -> Result<Response, String> {
+        let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
+        /*let sen_clone = sen.clone();
+
+        if let Some(vector_sender) = self.subscribers.get_mut(&channel) {
+            vector_sender.push(sen);
+            self.subscribers.insert(channel, vector_sender.to_owned().to_vec());
+        } else {
+            let vector_sender = vec![sen];
+            self.subscribers.insert(channel.clone(), vector_sender);
+        }
+
+        // TODO: Revisar que hacer con este
+        let result = sen_clone.send(
+            Re::List(vec!["OK".to_string(), ])
+        );
+*/
+        return Ok(Response::Stream(rec));
+    }
+
+    fn publish_method(&mut self, channel: String, msg: String) -> Result<Response, String> {
+        /*if !self.subscribers.contains_key(&channel) {
+            return Err("Channel not found".to_string());
+        };
+
+        //TODO: Ojo el unwrap
+        let vector_sender = self.subscribers.get(&channel).unwrap();
+        for x in vector_sender {
+            x.send(Re::String(msg.to_string()));
+        }
+*/
+        Ok(Response::Normal(Re::String("Ok".to_string())))
     }
 
     fn addclient_method(&mut self) -> Response {
@@ -154,7 +201,7 @@ impl Redis {
         Response::Normal(RedisElement::String("Ok".to_string()))
     }
 
-    fn info_method(&mut self, param: InfoParam) -> Result<Response, String>{
+    fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -165,7 +212,33 @@ impl Redis {
 
         match param {
             InfoParam::ConnectedClients => Ok(Response::Normal(RedisElement::String(self.users_connected.to_string()))),
+            InfoParam::ConfigFile => Err("Not Implemented".to_string()),
+            InfoParam::Uptime => self.get_server_uptime(),
+            InfoParam::ServerTime => Err("Not Implemented".to_string()),
+            InfoParam::ProcessID => Ok(Response::Normal(RedisElement::String(process::id().to_string()))),
             _ => Err("Not Implemented".to_string()),
+        }
+    }
+
+
+    fn get_server_uptime(&mut self) -> Result<Response, String> {
+        let result_time = SystemTime::now().duration_since(self.server_time);
+        match result_time {
+            Ok(duration) => {
+                Ok(Response::Normal(
+                    RedisElement::String(
+                        duration.as_secs().to_string())))
+            },
+            Err(e) => {
+                        let _ = self.log_sender.send(Log::new(
+                            LogLevel::Error,
+                            line!(),
+                            column!(),
+                            file!().to_string(),
+                            e.to_string(),
+                        ));
+                Err(e.to_string())
+            }
         }
     }
 
@@ -206,7 +279,7 @@ impl Redis {
         }
     }
 
-    fn monitor_method(&mut self) -> Response {
+    fn monitor_method(&mut self) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -219,10 +292,24 @@ impl Redis {
 
         let sen_clone = sen.clone();
         // TODO: Revisar que hacer con este
-        let _ = sen_clone.send(Re::String("OK".to_string()));
-        self.vec_senders.push(sen);
+        let result = sen_clone.send(Re::String("OK".to_string()));
+        match result {
+            Ok(_) => {
+                self.vec_senders.push(sen);
 
-        Response::Stream(rec)
+                return Ok(Response::Stream(rec));
+            }
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.to_string(),
+                ));
+                Err("Error processing Monitor Method".to_string())
+            }
+        }
     }
 
     fn flushdb_method(&mut self) -> Response {
@@ -3838,5 +3925,4 @@ mod test {
         }
         fs::remove_file("test_load_values_with_separated_words.rdb").unwrap();
     }
-
 }
