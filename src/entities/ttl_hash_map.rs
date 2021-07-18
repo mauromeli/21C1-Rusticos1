@@ -8,21 +8,38 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug)]
 pub struct TtlHashMap<K: Eq + Hash, V> {
     store: HashMap<K, V>,
-    timestamps: HashMap<K, SystemTime>,
+    ttls: HashMap<K, SystemTime>,
+    last_access: HashMap<K, SystemTime>,
 }
 
-impl<K: Eq + Hash, V> TtlHashMap<K, V> {
+impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
     pub fn new() -> Self {
         TtlHashMap {
             store: HashMap::new(),
-            timestamps: HashMap::new(),
+            ttls: HashMap::new(),
+            last_access: HashMap::new(),
         }
     }
 
     fn expired(&self, key: &K) -> bool {
-        match self.timestamps.get(key) {
+        match self.ttls.get(key) {
             Some(ttl) => ttl.elapsed().is_ok(),
             None => false,
+        }
+    }
+
+    /// Devuelve None si no existe la clave o expiró. Sino, devuelve el tiempo desde el anterior acceso.
+    pub fn update_last_access(&mut self, key: &K) -> Option<Duration> {
+        if !self.contains_key(&key) {
+            return None;
+        }
+        match self.last_access.insert(key.clone(), SystemTime::now()) {
+            Some(value) => Some(
+                value
+                    .duration_since(SystemTime::now())
+                    .unwrap_or_else(|_| Duration::from_secs(0)),
+            ),
+            None => None,
         }
     }
 
@@ -32,11 +49,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
             return None;
         }
         let ttl = SystemTime::now() + duration;
-        Some(
-            self.timestamps
-                .insert(key, ttl)
-                .unwrap_or(SystemTime::UNIX_EPOCH),
-        )
+        Some(self.ttls.insert(key, ttl).unwrap_or(SystemTime::UNIX_EPOCH))
     }
 
     /// Devuelve None si no existe la clave, y SystemTime::UNIX_EPOCH si era persistente. Sino, devuelve el valor previo de ttl.
@@ -44,15 +57,11 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
         if !self.contains_key(&key) {
             return None;
         }
-        Some(
-            self.timestamps
-                .insert(key, ttl)
-                .unwrap_or(SystemTime::UNIX_EPOCH),
-        )
+        Some(self.ttls.insert(key, ttl).unwrap_or(SystemTime::UNIX_EPOCH))
     }
 
     pub fn delete_ttl(&mut self, key: &K) -> Option<SystemTime> {
-        self.timestamps.remove(key)
+        self.ttls.remove(key)
     }
 
     /// Devuelve None si no existe la clave, y una duración 0 si existe pero es persistente. Sino, devuelve el ttl.
@@ -60,7 +69,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
         if !self.contains_key(key) {
             return None;
         }
-        let ttl = match self.timestamps.get(key) {
+        let ttl = match self.ttls.get(key) {
             Some(value) => value
                 .duration_since(SystemTime::now())
                 .unwrap_or_else(|_| Duration::from_secs(0)),
@@ -75,6 +84,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         self.delete_ttl(&key);
+        self.update_last_access(&key);
         self.store.insert(key, value)
     }
 
@@ -83,7 +93,8 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        self.timestamps.remove(key);
+        self.ttls.remove(key);
+        self.last_access.remove(key);
         self.store.remove(key)
     }
 
@@ -92,7 +103,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
             self.remove(key);
             return None;
         }
-
+        self.update_last_access(key);
         self.store.get(key)
     }
 
@@ -101,7 +112,7 @@ impl<K: Eq + Hash, V> TtlHashMap<K, V> {
             self.remove(key);
             return None;
         }
-
+        self.update_last_access(key);
         self.store.get_mut(key)
     }
 
@@ -115,7 +126,7 @@ impl<K: Eq + Hash + fmt::Display, V: fmt::Display> TtlHashMap<K, V> {
     pub fn serialize(&self) -> String {
         let mut s = "".to_string();
         for (key, value) in self.store.iter() {
-            let ttl = match self.timestamps.get(key) {
+            let ttl = match self.ttls.get(key) {
                 Some(t) => t
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .unwrap_or_else(|_| Duration::from_secs(0))

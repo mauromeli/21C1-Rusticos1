@@ -526,8 +526,19 @@ impl Redis {
 
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.contains_key(&key) {
-                count += 1;
+            match self.db.update_last_access(&key) {
+                None => (),
+                Some(time) => {
+                    count += 1;
+                    let time = time.as_secs().to_string();
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Debug,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        format!("Key {} previous access: {} secs ago.", &key, &time),
+                    ));
+                }
             }
         }
 
@@ -1329,6 +1340,7 @@ impl Redis {
 
     fn load_method(&mut self, path: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
+            //ACA, revisar error sender
             LogLevel::Debug,
             line!(),
             column!(),
