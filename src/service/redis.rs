@@ -159,35 +159,36 @@ impl Redis {
 
     fn subscribe_method(&mut self, channel: String) -> Result<Response, String> {
         let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
-        /*let sen_clone = sen.clone();
+        let sen_clone = sen.clone();
+        let mut vector_sender;
 
-        if let Some(vector_sender) = self.subscribers.get_mut(&channel) {
+        if let Some(vector) = self.subscribers.get_mut(&channel) {
+            vector_sender = vector.clone();
             vector_sender.push(sen);
-            self.subscribers.insert(channel, vector_sender.to_owned().to_vec());
         } else {
-            let vector_sender = vec![sen];
-            self.subscribers.insert(channel.clone(), vector_sender);
+            vector_sender = vec![sen];
         }
 
+        self.subscribers.insert(channel.clone(), vector_sender.to_vec());
         // TODO: Revisar que hacer con este
         let result = sen_clone.send(
-            Re::List(vec!["OK".to_string(), ])
+            Re::List(vec!["subscribe".to_string(), channel, "1".to_string()])
         );
-*/
+
         return Ok(Response::Stream(rec));
     }
 
     fn publish_method(&mut self, channel: String, msg: String) -> Result<Response, String> {
-        /*if !self.subscribers.contains_key(&channel) {
-            return Err("Channel not found".to_string());
-        };
-
-        //TODO: Ojo el unwrap
-        let vector_sender = self.subscribers.get(&channel).unwrap();
-        for x in vector_sender {
-            x.send(Re::String(msg.to_string()));
+        if !self.subscribers.contains_key(&channel) {
+            return Ok(Response::Normal(Re::String("0".to_string())));
         }
-*/
+
+        if let Some(vector) = self.subscribers.get_mut(&channel) {
+            for x in vector {
+                x.send(Re::String(msg.to_string()));
+            }
+        }
+
         Ok(Response::Normal(Re::String("Ok".to_string())))
     }
 

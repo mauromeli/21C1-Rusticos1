@@ -120,14 +120,16 @@ impl Server {
             /*for handler in handlers.filter(used==false).iter() {
                 handler.join()
             }*/
-            //let mut handlers_actives: Vec<(JoinHandle<()>, Arc<AtomicBool>)> = vec![];
+            let mut handlers_actives: Vec<(JoinHandle<()>, Arc<AtomicBool>)> = vec![];
             //let handlers_actives: Vec<(JoinHandle<()>, Arc<AtomicBool>)>= handlers.iter().filter(|&x| x.1.load(Ordering::Relaxed)).collect();
-            /*for x in &handlers {
-                if x.1.load(Ordering::Relaxed) {
-                    handlers_actives.push(x);
+            /*for (handler, used) in &handlers {
+                if used.load(Ordering::Relaxed) {
+                    //handlers_actives.push((handler, used));
+                    println!("en uso");
                 } else {
                     //TODO lanzar este result
-                    let result = x.0.join();
+                    //let result = handler.join();
+                    println!("sin uso");
                 }
             }*/
             println!("index {:?}", handlers);
