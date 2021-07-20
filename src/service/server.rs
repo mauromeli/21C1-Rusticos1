@@ -5,8 +5,7 @@ use crate::entities::log_level::LogLevel;
 use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
-use std::io;
-use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -24,57 +23,50 @@ pub struct Server {
 
 impl Server {
     #[allow(dead_code)]
-    pub fn new(config: Config) -> io::Result<Self> {
+    pub fn new(config: Config) -> Self {
         let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
         let redis = Redis::new(log_sender.clone());
 
         let logger = Logger::new(log_receiver, config.get_logfile());
-        logger.log()?;
+        logger.log();
 
-        Ok(Self {
+        Self {
             redis,
             config,
             log_sender,
-        })
+        }
     }
 
-    pub fn serve(mut self) -> io::Result<()> {
+    pub fn serve(mut self) {
         // load db
         let command = Command::Load {
             path: self.config.get_dbfilename(),
         };
-        self.redis.execute(command); //ACA, error de redis?
-
+        let _ = self.redis.execute(command);
         // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
-        let log_sender = self.log_sender.clone();
-        log_sender
-            .send(Log::new(
-                LogLevel::Debug,
-                line!(),
-                column!(),
-                file!().to_string(),
-                "=======Server Start Running======".to_string(),
-            ))
-            .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
-
-        self.server_run(&address)?;
-        log_sender
-            .send(Log::new(
-                LogLevel::Debug,
-                line!(),
-                column!(),
-                file!().to_string(),
-                "=======Server Stop Running======".to_string(),
-            ))
-            .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
-        Ok(())
+        let sender = self.log_sender.clone();
+        let _ = sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "=======Server Start Running======".to_string(),
+        ));
+        self.server_run(&address);
+        let _ = sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "=======Server Stop Running======".to_string(),
+        ));
     }
 
-    fn server_run(self, address: &str) -> io::Result<()> {
-        let listener = TcpListener::bind(address)?;
+    fn server_run(self, address: &str) {
+        let listener = TcpListener::bind(address).expect("Could not bind");
         let (db_sender, db_receiver) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
@@ -90,35 +82,29 @@ impl Server {
         self.db_thread(db_receiver);
 
         while let Ok(connection) = listener.accept() {
-            log_sender
-                .send(Log::new(
-                    LogLevel::Info,
-                    line!(),
-                    column!(),
-                    file!().to_string(),
-                    "=======New Client Connected======".to_string(),
-                ))
-                .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
+            let _ = log_sender.send(Log::new(
+                LogLevel::Info,
+                line!(),
+                column!(),
+                file!().to_string(),
+                "=======New Client Connected======".to_string(),
+            ));
 
             let (client, _) = connection;
             if timeout != 0 {
-                client.set_read_timeout(Option::from(Duration::from_secs(timeout)))?;
+                client
+                    .set_read_timeout(Option::from(Duration::from_secs(timeout)))
+                    .expect("Could not set timeout");
             }
             let db_sender_clone = db_sender.clone();
             //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
-
             let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
-            //ACA, no se trata un posible error del cliente. devuelve result el thread? Podría chequearse cuando se hace join.
         }
-        Ok(())
     }
 
     #[allow(clippy::while_let_on_iterator)]
-    fn client_handler(
-        client: TcpStream,
-        db_sender_clone: Sender<(Command, Sender<String>)>,
-    ) -> io::Result<()> {
-        let client_input: TcpStream = client.try_clone()?;
+    fn client_handler(client: TcpStream, db_sender_clone: Sender<(Command, Sender<String>)>) {
+        let client_input: TcpStream = client.try_clone().unwrap();
         let client_output: TcpStream = client;
         let input = BufReader::new(client_input);
         let mut output = client_output;
@@ -129,9 +115,12 @@ impl Server {
             //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
 
+            if request.is_err() {
+                break;
+            }
             //TODO: Agregar decode
             let mut vector: Vec<String> = vec![];
-            for string in request?.split_whitespace() {
+            for string in request.unwrap().split_whitespace() {
                 vector.push(string.to_string())
             }
             //TODO: FIN Agregar decode
@@ -142,28 +131,23 @@ impl Server {
             // TODO: Agregar forma de escritura por cada tipo.
             match command {
                 Ok(command) => {
-                    db_sender_clone
-                        .send((command, client_sndr))
-                        .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Db Sender error"))?;
-                    let response = client_rcvr.recv().map_err(|_| {
-                        Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
-                    })?;
-                    output_response = response + "\n"; //ACA
+                    let _ = db_sender_clone.send((command, client_sndr));
+                    let response = client_rcvr.recv();
+                    output_response = response.unwrap() + "\n";
                 }
-                Err(msg) => {
-                    output_response = msg + "\n";
+                _ => {
+                    output_response = command.err().unwrap() + "\n";
                 }
             };
 
-            output.write(output_response.as_ref())?;
+            let _ = output.write(output_response.as_ref());
+            //TODO: Ver que hacer con el error.
         }
-        Ok(())
 
         //TODO: flag = false
     }
 
     fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>)>) {
-        let log_sender = self.log_sender.clone();
         let _ = thread::spawn(move || {
             while let Ok((command, sender)) = db_receiver.recv() {
                 let redis_response = self.redis.execute(command);
@@ -177,39 +161,27 @@ impl Server {
                         output_response = error_msg;
                     }
                 };
-
-                if sender.send(output_response).is_err() {
-                    //ACA, y su falla este log sender? El thread podría devolver un result de si se logeo bien. Podría usar unwraps y paniquear el thread si algo sale mal. Como hago que devuelva un result sino?
-                    log_sender
-                        .send(Log::new(
-                            LogLevel::Error,
-                            line!(),
-                            column!(),
-                            file!().to_string(),
-                            "DB sender error".to_string(), //ACA, con que descripcion logeo el error?
-                        ))
-                        .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"));
-                }
+                let _ = sender.send(output_response);
             }
         });
     }
 
-    fn maintenance_thread(
-        file: String,
-        db_receiver: Sender<(Command, Sender<String>)>,
-    ) -> io::Result<()> {
+    //TODO: Return Result. -> Result<(), std::io::Error>
+    fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<String>)>) {
         loop {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
             let command = Command::Store {
                 path: file.to_string(),
             };
 
-            db_receiver
-                .send((command, client_sndr))
-                .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "DB receiver error"))?;
-            client_rcvr
-                .recv()
-                .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "DB sender error"))?;
+            /*
+            sender.send("hola")?;
+            client_recv.recv()?;
+            Ok(())
+            */
+            // Todo: Ver que pasa con  los errores.
+            let _ = db_receiver.send((command, client_sndr));
+            let _ = client_rcvr.recv();
 
             thread::sleep(Duration::from_secs(STORE_TIME_SEC));
         }

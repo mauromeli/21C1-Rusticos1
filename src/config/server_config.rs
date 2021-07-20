@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
@@ -25,26 +24,26 @@ impl Config {
         }
     }
 
-    pub fn new_from_file(path: String) -> Result<Config, io::Error> {
+    pub fn new_from_file(path: String) -> Config {
         let path = Path::new(&path);
-        let file = File::open(path)?;
+        let file = File::open(path).expect("File not found or cannot be opened");
         let content = BufReader::new(&file);
         let mut config = Config::new();
 
         for line in content.lines() {
+            let line = line.expect("Could not read the line");
             // Remuevo espacios al principio y al final de la línea.
-            let line = line?;
             let line = line.trim();
 
-            // Verifico si la línea es valida; eg: comentarios, linea en blanco, etc.
+            // Verifíco si la línea es valida; eg: comentarios, linea en blanco, etc.
             if is_invalid_line(line) {
                 continue;
             }
 
             // Separo el attributo de la config con el valor de la config.
             let splited: Vec<&str> = line.split_whitespace().collect();
-            let name = splited.first().unwrap_or(&"");
-            let tokens = splited.get(1..).unwrap_or(&[""]);
+            let name = splited.first().unwrap();
+            let tokens = splited.get(1..).unwrap();
 
             let parameters = Config::clean_and_parse_lines(tokens);
             let param = parameters[0].clone();
@@ -60,7 +59,7 @@ impl Config {
             }
         }
 
-        Ok(config)
+        config
     }
 
     fn clean_and_parse_lines(tokens: &[&str]) -> Vec<String> {

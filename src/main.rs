@@ -6,7 +6,7 @@ mod config;
 mod entities;
 mod service;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), ()> {
     let argv: Vec<String> = env::args().collect();
     let config: Config;
 
@@ -15,15 +15,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         1 => config = Config::new(),
         // one argument passed
         2 => {
-            config = Config::new_from_file(argv[1].to_string())?;
+            config = Config::new_from_file(argv[1].to_string());
         }
         _ => {
             println!("Incorrect params, Try passing one or two arguments!");
-            return Err("Incorrect params")?;
+            return Err(());
         }
     }
 
-    let server = Server::new(config)?;
-    server.serve()?;
+    let server = Server::new(config);
+    server.serve();
     Ok(())
 }
