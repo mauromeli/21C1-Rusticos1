@@ -526,7 +526,7 @@ impl Redis {
 
         let mut count = 0;
         for key in keys.iter() {
-            match self.db.update_last_access(&key) {
+            match self.db.update_last_access(&key.to_string()) {
                 None => (),
                 Some(time) => {
                     count += 1;
@@ -3419,11 +3419,29 @@ mod test {
         let keys = vec!["key".to_string()];
         let touch = redis.execute(Command::Touch { keys });
 
-        let pattern = "k**".to_string();
+        let pattern = "*".to_string();
         let keys = redis.execute(Command::Keys { pattern });
 
-        assert_eq!(touch.unwrap().to_string(), "1");
-        assert_eq!(keys.unwrap().to_string(), "0");
+        assert_eq!(touch.unwrap().to_string(), "0");
+        assert_eq!(keys.unwrap(), Re::List(Vec::new()));
+    }
+
+    #[test]
+    fn test_touch_returns_number_of_keys_touched() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key1".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key2".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let keys = vec!["key1".to_string(), "key2".to_string()];
+        let touch = redis.execute(Command::Touch { keys });
+
+        assert_eq!(touch.unwrap().to_string(), "2");
     }
 
     #[test]
@@ -3447,7 +3465,7 @@ mod test {
 
         let key: String = "key".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
     }
 
     #[test]

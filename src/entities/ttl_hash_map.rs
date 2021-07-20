@@ -28,11 +28,12 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         }
     }
 
-    /// Devuelve None si no existe la clave o expiró. Sino, devuelve el tiempo desde el anterior acceso.
+    /// Actualiza el último acceso a la clave. Devuelve el tiempo transcurrido desde el anterior acceso. Devuelve None si no existe la clave o expiró.
     pub fn update_last_access(&mut self, key: &K) -> Option<Duration> {
         if !self.contains_key(&key) {
             return None;
         }
+
         match self.last_access.insert(key.clone(), SystemTime::now()) {
             Some(value) => Some(
                 value
@@ -60,6 +61,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         Some(self.ttls.insert(key, ttl).unwrap_or(SystemTime::UNIX_EPOCH))
     }
 
+    /// Elimina el time-to-live de la clave, devolviendo el timestamp de expiración. Si no tenía una expiración, devuelve None.
     pub fn delete_ttl(&mut self, key: &K) -> Option<SystemTime> {
         self.ttls.remove(key)
     }
@@ -78,20 +80,32 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         Some(ttl)
     }
 
+    /// Devuelve la cantidad de claves guardadas, sin chequear que no hayan expirado.
     pub fn len(&self) -> usize {
         self.store.len()
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.delete_ttl(&key);
-        self.update_last_access(&key);
+        self.remove(&key);
+        self.last_access.insert(key.clone(), SystemTime::now());
         self.store.insert(key, value)
     }
 
+    /// Devuelve si la clave existe o no, chequeando que no haya expirado. Si expiró, la borra.
     pub fn contains_key(&mut self, key: &K) -> bool {
-        self.get(&key).is_some()
+        match self.store.get(key) {
+            Some(_value) => {
+                if self.expired(key) {
+                    self.remove(key);
+                    return false;
+                }
+                return true;
+            }
+            None => return false,
+        }
     }
 
+    /// Elimina el par clave-valor, devolviendo ese valor. Si no existía la clave, devuelve None.
     pub fn remove(&mut self, key: &K) -> Option<V> {
         self.ttls.remove(key);
         self.last_access.remove(key);
@@ -116,7 +130,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         self.store.get_mut(key)
     }
 
-    /// Devuelve las keys sin chequear que no hayan expirado
+    /// Devuelve las claves, sin chequear que no hayan expirado
     pub fn keys(&self) -> Keys<K, V> {
         self.store.keys()
     }
