@@ -218,7 +218,7 @@ impl Redis {
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 self.set_method(key, value);
-                Ok(Re::String(return_value.to_string()))
+                Ok(return_value)
             }
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
@@ -526,8 +526,19 @@ impl Redis {
 
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.contains_key(&key) {
-                count += 1;
+            match self.db.update_last_access(&key.to_string()) {
+                None => (),
+                Some(time) => {
+                    count += 1;
+                    let time = time.as_secs().to_string();
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Debug,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        format!("Key {} previous access: {} secs ago.", &key, &time),
+                    ));
+                }
             }
         }
 
@@ -1335,6 +1346,7 @@ impl Redis {
             file!().to_string(),
             "Command LOAD Received - path: ".to_string() + &*path,
         ));
+
         let text = match fs::read_to_string(path) {
             Ok(text) => text,
             Err(e) => {
@@ -1460,7 +1472,7 @@ mod test {
         let key = "hola".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
 
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
     }
 
     #[test]
@@ -1500,7 +1512,7 @@ mod test {
         let value: String = "value".to_string();
         let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
 
-        assert_eq!("(nil)", getset.unwrap().to_string());
+        assert_eq!(Re::Nil, getset.unwrap());
     }
 
     #[test]
@@ -1680,7 +1692,7 @@ mod test {
             Re::List(l) => {
                 let mut l = l.iter();
                 assert_eq!("value".to_string(), l.next().unwrap().to_string());
-                assert_eq!("(nil)".to_string(), l.next().unwrap().to_string());
+                assert_eq!("(nil)", l.next().unwrap().to_string());
             }
             _ => (),
         }
@@ -1706,7 +1718,7 @@ mod test {
             Re::List(l) => {
                 let mut l = l.iter();
                 assert_eq!("value".to_string(), l.next().unwrap().to_string());
-                assert_eq!("(nil)".to_string(), l.next().unwrap().to_string());
+                assert_eq!("(nil)", l.next().unwrap().to_string());
             }
             _ => (),
         }
@@ -1731,7 +1743,7 @@ mod test {
 
         let key: String = "key".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
     }
 
     #[test]
@@ -1740,7 +1752,7 @@ mod test {
 
         let key: String = "key".to_string();
         let getdel: Result<Re, String> = redis.execute(Command::Getdel { key });
-        assert_eq!("(nil)", getdel.unwrap().to_string());
+        assert_eq!(Re::Nil, getdel.unwrap());
     }
 
     #[test]
@@ -1778,7 +1790,7 @@ mod test {
 
         let key: String = "key".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
     }
 
     #[test]
@@ -1910,7 +1922,7 @@ mod test {
 
         let key: String = "key".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
         assert_eq!("1", expire.unwrap().to_string());
     }
 
@@ -1939,7 +1951,7 @@ mod test {
 
         let key: String = "key".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
         assert_eq!("1", expire.unwrap().to_string());
     }
 
@@ -2024,7 +2036,7 @@ mod test {
 
         let key: String = "key1".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
 
         let key: String = "key2".to_string();
         let get = redis.execute(Command::Get { key });
@@ -2186,7 +2198,7 @@ mod test {
         let lindex = redis.execute(Command::Lindex { key, index });
 
         assert!(lindex.is_ok());
-        assert_eq!("(nil)", lindex.unwrap().to_string());
+        assert_eq!(Re::Nil, lindex.unwrap());
     }
 
     #[test]
@@ -3389,6 +3401,49 @@ mod test {
         assert!(keys.is_ok());
     }
 
+    #[ignore]
+    #[test]
+    fn test_touch_deletes_expired_key() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let ttl = Duration::from_secs(1);
+        let _expire = redis.execute(Command::Expire { key, ttl });
+
+        thread::sleep(Duration::from_secs(1));
+
+        let keys = vec!["key".to_string()];
+        let touch = redis.execute(Command::Touch { keys });
+
+        let pattern = "*".to_string();
+        let keys = redis.execute(Command::Keys { pattern });
+
+        assert_eq!(touch.unwrap().to_string(), "0");
+        assert_eq!(keys.unwrap(), Re::List(Vec::new()));
+    }
+
+    #[test]
+    fn test_touch_returns_number_of_keys_touched() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key1".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key2".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let keys = vec!["key1".to_string(), "key2".to_string()];
+        let touch = redis.execute(Command::Touch { keys });
+
+        assert_eq!(touch.unwrap().to_string(), "2");
+    }
+
     #[test]
     fn test_set_element_and_flushdb() {
         let mut redis: Redis = Redis::new_for_test();
@@ -3410,7 +3465,7 @@ mod test {
 
         let key: String = "key".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert_eq!(Re::Nil, get.unwrap());
     }
 
     #[test]
