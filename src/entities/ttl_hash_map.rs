@@ -34,14 +34,13 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
             return None;
         }
 
-        match self.last_access.insert(key.clone(), SystemTime::now()) {
-            Some(value) => Some(
+        self.last_access
+            .insert(key.clone(), SystemTime::now())
+            .map(|value| {
                 value
                     .duration_since(SystemTime::now())
-                    .unwrap_or_else(|_| Duration::from_secs(0)),
-            ),
-            None => None,
-        }
+                    .unwrap_or_else(|_| Duration::from_secs(0))
+            })
     }
 
     /// Devuelve None si no existe la clave, y SystemTime::UNIX_EPOCH si era persistente. Sino, devuelve el valor previo de ttl.
