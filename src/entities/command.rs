@@ -14,6 +14,7 @@ pub enum Command {
     Load {
         path: String,
     },
+    Monitor,
 
     // Strings
     Get {

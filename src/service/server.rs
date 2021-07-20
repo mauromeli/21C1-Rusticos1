@@ -1,6 +1,9 @@
 use crate::config::server_config::Config;
 use crate::entities::command::Command;
+use crate::entities::log::Log;
+use crate::entities::log_level::LogLevel;
 use crate::service::command_generator::generate;
+use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -15,13 +18,24 @@ static STORE_TIME_SEC: u64 = 120;
 pub struct Server {
     redis: Redis,
     config: Config,
+    log_sender: Sender<Log>,
 }
 
 impl Server {
     #[allow(dead_code)]
     pub fn new(config: Config) -> Self {
-        let redis = Redis::new();
-        Self { redis, config }
+        let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
+
+        let redis = Redis::new(log_sender.clone());
+
+        let logger = Logger::new(log_receiver, config.get_logfile());
+        logger.log();
+
+        Self {
+            redis,
+            config,
+            log_sender,
+        }
     }
 
     pub fn serve(mut self) {
@@ -33,22 +47,49 @@ impl Server {
         // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
+        let sender = self.log_sender.clone();
+        let _ = sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "=======Server Start Running======".to_string(),
+        ));
         self.server_run(&address);
+        let _ = sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "=======Server Stop Running======".to_string(),
+        ));
     }
 
     fn server_run(self, address: &str) {
         let listener = TcpListener::bind(address).expect("Could not bind");
         let (db_sender, db_receiver) = mpsc::channel();
+
+        let log_sender = self.log_sender.clone();
         let timeout = self.config.get_timeout();
 
         let db_filename = self.config.get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
+
+        //Todo: Agregar el handler.
         let _ =
             thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
 
         self.db_thread(db_receiver);
 
         while let Ok(connection) = listener.accept() {
+            let _ = log_sender.send(Log::new(
+                LogLevel::Info,
+                line!(),
+                column!(),
+                file!().to_string(),
+                "=======New Client Connected======".to_string(),
+            ));
+
             let (client, _) = connection;
             if timeout != 0 {
                 client
@@ -56,6 +97,7 @@ impl Server {
                     .expect("Could not set timeout");
             }
             let db_sender_clone = db_sender.clone();
+            //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
             let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
         }
     }
@@ -70,6 +112,7 @@ impl Server {
 
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(request) = lines.next() {
+            //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
 
             if request.is_err() {
@@ -98,7 +141,10 @@ impl Server {
             };
 
             let _ = output.write(output_response.as_ref());
+            //TODO: Ver que hacer con el error.
         }
+
+        //TODO: flag = false
     }
 
     fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>)>) {
@@ -120,12 +166,21 @@ impl Server {
         });
     }
 
+    //TODO: Return Result. -> Result<(), std::io::Error>
     fn maintenance_thread(file: String, db_receiver: Sender<(Command, Sender<String>)>) {
         loop {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
             let command = Command::Store {
                 path: file.to_string(),
             };
+
+            /*
+            sender.send("hola")?;
+            client_recv.recv()?;
+            Ok(())
+
+            */
+            // Todo: Ver que pasa con  los errores.
             let _ = db_receiver.send((command, client_sndr));
             let _ = client_rcvr.recv();
 

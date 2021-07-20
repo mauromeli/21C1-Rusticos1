@@ -1,24 +1,40 @@
 use crate::entities::command::Command;
+use crate::entities::log::Log;
+use crate::entities::log_level::LogLevel;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use crate::entities::ttl_hash_map::TtlHashMap;
 use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::fs;
 use std::io::Write;
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::time::{Duration, SystemTime};
+
+const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
+const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 
 #[derive(Debug)]
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
+    log_sender: Sender<Log>,
 }
 
 impl Redis {
     #[allow(dead_code)]
-    pub fn new() -> Self {
-        let map = TtlHashMap::new();
+    pub fn new(log_sender: Sender<Log>) -> Self {
+        let db = TtlHashMap::new();
 
-        Self { db: map }
+        Self { db, log_sender }
+    }
+
+    #[allow(dead_code)]
+    fn new_for_test() -> Self {
+        let db = TtlHashMap::new();
+        let (log_sender, _): (Sender<Log>, _) = mpsc::channel();
+        Self { db, log_sender }
     }
 
     #[allow(dead_code)]
@@ -30,6 +46,7 @@ impl Redis {
             Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
             Command::Store { path } => self.store_method(path),
             Command::Load { path } => self.load_method(path),
+            Command::Monitor => Err("NotImplemented".to_string()),
 
             // Strings
             Command::Append { key, value } => self.append_method(key, value),
@@ -93,12 +110,31 @@ impl Redis {
     }
 
     fn flushdb_method(&mut self) -> Re {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command FLUSHDB Received".to_string(),
+        ));
+
         self.db = TtlHashMap::new();
         Re::String("OK".to_string())
     }
 
     #[allow(dead_code)]
     fn copy_method(&mut self, key_origin: String, key_destination: String) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command COPY Received - key origin:".to_string()
+                + &*key_origin
+                + " - key destination: "
+                + &*key_destination,
+        ));
+
         let value_origin;
         match self.db.get(&key_origin) {
             Some(value) => value_origin = value.clone(),
@@ -116,24 +152,54 @@ impl Redis {
 
     #[allow(dead_code)]
     fn get_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command GET Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get(&key) {
             Some(return_value) => match return_value {
                 Re::String(s) => Ok(Re::String(s.to_string())),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::Nil),
         }
     }
 
     fn strlen_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command STRLEN Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get(&key) {
             Some(return_value) => match return_value {
                 Re::String(s) => Ok(Re::String(s.len().to_string())),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::String("0".to_string())),
         }
@@ -141,17 +207,42 @@ impl Redis {
 
     #[allow(dead_code)]
     fn getset_method(&mut self, key: String, value: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command GETSET Received - key: ".to_string() + &*key,
+        ));
+
         match self.get_method(key.clone()) {
             Ok(return_value) => {
                 self.set_method(key, value);
                 Ok(Re::String(return_value.to_string()))
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.clone(),
+                ));
+                Err(e)
+            }
         }
     }
 
     #[allow(dead_code)]
     fn set_method(&mut self, key: String, value: String) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SET Received - key: ".to_string() + &*key,
+        ));
+
         self.db.insert(key, Re::String(value));
 
         "Ok".to_string()
@@ -159,21 +250,44 @@ impl Redis {
 
     #[allow(dead_code)]
     fn incrby_method(&mut self, key: String, increment: i32) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command INCRBY Received - key: ".to_string() + &*key,
+        ));
+
         match self.get_method(key.clone()) {
             Ok(return_value) => match return_value {
                 Re::String(value) => {
                     let my_int: Result<i32, _> = value.parse();
                     if my_int.is_err() {
-                        return Err("ERR value is not an integer or out of range".to_string());
+                        let _ = self.log_sender.send(Log::new(
+                            LogLevel::Error,
+                            line!(),
+                            column!(),
+                            file!().to_string(),
+                            OUT_OF_RANGE_MSG.to_string(),
+                        ));
+
+                        return Err(OUT_OF_RANGE_MSG.to_string());
                     }
 
                     let my_int = my_int.unwrap() + increment;
                     Ok(Re::String(self.set_method(key, my_int.to_string())))
                 }
                 Re::Nil => Ok(Re::String(self.set_method(key, increment.to_string()))),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             Err(_) => Ok(Re::String(self.set_method(key, increment.to_string()))),
         }
@@ -181,6 +295,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn mget_method(&mut self, keys: Vec<String>) -> Re {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command MGET Received - keys: ".to_string() + &keys.join(" - "),
+        ));
+
         let mut elements: Vec<String> = Vec::new();
         for key in keys.iter() {
             elements.push(
@@ -194,6 +316,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn mset_method(&mut self, key_values: Vec<(String, String)>) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command MSET Received".to_string(),
+        ));
+
         for (key, value) in key_values.iter() {
             self.set_method(key.to_string(), value.to_string());
         }
@@ -202,6 +332,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn getdel_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command GETDEL Received - keys: ".to_string() + &key,
+        ));
+
         match self.get_method(key.clone()) {
             Ok(return_value) => match return_value {
                 Re::String(_) => {
@@ -209,9 +347,16 @@ impl Redis {
                     Ok(return_value)
                 }
                 Re::Nil => Ok(return_value),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             Err(msg) => Err(msg),
         }
@@ -219,6 +364,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn del_method(&mut self, keys: Vec<String>) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command DEL Received - keys: ".to_string() + &keys.join(" - "),
+        ));
+
         let mut count = 0;
         for key in keys.iter() {
             if self.db.remove(&key).is_some() {
@@ -231,6 +384,14 @@ impl Redis {
 
     #[allow(dead_code)]
     fn append_method(&mut self, key: String, value: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command APPEND Received - key: ".to_string() + &*key,
+        ));
+
         match self.get_method(key.clone()) {
             Ok(redis_element) => match redis_element {
                 Re::String(s) => {
@@ -238,15 +399,39 @@ impl Redis {
                     Ok(Re::String(self.set_method(key, value)))
                 }
                 Re::Nil => Ok(Re::String(self.set_method(key, value))),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
-            Err(e) => Err(e),
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.to_string(),
+                ));
+                Err(e)
+            }
         }
     }
 
     fn exists_method(&mut self, keys: Vec<String>) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command EXISTS Received - key: ".to_string() + &keys.join(" - "),
+        ));
+
         let mut count = 0;
         for key in keys.iter() {
             if self.db.contains_key(&key) {
@@ -257,6 +442,14 @@ impl Redis {
     }
 
     fn expire_method(&mut self, key: String, ttl: Duration) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command EXPIRE Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.set_ttl_relative(key, ttl) {
             Some(_) => "1".to_string(),
             None => "0".to_string(),
@@ -264,6 +457,14 @@ impl Redis {
     }
 
     fn expireat_method(&mut self, key: String, ttl: SystemTime) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command EXPIREAT Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.set_ttl_absolute(key, ttl) {
             Some(_) => "1".to_string(),
             None => "0".to_string(),
@@ -271,6 +472,14 @@ impl Redis {
     }
 
     fn persist_method(&mut self, key: String) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command PERSIST Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.delete_ttl(&key) {
             Some(_) => "1".to_string(),
             None => "0".to_string(),
@@ -278,15 +487,43 @@ impl Redis {
     }
 
     fn rename_method(&mut self, key_origin: String, key_destination: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command RENAME Received - key origin: ".to_string()
+                + &*key_origin
+                + " - key destination: "
+                + &*key_destination,
+        ));
+
         match self.getdel_method(key_origin) {
             Ok(value) => Ok(Re::String(
                 self.set_method(key_destination, value.to_string()),
             )),
-            Err(msg) => Err(msg),
+            Err(msg) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    msg.clone(),
+                ));
+                Err(msg)
+            }
         }
     }
 
     fn touch_method(&mut self, keys: Vec<String>) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command TOUCH Received - keys: ".to_string() + &keys.join(" - "),
+        ));
+
         let mut count = 0;
         for key in keys.iter() {
             if self.db.contains_key(&key) {
@@ -298,6 +535,14 @@ impl Redis {
     }
 
     fn ttl_method(&mut self, key: String) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command TTL Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_ttl(&key) {
             Some(value) => {
                 if value == Duration::from_secs(0) {
@@ -310,6 +555,14 @@ impl Redis {
     }
 
     fn type_method(&mut self, key: String) -> String {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command TYPE Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get(&key) {
             Some(return_value) => match return_value {
                 Re::String(_) => "string".to_string(),
@@ -322,6 +575,14 @@ impl Redis {
     }
 
     fn lindex_method(&mut self, key: String, index: i32) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LINDEX Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
@@ -337,27 +598,57 @@ impl Redis {
                         None => Ok(Re::Nil),
                     }
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::Nil),
         }
     }
 
     fn llen_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LLEN Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => Ok(Re::String(value.len().to_string())),
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::String("0".to_string())),
         }
     }
 
     fn lpop_method(&mut self, key: String, count: usize) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LPOP Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
@@ -387,15 +678,30 @@ impl Redis {
                         _ => Ok(Re::Nil),
                     }
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::Nil),
         }
     }
 
     fn lpush_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LPUSH Received - key: ".to_string() + &*key,
+        ));
+
         let mut redis_element: Vec<String> = values;
         redis_element.reverse();
 
@@ -408,9 +714,16 @@ impl Redis {
 
                     Ok(Re::String(redis_element.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Debug,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => {
                 self.db.insert(key, Re::List(redis_element.clone()));
@@ -421,6 +734,14 @@ impl Redis {
     }
 
     fn lpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LPUSHX Received - key: ".to_string() + &*key,
+        ));
+
         let mut redis_element: Vec<String> = values;
         redis_element.reverse();
 
@@ -434,9 +755,16 @@ impl Redis {
 
                     Ok(Re::String(redis_element.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => {
                 self.db.insert(key, Re::List(vec![]));
@@ -446,6 +774,14 @@ impl Redis {
     }
 
     fn lrange_method(&mut self, key: String, begin: i32, end: i32) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LRANGE Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
@@ -471,15 +807,30 @@ impl Redis {
 
                     Ok(Re::List(return_value.unwrap().to_vec()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::List(vec![])),
         }
     }
 
     fn lrem_method(&mut self, key: String, count: i32, element: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LREM Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => match count.cmp(&0) {
@@ -504,9 +855,16 @@ impl Redis {
                         Ok(Re::String(deleted.to_string()))
                     }
                 },
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::String("0".to_string())),
         }
@@ -539,6 +897,14 @@ impl Redis {
     }
 
     fn lset_method(&mut self, key: String, index: i32, element: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LSET Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
@@ -550,6 +916,13 @@ impl Redis {
                     };
 
                     if position < 0 || position > len_value {
+                        let _ = self.log_sender.send(Log::new(
+                            LogLevel::Error,
+                            line!(),
+                            column!(),
+                            file!().to_string(),
+                            "ERR index out of range".to_string(),
+                        ));
                         return Err("ERR index out of range".to_string());
                     }
 
@@ -559,15 +932,39 @@ impl Redis {
 
                     Ok(Re::String("Ok".to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
-            None => Err("ERR no such key".to_string()),
+            None => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    "ERR no such key".to_string(),
+                ));
+                Err("ERR no such key".to_string())
+            }
         }
     }
 
     fn rpop_method(&mut self, key: String, count: usize) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command RPOP Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
@@ -600,15 +997,30 @@ impl Redis {
                         _ => Ok(Re::Nil),
                     }
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::Nil),
         }
     }
 
     fn rpush_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command RPUSH Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 Re::List(value) => {
@@ -618,9 +1030,16 @@ impl Redis {
 
                     Ok(Re::String(saved_vector.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => {
                 self.db.insert(key, Re::List(values.clone()));
@@ -631,6 +1050,14 @@ impl Redis {
     }
 
     fn rpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command RPUSHX Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 RedisElement::List(value) => {
@@ -641,15 +1068,30 @@ impl Redis {
 
                     Ok(Re::String(saved_vector.len().to_string()))
                 }
-                _ => Err(
-                    "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-                ),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    Err(WRONGTYPE_MSG.to_string())
+                }
             },
             None => Ok(Re::String("0".to_string())),
         }
     }
 
     fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SADD Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 RedisElement::Set(value) => {
@@ -661,7 +1103,16 @@ impl Redis {
 
                     Ok(Re::String((final_set_len - start_set_len).to_string()))
                 }
-                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "WRONGTYPE A hashset data type expected".to_string(),
+                    ));
+                    Err("WRONGTYPE A hashset data type expected".to_string())
+                }
             },
             None => {
                 self.db.insert(key, RedisElement::Set(values.clone()));
@@ -671,19 +1122,45 @@ impl Redis {
     }
 
     fn scard_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SCARD Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(value) => match value {
                 RedisElement::Set(value) => {
                     let set = value.clone();
                     Ok(Re::String(set.len().to_string()))
                 }
-                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "WRONGTYPE A hashset data type expected".to_string(),
+                    ));
+
+                    Err("WRONGTYPE A hashset data type expected".to_string())
+                }
             },
             None => Ok(Re::String("0".to_string())),
         }
     }
 
     fn sismember_method(&mut self, key: String, value: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SISMEMBER Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(redis_element) => match redis_element {
                 RedisElement::Set(redis_element) => {
@@ -694,24 +1171,77 @@ impl Redis {
                         Ok(Re::String("0".to_string()))
                     }
                 }
-                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "WRONGTYPE A hashset data type expected".to_string() + &*key,
+                    ));
+
+                    Err("WRONGTYPE A hashset data type expected".to_string())
+                }
             },
-            None => Err("The key doesn't exist".to_string()),
+            None => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    "The key doesn't exist".to_string(),
+                ));
+                Err("The key doesn't exist".to_string())
+            }
         }
     }
 
     fn smembers_method(&mut self, key: String) -> Result<RedisElement, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SMEMBERS Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(redis_element) => match redis_element {
                 RedisElement::Set(redis_element) => Ok(Re::Set(redis_element.clone())),
 
-                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "WRONGTYPE A hashset data type expected".to_string(),
+                    ));
+                    Err("WRONGTYPE A hashset data type expected".to_string())
+                }
             },
-            None => Err("The key doesn't exist".to_string()),
+            None => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    "The key doesn't exist".to_string(),
+                ));
+                Err("The key doesn't exist".to_string())
+            }
         }
     }
 
     fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SREM Received - key: ".to_string() + &*key,
+        ));
+
         match self.db.get_mut(&key) {
             Some(redis_element) => match redis_element {
                 RedisElement::Set(redis_element) => {
@@ -725,13 +1255,30 @@ impl Redis {
                     self.db.insert(key.clone(), RedisElement::Set(set));
                     Ok(Re::String(count.to_string()))
                 }
-                _ => Err("WRONGTYPE A hashset data type expected".to_string()),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "WRONGTYPE A hashset data type expected".to_string() + &*key,
+                    ));
+                    Err("WRONGTYPE A hashset data type expected".to_string())
+                }
             },
             None => Ok(Re::String("0".to_string())),
         }
     }
 
     fn keys_method(&mut self, pattern: String) -> Vec<String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command KEYS Received".to_string(),
+        ));
+
         let mut vector = vec![];
         for key in self.db.keys() {
             let re = Regex::new(&*pattern).unwrap();
@@ -743,21 +1290,63 @@ impl Redis {
     }
 
     fn store_method(&self, path: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command STORE Received - path: ".to_string() + &*path,
+        ));
+
         let mut file = match fs::File::create(path) {
             Ok(file) => file,
-            Err(e) => return Err(e.to_string()),
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.to_string(),
+                ));
+                return Err(e.to_string());
+            }
         };
 
         match file.write_all(self.db.serialize().as_bytes()) {
             Ok(_) => Ok(RedisElement::String("Ok".to_string())),
-            Err(e) => Err(e.to_string()),
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.to_string(),
+                ));
+                Err(e.to_string())
+            }
         }
     }
 
     fn load_method(&mut self, path: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command LOAD Received - path: ".to_string() + &*path,
+        ));
         let text = match fs::read_to_string(path) {
             Ok(text) => text,
-            Err(e) => return Err(e.to_string()),
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.to_string(),
+                ));
+                return Err(e.to_string());
+            }
         };
 
         match TtlHashMap::deserialize(text) {
@@ -765,7 +1354,16 @@ impl Redis {
                 self.db = map;
                 Ok(RedisElement::String("Ok".to_string()))
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.clone(),
+                ));
+                Err(e)
+            }
         }
     }
 }
@@ -782,7 +1380,7 @@ mod test {
 
     #[test]
     fn test_strlen_element_fail_if_is_not_string() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -796,7 +1394,7 @@ mod test {
 
     #[test]
     fn test_strlen_element_not_found() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let strlen: Result<Re, String> = redis.execute(Command::Strlen { key });
@@ -807,7 +1405,7 @@ mod test {
 
     #[test]
     fn test_strlen_element_saved_before() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "hola".to_string();
@@ -823,7 +1421,7 @@ mod test {
     #[allow(unused_imports)]
     #[test]
     fn test_set_element_and_get_the_same() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "hola".to_string();
@@ -838,7 +1436,7 @@ mod test {
 
     #[test]
     fn test_set_element_twice_and_get_the_last_set() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "hola".to_string();
         let value: String = "chau".to_string();
@@ -857,7 +1455,7 @@ mod test {
 
     #[test]
     fn test_get_on_empty_key_returns_nil() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "hola".to_string();
         let get: Result<Re, String> = redis.execute(Command::Get { key });
@@ -867,7 +1465,7 @@ mod test {
 
     #[test]
     fn test_get_element_fail_if_is_not_string() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -881,7 +1479,7 @@ mod test {
 
     #[test]
     fn test_getset_fails_if_is_not_string() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -896,7 +1494,7 @@ mod test {
 
     #[test]
     fn test_getset_on_empty_key_returns_nil() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "value".to_string();
@@ -907,7 +1505,7 @@ mod test {
 
     #[test]
     fn test_getset_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "1".to_string();
@@ -925,7 +1523,7 @@ mod test {
 
     #[test]
     fn test_ping_returns_pong() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let ping: Result<Re, String> = redis.execute(Command::Ping);
 
@@ -934,7 +1532,7 @@ mod test {
 
     #[test]
     fn test_incrby_with_2_as_value() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "1".to_string();
@@ -960,7 +1558,7 @@ mod test {
 
     #[test]
     fn test_incrby_value_err_initial_value_string() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "hola".to_string();
@@ -975,7 +1573,7 @@ mod test {
 
     #[test]
     fn test_incrby_not_saved_value() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let increment: u32 = 1;
@@ -993,7 +1591,7 @@ mod test {
 
     #[test]
     fn test_decrby_on_new_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let decrement: u32 = 3;
@@ -1007,7 +1605,7 @@ mod test {
 
     #[test]
     fn test_decrby_on_existing_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "5".to_string();
@@ -1025,7 +1623,7 @@ mod test {
 
     #[test]
     fn test_mset_sets_2_values() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key_values = vec![
             ("key1".to_string(), "value1".to_string()),
@@ -1044,7 +1642,7 @@ mod test {
 
     #[test]
     fn test_mget_gets_2_values() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key_values = vec![
             ("key1".to_string(), "value1".to_string()),
@@ -1068,7 +1666,7 @@ mod test {
 
     #[test]
     fn test_mget_nil_for_missing_value() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "value".to_string();
@@ -1090,7 +1688,7 @@ mod test {
 
     #[test]
     fn test_mget_nil_for_non_string_value() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "value".to_string();
@@ -1116,7 +1714,7 @@ mod test {
 
     #[test]
     fn test_set_element_and_getdel() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "key".to_string();
@@ -1138,7 +1736,7 @@ mod test {
 
     #[test]
     fn test_getdel_without_previews_saving_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let getdel: Result<Re, String> = redis.execute(Command::Getdel { key });
@@ -1147,7 +1745,7 @@ mod test {
 
     #[test]
     fn test_dbsize() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let dbsize: Result<Re, String> = redis.execute(Command::Dbsize);
         assert_eq!("0".to_string(), dbsize.unwrap().to_string());
@@ -1168,7 +1766,7 @@ mod test {
 
     #[test]
     fn test_set_element_and_del() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "key".to_string();
@@ -1185,7 +1783,7 @@ mod test {
 
     #[test]
     fn test_set_two_elements_and_del_both() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "key1".to_string();
@@ -1203,7 +1801,7 @@ mod test {
 
     #[test]
     fn test_append_adds_word() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = "value".to_string();
@@ -1220,7 +1818,7 @@ mod test {
 
     #[test]
     fn test_append_on_non_existent_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value: String = " appended".to_string();
@@ -1234,7 +1832,7 @@ mod test {
 
     #[test]
     fn test_set_two_elements_and_check_exists_equal_2() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key1".to_string();
         let value: String = "value".to_string();
@@ -1255,7 +1853,7 @@ mod test {
 
     #[test]
     fn test_copy_on_existing_key_returns_0() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key1".to_string();
         let value: String = "value1".to_string();
@@ -1277,7 +1875,7 @@ mod test {
 
     #[test]
     fn test_copy_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key1".to_string();
         let value: String = "value1".to_string();
@@ -1298,7 +1896,7 @@ mod test {
     #[ignore]
     #[test]
     fn test_expire_deletes_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = "value".to_string();
@@ -1318,7 +1916,7 @@ mod test {
 
     #[test]
     fn test_expire_returns_0_on_unexisting_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let ttl = Duration::from_secs(1);
@@ -1329,7 +1927,7 @@ mod test {
 
     #[test]
     fn test_expireat_with_past_time_deletes_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = "value".to_string();
@@ -1347,7 +1945,7 @@ mod test {
 
     #[test]
     fn test_expireat_returns_0_on_unexisting_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
@@ -1359,7 +1957,7 @@ mod test {
     #[ignore]
     #[test]
     fn test_persist_deletes_expire_time() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = "value".to_string();
@@ -1383,7 +1981,7 @@ mod test {
 
     #[test]
     fn test_persist_returns_0_on_persistent_value() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = "value".to_string();
@@ -1401,7 +1999,7 @@ mod test {
 
     #[test]
     fn test_persist_returns_0_on_unexisting_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let persist = redis.execute(Command::Persist { key });
@@ -1410,7 +2008,7 @@ mod test {
 
     #[test]
     fn test_set_and_rename() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key1".to_string();
         let value: String = "value1".to_string();
@@ -1436,7 +2034,7 @@ mod test {
 
     #[test]
     fn test_ttl_returns_neg2_on_unexisting_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let ttl = redis.execute(Command::Ttl { key });
@@ -1446,7 +2044,7 @@ mod test {
 
     #[test]
     fn test_ttl_returns_neg1_on_persistent_value() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = "value".to_string();
@@ -1460,7 +2058,7 @@ mod test {
 
     #[test]
     fn test_ttl_returns_secs_remaining() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = "value".to_string();
@@ -1480,7 +2078,7 @@ mod test {
 
     #[test]
     fn test_type_on_string() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = "value".to_string();
@@ -1493,7 +2091,7 @@ mod test {
 
     #[test]
     fn test_type_on_empty_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let type_method: Result<Re, String> = redis.execute(Command::Type { key });
@@ -1503,7 +2101,7 @@ mod test {
 
     #[test]
     fn test_type_on_list() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = vec!["value".to_string()];
@@ -1516,7 +2114,7 @@ mod test {
 
     #[test]
     fn test_type_on_set() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let mut values = HashSet::new();
@@ -1530,7 +2128,7 @@ mod test {
 
     #[test]
     fn test_lindex_with_key_used_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -1545,7 +2143,7 @@ mod test {
 
     #[test]
     fn test_lindex_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1561,7 +2159,7 @@ mod test {
 
     #[test]
     fn test_lindex_negative_index_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1577,7 +2175,7 @@ mod test {
 
     #[test]
     fn test_lindex_negative_index_result_nil_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1593,7 +2191,7 @@ mod test {
 
     #[test]
     fn test_llen_key_saved_as_string_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -1607,7 +2205,7 @@ mod test {
 
     #[test]
     fn test_llen_key_not_found_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
@@ -1618,7 +2216,7 @@ mod test {
 
     #[test]
     fn test_llen_key_used_twice_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1636,7 +2234,7 @@ mod test {
 
     #[test]
     fn test_lpop_without_count_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1655,7 +2253,7 @@ mod test {
 
     #[test]
     fn test_lpop_with_count_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -1687,7 +2285,7 @@ mod test {
 
     #[test]
     fn test_lpop_with_count_major_than_len_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -1724,7 +2322,7 @@ mod test {
 
     #[test]
     fn test_lpop_with_saved_string_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -1737,7 +2335,7 @@ mod test {
 
     #[test]
     fn test_lrange_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -1770,7 +2368,7 @@ mod test {
 
     #[test]
     fn test_lrange_ranges_incorrect_return_empty_vec_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -1795,7 +2393,7 @@ mod test {
 
     #[test]
     fn test_lrange_using_ranges_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -1823,7 +2421,7 @@ mod test {
 
     #[test]
     fn test_lrange_for_string_value_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value1".to_string();
@@ -1842,7 +2440,7 @@ mod test {
 
     #[test]
     fn test_lset_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1876,7 +2474,7 @@ mod test {
 
     #[test]
     fn test_lset_out_of_range_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1896,7 +2494,7 @@ mod test {
 
     #[test]
     fn test_lset_out_of_range_upper_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1916,7 +2514,7 @@ mod test {
 
     #[test]
     fn test_lset_key_not_found_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let index = 70;
@@ -1932,7 +2530,7 @@ mod test {
 
     #[test]
     fn test_lset_value_saved_was_string_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "key".to_string();
@@ -1952,7 +2550,7 @@ mod test {
 
     #[test]
     fn test_rpop_without_count_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -1971,7 +2569,7 @@ mod test {
 
     #[test]
     fn test_rpop_with_count_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -2003,7 +2601,7 @@ mod test {
 
     #[test]
     fn test_rpop_with_count_major_than_len_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -2040,7 +2638,7 @@ mod test {
 
     #[test]
     fn test_rpop_with_saved_string_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -2053,7 +2651,7 @@ mod test {
 
     #[test]
     fn test_lpush_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2065,7 +2663,7 @@ mod test {
 
     #[test]
     fn test_lpush_with_key_used_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -2080,7 +2678,7 @@ mod test {
 
     #[test]
     fn test_lpush_key_used_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2099,7 +2697,7 @@ mod test {
 
     #[test]
     fn test_lpush_key_used_check_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["1".to_string(), "2".to_string()];
@@ -2133,7 +2731,7 @@ mod test {
 
     #[test]
     fn test_rpush_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2145,7 +2743,7 @@ mod test {
 
     #[test]
     fn test_rpush_with_key_used_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -2160,7 +2758,7 @@ mod test {
 
     #[test]
     fn test_rpush_key_used_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2179,7 +2777,7 @@ mod test {
 
     #[test]
     fn test_rpush_key_used_check_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["1".to_string(), "2".to_string()];
@@ -2213,7 +2811,7 @@ mod test {
 
     #[test]
     fn test_sadd() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let mut values = HashSet::new();
@@ -2227,7 +2825,7 @@ mod test {
 
     #[test]
     fn test_sadd_with_existing_key() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "set".to_string();
         let mut values = HashSet::new();
@@ -2249,7 +2847,7 @@ mod test {
 
     #[test]
     fn test_sadd_error() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "set".to_string();
         let value = "value".to_string();
@@ -2270,7 +2868,7 @@ mod test {
 
     #[test]
     fn test_scard() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let mut values = HashSet::new();
@@ -2287,7 +2885,7 @@ mod test {
 
     #[test]
     fn test_scard_error() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "set".to_string();
         let value = "value".to_string();
@@ -2304,7 +2902,7 @@ mod test {
 
     #[test]
     fn test_sismember() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let mut values = HashSet::new();
@@ -2328,7 +2926,7 @@ mod test {
 
     #[test]
     fn test_sismember_error() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let mut values = HashSet::new();
@@ -2362,7 +2960,7 @@ mod test {
 
     #[test]
     fn test_srem() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let mut values = HashSet::new();
@@ -2388,7 +2986,7 @@ mod test {
 
     #[test]
     fn test_srem_value_two_times() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let mut values = HashSet::new();
@@ -2414,7 +3012,7 @@ mod test {
 
     #[test]
     fn test_srem_error() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "set".to_string();
         let value = "value".to_string();
@@ -2433,7 +3031,7 @@ mod test {
 
     #[test]
     fn test_smembers() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let mut values = HashSet::new();
@@ -2460,7 +3058,7 @@ mod test {
 
     #[test]
     fn test_lpushx_not_pre_save_return_0() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2472,7 +3070,7 @@ mod test {
 
     #[test]
     fn test_lpushx_with_key_used_with_string_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -2487,7 +3085,7 @@ mod test {
 
     #[test]
     fn test_lpushx_after_lpush_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2506,7 +3104,7 @@ mod test {
 
     #[test]
     fn test_rpushx_not_pre_save_return_0() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2518,7 +3116,7 @@ mod test {
 
     #[test]
     fn test_rpushx_with_key_used_with_string_err() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -2533,7 +3131,7 @@ mod test {
 
     #[test]
     fn test_rpushx_after_rpush_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
@@ -2552,7 +3150,7 @@ mod test {
 
     #[test]
     fn test_rpush_and_check_elements_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -2587,7 +3185,7 @@ mod test {
 
     #[test]
     fn test_rpush_rpushx_and_check_elements_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec!["1".to_string(), "2".to_string()];
@@ -2624,7 +3222,7 @@ mod test {
 
     #[test]
     fn test_lrem_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -2665,7 +3263,7 @@ mod test {
 
     #[test]
     fn test_lrem_reverse_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -2710,7 +3308,7 @@ mod test {
 
     #[test]
     fn test_lrem_all_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = vec![
@@ -2753,7 +3351,7 @@ mod test {
 
     #[test]
     fn test_lrem_invalid_key_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
 
@@ -2768,7 +3366,7 @@ mod test {
 
     #[test]
     fn test_keys_ok() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key: String = "key".to_string();
         let value = "value".to_string();
@@ -2793,7 +3391,7 @@ mod test {
 
     #[test]
     fn test_set_element_and_flushdb() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value: String = "value".to_string();
         let key: String = "key".to_string();
@@ -2817,7 +3415,7 @@ mod test {
 
     #[test]
     fn test_store_strings() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value = "value1".to_string();
         let key = "key1".to_string();
@@ -2841,7 +3439,7 @@ mod test {
 
     #[test]
     fn test_store_list() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let value = vec!["value2".to_string(), "value1".to_string()];
@@ -2859,7 +3457,7 @@ mod test {
 
     #[test]
     fn test_store_set() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let mut values = HashSet::new();
@@ -2879,7 +3477,7 @@ mod test {
 
     #[test]
     fn test_store_string_with_ttl() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let value = "value".to_string();
         let key = "key".to_string();
@@ -2905,7 +3503,7 @@ mod test {
 
     #[test]
     fn test_store_value_with_dash() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let mut values = HashSet::new();
@@ -2925,7 +3523,7 @@ mod test {
 
     #[test]
     fn test_store_values_with_separated_words() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let mut values = HashSet::new();
@@ -2948,7 +3546,7 @@ mod test {
         let mut file = fs::File::create("test_load_string.rdb").unwrap();
         file.write_all("key,value,0\n".as_bytes()).unwrap();
 
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
         let path = "test_load_string.rdb".to_string();
         let _load = redis.execute(Command::Load { path });
 
@@ -2966,7 +3564,7 @@ mod test {
         file.write_all("key,[value1 - value2],0\n".as_bytes())
             .unwrap();
 
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
         let path = "test_load_list.rdb".to_string();
         let _load = redis.execute(Command::Load { path });
 
@@ -2989,7 +3587,7 @@ mod test {
         file.write_all("key,{value1 - value2},0\n".as_bytes())
             .unwrap();
 
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
         let path = "test_load_set.rdb".to_string();
         let _load = redis.execute(Command::Load { path });
 
@@ -3021,7 +3619,7 @@ mod test {
         let serialized = format!("key,value,{}\n", ttl);
         file.write_all(serialized.as_bytes()).unwrap();
 
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
         let path = "test_load_string_with_ttl.rdb".to_string();
         let _load = redis.execute(Command::Load { path });
 
@@ -3035,7 +3633,7 @@ mod test {
 
     #[test]
     fn test_load_values_with_dash() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let mut file = fs::File::create("test_load_values_with_dash.rdb").unwrap();
         file.write_all("key,{value-1 - value2},0\n".as_bytes())
@@ -3062,7 +3660,7 @@ mod test {
 
     #[test]
     fn test_load_values_with_separated_words() {
-        let mut redis: Redis = Redis::new();
+        let mut redis: Redis = Redis::new_for_test();
 
         let mut file = fs::File::create("test_load_values_with_separated_words.rdb").unwrap();
         file.write_all("key,{value 1 - value2},0\n".as_bytes())
