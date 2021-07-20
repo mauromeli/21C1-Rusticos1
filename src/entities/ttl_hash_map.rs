@@ -183,6 +183,7 @@ impl TtlHashMap<String, RedisElement> {
     }
 }
 
+#[allow(unused_imports)]
 mod test {
     use crate::entities::ttl_hash_map::RedisElement;
     use crate::entities::ttl_hash_map::TtlHashMap;
