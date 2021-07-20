@@ -178,7 +178,6 @@ impl Server {
             sender.send("hola")?;
             client_recv.recv()?;
             Ok(())
-
             */
             // Todo: Ver que pasa con  los errores.
             let _ = db_receiver.send((command, client_sndr));
