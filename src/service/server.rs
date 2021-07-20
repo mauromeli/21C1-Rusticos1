@@ -40,12 +40,12 @@ impl Server {
         })
     }
 
-    pub fn serve(mut self) -> io::Result<()> {
+    pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
         // load db
         let command = Command::Load {
             path: self.config.get_dbfilename(),
         };
-        let _ = self.redis.execute(command); //TODO: tratar un posible error de load
+        self.redis.execute(command)?;
 
         // endload db
 
@@ -62,6 +62,7 @@ impl Server {
             .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
 
         self.server_run(&address)?;
+
         log_sender
             .send(Log::new(
                 LogLevel::Debug,
@@ -85,8 +86,10 @@ impl Server {
         let db_sender_maintenance = db_sender.clone();
 
         //Todo: Agregar el handler.
-        let _ =
-            thread::spawn(move || Server::maintenance_thread(db_filename, db_sender_maintenance));
+        let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
+            Server::maintenance_thread(db_filename, db_sender_maintenance)?;
+            Ok(())
+        });
 
         self.db_thread(db_receiver);
 
