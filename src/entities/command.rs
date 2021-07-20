@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
+use crate::entities::info_param::InfoParam;
+use crate::entities::pubsub_param::PubSubParam;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -168,12 +170,12 @@ pub enum Command {
     },
 
     // pubsub
-
     Pubsub {
-        args: Vec<String>
+        param: PubSubParam,
+        channels: Vec<String>
     },
     Subscribe {
-        channels: String,
+        channels: Vec<String>,
         //local_address: String,
     },
     Publish {
@@ -184,16 +186,6 @@ pub enum Command {
         channels: Vec<String>
         //local_address: String,
     }
-}
-
-#[derive(Debug)]
-pub enum InfoParam {
-    ProcessID,
-    Port,
-    ServerTime,
-    Uptime,
-    ConfigFile,
-    ConnectedClients,
 }
 
 impl Command {

@@ -33,6 +33,14 @@ impl Logger {
                 .expect("Fail Open logfile");
 
             while let Ok(log) = self.receiver.recv() {
+                /*if path != path_new => {
+                                let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(self.path)
+                }*/
+
                 if self.verbose == 1 {
                     println!("{:?}", log.to_string());
                 }

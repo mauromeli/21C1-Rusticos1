@@ -1,4 +1,5 @@
-use crate::entities::command::{Command, InfoParam};
+use crate::entities::command::Command;
+use crate::entities::info_param::InfoParam;
 use crate::entities::log::Log;
 use crate::entities::log_level::LogLevel;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
@@ -13,6 +14,7 @@ use std::io::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
+use crate::entities::pubsub_param::PubSubParam;
 
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
 const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
@@ -150,35 +152,74 @@ impl Redis {
             Command::Srem { key, values } => self.srem_method(key, values),
 
             // Pubsub
-            Command::Pubsub { args } => Err("Method not implemented".to_string()),
+            Command::Pubsub { param, channels } => self.pubsub_method(param, channels),
             Command::Subscribe { channels } => self.subscribe_method(channels),
             Command::Publish { channel, message } => self.publish_method(channel, message),
             Command::Unsubscribe { channels } => Err("Method not implemented".to_string()),
         }
     }
 
-    fn subscribe_method(&mut self, channel: String) -> Result<Response, String> {
+    fn pubsub_method(&mut self, param: PubSubParam, channels: Vec<String>) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command Pubsub Received".to_string(),
+        ));
+
+        match param {
+                PubSubParam::Channels => self.channels_method(channels),
+                PubSubParam::Numsub => self.numsub_method(channels),
+            }
+    }
+
+    fn channels_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+
+    }
+
+    fn numsub_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+
+    }
+
+    fn subscribe_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command Subscribe Received".to_string(),
+        ));
+
         let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
-        let sen_clone = sen.clone();
-        let mut vector_sender;
+        for channel in channels {
+            let mut vector_sender;
 
-        if let Some(vector) = self.subscribers.get_mut(&channel) {
-            vector_sender = vector.clone();
-            vector_sender.push(sen);
-        } else {
-            vector_sender = vec![sen];
+            if let Some(vector) = self.subscribers.get_mut(&channel) {
+                vector_sender = vector.clone();
+                vector_sender.push(sen.clone());
+            } else {
+                vector_sender = vec![sen.clone()];
+            }
+
+            self.subscribers.insert(channel.clone(), vector_sender.to_vec());
+            // TODO: Revisar que hacer con este
+            let result = sen.clone().send(
+                Re::List(vec!["subscribe".to_string(), channel, "1".to_string()])
+            );
         }
-
-        self.subscribers.insert(channel.clone(), vector_sender.to_vec());
-        // TODO: Revisar que hacer con este
-        let result = sen_clone.send(
-            Re::List(vec!["subscribe".to_string(), channel, "1".to_string()])
-        );
-
         return Ok(Response::Stream(rec));
     }
 
     fn publish_method(&mut self, channel: String, msg: String) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command Publish Received".to_string(),
+        ));
+
         if !self.subscribers.contains_key(&channel) {
             return Ok(Response::Normal(Re::String("0".to_string())));
         }
@@ -229,15 +270,15 @@ impl Redis {
                 Ok(Response::Normal(
                     RedisElement::String(
                         duration.as_secs().to_string())))
-            },
+            }
             Err(e) => {
-                        let _ = self.log_sender.send(Log::new(
-                            LogLevel::Error,
-                            line!(),
-                            column!(),
-                            file!().to_string(),
-                            e.to_string(),
-                        ));
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    e.to_string(),
+                ));
                 Err(e.to_string())
             }
         }
@@ -1641,7 +1682,7 @@ mod test {
         if let Response::Normal(redis_element) = strlen.unwrap() {
             assert_eq!("0", redis_element.to_string());
         } else {
-            assert_eq!(false, true);
+            assert!(false);
         }
     }
 

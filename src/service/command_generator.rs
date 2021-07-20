@@ -1,8 +1,10 @@
-use crate::entities::command::{Command, InfoParam};
+use crate::entities::command::Command;
+use crate::entities::info_param::InfoParam;
 use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::time::SystemTime;
+use crate::entities::pubsub_param::PubSubParam;
 
 #[allow(dead_code)]
 pub fn generate(params: Vec<String>) -> Result<Command, String> {
@@ -604,19 +606,24 @@ fn generate_load(params: Vec<String>) -> Result<Command, String> {
 }
 
 fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
-    if params.is_empty() {
+    if params.len() <= 2 {
         return Err("ERR wrong number of arguments for 'pubsub' command".to_string());
     }
-    let args = params.clone();
-    Ok(Command::Pubsub { args })
+
+    match params[0].clone().to_lowercase().as_str() {
+        "channels" => Ok(Command::Pubsub {param: PubSubParam::Channels, channels: Vec::from(params.get(1..).unwrap()) }),
+        "numsub" => Ok(Command::Pubsub {param: PubSubParam::Numsub, channels: Vec::from(params.get(1..).unwrap()) }),
+        _ => Err("ERR Unknown subcommand or wrong number of arguments for".to_string() + params[0].as_str() )
+
+    }
 }
 
 fn generate_subscribe(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
     }
-    let channels = params[0].clone();
-    Ok(Command::Subscribe { channels })
+
+    Ok(Command::Subscribe { channels: params })
 }
 
 fn generate_publish(params: Vec<String>) -> Result<Command, String> {

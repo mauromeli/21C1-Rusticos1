@@ -113,26 +113,22 @@ impl Server {
             let handler =
                 thread::spawn(move || Server::client_handler(client, db_sender_clone, &used_flag));
             handlers.push((handler, flag));
-            println!("handlers {:?}", handlers);
-            //antes de hacer el join me quedo con los true y luego los false para hacerle join.
-            // if vive lo guardo else join.
-            //let vec = handlers.iter().filter(|h| h.1 == false).map().collect();
-            /*for handler in handlers.filter(used==false).iter() {
-                handler.join()
-            }*/
+
             let mut handlers_actives: Vec<(JoinHandle<()>, Arc<AtomicBool>)> = vec![];
-            //let handlers_actives: Vec<(JoinHandle<()>, Arc<AtomicBool>)>= handlers.iter().filter(|&x| x.1.load(Ordering::Relaxed)).collect();
-            /*for (handler, used) in &handlers {
+            let mut handlers_inactives: Vec<(JoinHandle<()>, Arc<AtomicBool>)> = vec![];
+            for (handler, used) in handlers {
                 if used.load(Ordering::Relaxed) {
-                    //handlers_actives.push((handler, used));
-                    println!("en uso");
+                    handlers_actives.push((handler, used));
                 } else {
-                    //TODO lanzar este result
-                    //let result = handler.join();
-                    println!("sin uso");
+                    handlers_inactives.push((handler, used));
                 }
-            }*/
-            println!("index {:?}", handlers);
+            }
+
+            for (handler,_) in handlers_inactives {
+                handler.join();
+            }
+
+            handlers = handlers_actives;
         }
     }
 
