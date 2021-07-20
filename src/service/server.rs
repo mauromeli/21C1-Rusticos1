@@ -11,6 +11,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 static STORE_TIME_SEC: u64 = 120;
@@ -30,7 +31,7 @@ impl Server {
         let redis = Redis::new(log_sender.clone());
 
         let logger = Logger::new(log_receiver, config.get_logfile());
-        logger.log()?;
+        logger.log();
 
         Ok(Self {
             redis,
@@ -44,7 +45,7 @@ impl Server {
         let command = Command::Load {
             path: self.config.get_dbfilename(),
         };
-        self.redis.execute(command); //ACA, error de redis?
+        let _ = self.redis.execute(command); //TODO: tratar un posible error de load
 
         // endload db
 
@@ -107,8 +108,10 @@ impl Server {
             let db_sender_clone = db_sender.clone();
             //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
 
-            let _ = thread::spawn(move || Server::client_handler(client, db_sender_clone));
-            //ACA, no se trata un posible error del cliente. devuelve result el thread? Podría chequearse cuando se hace join.
+            let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
+                Server::client_handler(client, db_sender_clone)?;
+                Ok(())
+            });
         }
         Ok(())
     }
@@ -148,7 +151,7 @@ impl Server {
                     let response = client_rcvr.recv().map_err(|_| {
                         Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
                     })?;
-                    output_response = response + "\n"; //ACA
+                    output_response = response + "\n";
                 }
                 Err(msg) => {
                     output_response = msg + "\n";
@@ -164,7 +167,7 @@ impl Server {
 
     fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<String>)>) {
         let log_sender = self.log_sender.clone();
-        let _ = thread::spawn(move || {
+        let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
             while let Ok((command, sender)) = db_receiver.recv() {
                 let redis_response = self.redis.execute(command);
                 //TODO: Encode RedisResponse
@@ -179,18 +182,20 @@ impl Server {
                 };
 
                 if sender.send(output_response).is_err() {
-                    //ACA, y su falla este log sender? El thread podría devolver un result de si se logeo bien. Podría usar unwraps y paniquear el thread si algo sale mal. Como hago que devuelva un result sino?
                     log_sender
                         .send(Log::new(
                             LogLevel::Error,
                             line!(),
                             column!(),
                             file!().to_string(),
-                            "DB sender error".to_string(), //ACA, con que descripcion logeo el error?
+                            "DB sender error".to_string(),
                         ))
-                        .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"));
+                        .map_err(|_| {
+                            Error::new(ErrorKind::ConnectionAborted, "Log Sender error")
+                        })?;
                 }
             }
+            Ok(())
         });
     }
 

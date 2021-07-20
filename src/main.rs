@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             println!("Incorrect params, Try passing one or two arguments!");
-            return Err("Incorrect params")?;
+            return Err("Incorrect params".into());
         }
     }
 

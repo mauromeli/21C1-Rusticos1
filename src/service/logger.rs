@@ -23,14 +23,14 @@ impl Logger {
     }
 
     #[allow(unused_must_use)]
-    pub fn log(self) -> std::io::Result<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(self.path.clone())?;
+    pub fn log(self) {
+        let _: std::thread::JoinHandle<Result<(), std::io::Error>> = thread::spawn(move || {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(self.path.clone())?;
 
-        let _ = thread::spawn(move || {
             while let Ok(log) = self.receiver.recv() {
                 if self.level == 1 {
                     println!("{:?}", log.to_string());
@@ -38,7 +38,7 @@ impl Logger {
 
                 file.write(log.to_string().as_bytes());
             }
+            Ok(())
         });
-        Ok(())
     }
 }
