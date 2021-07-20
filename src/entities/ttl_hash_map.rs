@@ -99,9 +99,9 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
                     self.remove(key);
                     return false;
                 }
-                return true;
+                true
             }
-            None => return false,
+            None => false,
         }
     }
 
