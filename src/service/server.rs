@@ -161,7 +161,7 @@ impl Server {
                 }
             };
 
-            output.write(output_response.as_ref())?;
+            output.write_all(output_response.as_ref())?;
         }
         Ok(())
 
