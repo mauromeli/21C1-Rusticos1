@@ -544,12 +544,24 @@ impl Redis {
                 return Ok(Re::Nil);
             }
         };
-
-        let mut transformed_collection: Vec<f64> = collection
+        let transformed_collection: Result<Vec<f64>, String> = collection
             .iter()
             .map(|a| a.parse::<f64>())
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| "ERR One or more scores can't be converted into double".to_string())?;
+            .map_err(|_| "ERR One or more scores can't be converted into double".to_string());
+        let mut transformed_collection = match transformed_collection {
+            Ok(vec) => vec,
+            Err(msg) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    msg.to_string(),
+                ));
+                return Err(msg);
+            }
+        };
 
         transformed_collection.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let sorted = transformed_collection
