@@ -41,6 +41,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "expireat" => generate_expireat(params),
         "persist" => generate_persist(params),
         "rename" => generate_rename(params),
+        "sort" => generate_sort(params),
         "touch" => generate_touch(params),
         "ttl" => generate_ttl(params),
         "type" => generate_type(params),
@@ -258,6 +259,15 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
         key_origin,
         key_destination,
     })
+}
+
+fn generate_sort(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'sort' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Sort { key })
 }
 
 fn generate_touch(params: Vec<String>) -> Result<Command, String> {
@@ -1012,6 +1022,28 @@ mod test {
 
         assert!(match result.unwrap() {
             Command::Persist { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_sort_without_param_err() {
+        let params = vec!["sort".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_sort_ok() {
+        let params = vec!["sort".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Sort { key: _key } => true,
             _ => false,
         });
     }
