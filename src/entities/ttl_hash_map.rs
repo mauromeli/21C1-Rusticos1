@@ -135,51 +135,117 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
     }
 }
 
-impl<K: Eq + Hash + fmt::Display, V: fmt::Display> TtlHashMap<K, V> {
-    /// Devuelve un string con todos los elementos serializados. Los ttl se guardan como segundos desde UNIX_EPOCH.
-    pub fn serialize(&self) -> String {
-        let mut s = "".to_string();
+impl TtlHashMap<String, RedisElement> {
+    /// Devuelve un string con el TtlHashMap serializado. Se guardan todos los key-value con su ttl (como Unix Timestamp en segundos).
+    pub fn serialize(&self) -> Vec<u8> {
+        let OP_EOF: u8 = 0xff;
+        let OP_EXPIRETIME = 0xfd;
+        let OP_RESIZEDB = 0xfb;
+
+        let mut s: Vec<u8> = vec![OP_RESIZEDB];
+        s.append(&mut TtlHashMap::length_encode(self.store.len()));
+        s.append(&mut TtlHashMap::length_encode(self.ttls.len()));
+
         for (key, value) in self.store.iter() {
-            let ttl = match self.ttls.get(key) {
-                Some(t) => t
+            if let Some(ttl) = self.ttls.get(key) {
+                let secs = ttl
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .unwrap_or_else(|_| Duration::from_secs(0))
-                    .as_secs(),
-                None => 0,
-            };
-            s.push_str(format!("{},{},{}\n", key.to_string(), value.to_string(), ttl).as_str());
+                    .as_secs();
+                s.push(OP_EXPIRETIME);
+                s.append(&mut secs.to_be_bytes().to_vec()); //revisar LITTLE ENDIAN O BIG ENDIAN
+            }
+            s.push(TtlHashMap::get_value_type(value));
+            s.append(&mut key.as_bytes().to_vec());
+            s.append(&mut value.to_string().as_bytes().to_vec());
         }
+
+        s.push(OP_EOF);
         s
     }
-}
 
-impl TtlHashMap<String, RedisElement> {
-    // Deserializa un string para devolver un TtlHashMap cargado con todos los elementos. Solo está implementado para cargar RedisElements.
-    pub fn deserialize(s: String) -> Result<Self, String> {
+    // Deserializa un vector de bytes para devolver un TtlHashMap cargado con todos los RedisElemets.
+    pub fn deserialize(s: Vec<u8>) -> std::io::Result<Self> {
         let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
 
-        for element in s.lines() {
-            let mut element = element.split(',');
-
-            let key = element.next().ok_or("ERR syntax error")?;
-            let value = element
-                .next()
-                .ok_or_else(|| format!("ERR missing value at key: {}", key))?;
-            let ttl = element
-                .next()
-                .ok_or_else(|| format!("ERR missing ttl at key: {}", key))?
-                .parse()
-                .map_err(|_| format!("ERR ttl syntax error at key: {}", key))?;
-
-            map.insert(key.to_string(), RedisElement::from(value));
-            if ttl != 0 {
-                map.set_ttl_absolute(
-                    key.to_string(),
-                    SystemTime::UNIX_EPOCH + Duration::from_secs(ttl),
+        match s.split_off(1) {
+            OP_RESIZEDB => {
+                map.set_size(
+                    TtlHashMap::length_decode(&mut s) as usize,
+                    TtlHashMap::length_decode(&mut s) as usize,
                 );
+                map.load(s);
+                Ok(map)
             }
+            OP_EOF => Ok(map),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "OP code unknown.",
+            ))?, //CORREGIR ERROR
         }
-        Ok(map)
+    }
+
+    fn length_decode(length: &mut Vec<u8>) -> u32 {
+        let first_byte = length.split_off(1).first().unwrap(); //unwrap! puede fallar? no deberia
+        match first_byte >> 6 {
+            0b00 => *first_byte as u32,
+            0b01 => (first_byte & 0b00111111) as u32,
+            0b10 => TtlHashMap::as_u32_be(&length.split_off(4)),
+            0b11 => 0, //caso no implementado en encode! agregarlo
+        }
+    }
+
+    fn as_u32_be(array: &[u8]) -> u32 {
+        ((array[0] as u32) << 24)
+            + ((array[1] as u32) << 16)
+            + ((array[2] as u32) << 8)
+            + ((array[3] as u32) << 0)
+    }
+
+    fn set_size(&mut self, store_size: usize, ttl_size: usize) {
+        self.store.reserve(store_size);
+        self.ttls.reserve(ttl_size);
+    }
+
+    fn load(&mut self, s: Vec<u8>) {
+            // USAR ITERADORES
+        while s.split_off(1).first().unwrap() != OP_EOF //unwrap!
+            match s.split_off(1) {
+                OP_EXPIRETIME => {
+                    
+                }
+                _ => { //persistente
+                }
+            }
+    }
+
+    fn length_encode(length: usize) -> Vec<u8> {
+        if length < 64 {
+            // 00 + length in 6 bits
+            vec![length as u8]
+        } else if length < 16384 {
+            // 01 + length in 14 bits
+            vec![0x40 | (length >> 8) as u8, length as u8]
+        } else {
+            // 1000 0000 + length in 32 bits
+            vec![
+                0x80,
+                (length >> 24) as u8,
+                (length >> 16) as u8,
+                (length >> 8) as u8,
+                length as u8,
+            ]
+        }
+        //if length > 0xffffffff ?
+    }
+
+    fn get_value_type(value: &RedisElement) -> u8 {
+        match value {
+            RedisElement::String(_) => 0,
+            RedisElement::List(_) => 1,
+            RedisElement::Set(_) => 2,
+            _ => 3,
+        }
     }
 }
 

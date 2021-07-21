@@ -1301,6 +1301,9 @@ impl Redis {
     }
 
     fn store_method(&self, path: String) -> Result<Re, String> {
+        let VERSION_NUMBER = "0001"; //constante global
+        let OP_EOF: u8 = 0xff; //cte
+
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1323,7 +1326,15 @@ impl Redis {
             }
         };
 
-        match file.write_all(self.db.serialize().as_bytes()) {
+        let rdb_file = [
+            "REDIS".as_bytes(),
+            VERSION_NUMBER.as_bytes(),
+            &self.db.serialize(),
+            &[OP_EOF],
+        ]
+        .concat();
+
+        match file.write_all(&rdb_file) {
             Ok(_) => Ok(RedisElement::String("Ok".to_string())),
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
@@ -1339,6 +1350,8 @@ impl Redis {
     }
 
     fn load_method(&mut self, path: String) -> Result<Re, String> {
+        let VERSION_NUMBER = "0001"; //constante global
+
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1347,7 +1360,7 @@ impl Redis {
             "Command LOAD Received - path: ".to_string() + &*path,
         ));
 
-        let text = match fs::read_to_string(path) {
+        let text = match fs::read(path) {
             Ok(text) => text,
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
@@ -1360,6 +1373,15 @@ impl Redis {
                 return Err(e.to_string());
             }
         };
+
+        let text = text.to_vec();
+
+        if !text.split_off(5).starts_with("REDIS".as_bytes()) {
+            return Err("Error: file is not RDB type".to_string());
+        }
+        if String::from_utf8_lossy(&text.split_off(4)) != VERSION_NUMBER {
+            return Err("Error: file is not same redis version.".to_string());
+        }
 
         match TtlHashMap::deserialize(text) {
             Ok(map) => {
