@@ -14,6 +14,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
 
     let command = params.first().unwrap();
     let params = Vec::from(params.get(1..).unwrap());
+
     match command.to_lowercase().as_str() {
         // Server
         "ping" => generate_ping(params),
@@ -102,16 +103,14 @@ fn generate_info(params: Vec<String>) -> Result<Command, String> {
     }
 
     match params[0].to_lowercase().as_str() {
-        "processid" => Ok(Command::Info {param: InfoParam::ProcessID}),
-        "port" => Ok(Command::Info {param: InfoParam::Port}),
-        "servertime" => Ok(Command::Info {param: InfoParam::ServerTime}),
-        "uptime" => Ok(Command::Info {param: InfoParam::Uptime}),
-        "configfile" => Ok(Command::Info {param: InfoParam::ConfigFile}),
-        "connectedclients" => Ok(Command::Info {param: InfoParam::ConnectedClients}),
+        "processid" => Ok(Command::Info { param: InfoParam::ProcessID }),
+        "port" => Ok(Command::Info { param: InfoParam::Port }),
+        "servertime" => Ok(Command::Info { param: InfoParam::ServerTime }),
+        "uptime" => Ok(Command::Info { param: InfoParam::Uptime }),
+        "configfile" => Ok(Command::Info { param: InfoParam::ConfigFile }),
+        "connectedclients" => Ok(Command::Info { param: InfoParam::ConnectedClients }),
         _ => Err("ERR wrong command param".to_string())
-
     }
-
 }
 
 fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
@@ -606,15 +605,26 @@ fn generate_load(params: Vec<String>) -> Result<Command, String> {
 }
 
 fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
-    if params.len() <= 2 {
+    if params.is_empty() {
         return Err("ERR wrong number of arguments for 'pubsub' command".to_string());
     }
 
+    println!("{:?}", params.get(1..));
     match params[0].clone().to_lowercase().as_str() {
-        "channels" => Ok(Command::Pubsub {param: PubSubParam::Channels, channels: Vec::from(params.get(1..).unwrap()) }),
-        "numsub" => Ok(Command::Pubsub {param: PubSubParam::Numsub, channels: Vec::from(params.get(1..).unwrap()) }),
-        _ => Err("ERR Unknown subcommand or wrong number of arguments for".to_string() + params[0].as_str() )
-
+        "channels" => {
+            match params.len() {
+                1 => Ok(Command::Pubsub { param: PubSubParam::Channels}),
+                2 => Ok(Command::Pubsub { param: PubSubParam::ChannelsWithChannel(params[1].clone())}),
+                _ => Err("ERR Unknown subcommand or wrong number of arguments for ".to_string() + params[0].as_str())
+            }
+        },
+        "numsub" => {
+            match params.len() {
+                1 => Ok(Command::Pubsub { param: PubSubParam::Numsub}),
+                _ => Ok(Command::Pubsub { param: PubSubParam::NumsubWithChannels(Vec::from(params.get(1..).unwrap()))}),
+            }
+        },
+        _ => Err("ERR Unknown subcommand or wrong number of arguments for ".to_string() + params[0].as_str())
     }
 }
 

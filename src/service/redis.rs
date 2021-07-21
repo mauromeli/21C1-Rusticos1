@@ -152,34 +152,91 @@ impl Redis {
             Command::Srem { key, values } => self.srem_method(key, values),
 
             // Pubsub
-            Command::Pubsub { param, channels } => self.pubsub_method(param, channels),
+            Command::Pubsub { param} => self.pubsub_method(param),
             Command::Subscribe { channels } => self.subscribe_method(channels),
             Command::Publish { channel, message } => self.publish_method(channel, message),
             Command::Unsubscribe { channels } => Err("Method not implemented".to_string()),
         }
     }
 
-    fn pubsub_method(&mut self, param: PubSubParam, channels: Vec<String>) -> Result<Response, String> {
+    fn pubsub_method(&mut self, param: PubSubParam) -> Result<Response, String> {
+        match param {
+            PubSubParam::Channels => self.channels_method(),
+            PubSubParam::ChannelsWithChannel(channel) => self.channels_with_channel_method(channel),
+            PubSubParam::Numsub => self.numsub_method(),
+            PubSubParam::NumsubWithChannels(channels) => self.numsub_with_channels_method(channels),
+        }
+    }
+
+    fn channels_method(&mut self) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
             column!(),
             file!().to_string(),
-            "Command Pubsub Received".to_string(),
+            "Command Pubsub Channels Received".to_string(),
         ));
 
-        match param {
-                PubSubParam::Channels => self.channels_method(channels),
-                PubSubParam::Numsub => self.numsub_method(channels),
+        let mut vec_response = vec![];
+        for (key, _) in self.subscribers.iter() {
+            vec_response.push(key.to_string());
+        }
+
+        Ok(Response::Normal(Re::List(vec_response)))
+    }
+
+    fn channels_with_channel_method(&mut self, channel: String) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command Pubsub Channels Received".to_string(),
+        ));
+
+        let mut vec_response = vec![];
+        for (key, _) in self.subscribers.iter() {
+            if channel == key.to_string() {
+                vec_response.push(key.to_string());
             }
+        }
+
+        Ok(Response::Normal(Re::List(vec_response)))
     }
 
-    fn channels_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+    fn numsub_method(&mut self) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command Pubsub Numsub Received".to_string(),
+        ));
 
+        Ok(Response::Normal(Re::List(vec![])))
     }
 
-    fn numsub_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+    fn numsub_with_channels_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command Pubsub Numsub Received".to_string(),
+        ));
 
+        let mut vec_response = vec![];
+        for (key, value) in self.subscribers.iter() {
+            if channels.iter().any(|i| i.to_string() == key.to_string()) {
+                vec_response.push(key.to_string());
+                vec_response.push(value.len().to_string());
+            } else {
+                vec_response.push(key.to_string());
+                vec_response.push("0".to_string());
+            }
+        }
+
+        Ok(Response::Normal(Re::List(vec_response)))
     }
 
     fn subscribe_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
@@ -226,7 +283,8 @@ impl Redis {
 
         if let Some(vector) = self.subscribers.get_mut(&channel) {
             for x in vector {
-                x.send(Re::String(msg.to_string()));
+                // TODO: revisar salida
+                let _ = x.send(Re::String(msg.to_string()));
             }
         }
 

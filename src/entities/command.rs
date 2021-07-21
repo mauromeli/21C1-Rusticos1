@@ -171,8 +171,7 @@ pub enum Command {
 
     // pubsub
     Pubsub {
-        param: PubSubParam,
-        channels: Vec<String>
+        param: PubSubParam
     },
     Subscribe {
         channels: Vec<String>,
@@ -236,12 +235,19 @@ impl Command {
             Command::Rpush { .. } => "rpush",
             Command::Rpushx { .. } => "rpushx",
 
-            //Sets
+            // Sets
             Command::Sadd { .. } => "sadd",
             Command::Scard { .. } => "scard",
             Command::Sismember { .. } => "sismember",
             Command::Smembers { .. } => "smember",
             Command::Srem { .. } => "srem",
+
+            // Pubsub
+            Command::Pubsub { ..} => "pubsub",
+            Command::Subscribe { .. } => "subscribe",
+            Command::Publish { .. } => "publish",
+            Command::Unsubscribe { .. } => "unsubscribe",
+
             _ => "",
         }
     }

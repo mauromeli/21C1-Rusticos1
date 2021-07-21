@@ -25,14 +25,18 @@ impl fmt::Display for RedisElement {
                 write!(fmt, "}}")?;
             }
             RedisElement::List(list) => {
-                write!(fmt, "[")?;
+                if list.is_empty(){
+                    write!(fmt, "[]")?;
+                } else {
+                    write!(fmt, "[")?;
 
-                let mut list = list.iter();
-                write!(fmt, "{}", list.next().unwrap().replace(" - ", "-"))?;
-                for element in list {
-                    write!(fmt, " - {}", element.replace(" - ", "-"))?;
+                    let mut list = list.iter();
+                    write!(fmt, "{}", list.next().unwrap().replace(" - ", "-"))?;
+                    for element in list {
+                        write!(fmt, " - {}", element.replace(" - ", "-"))?;
+                    }
+                    write!(fmt, "]")?;
                 }
-                write!(fmt, "]")?;
             }
             RedisElement::Nil => {
                 write!(fmt, "(nil)")?;

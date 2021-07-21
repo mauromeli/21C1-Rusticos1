@@ -125,7 +125,8 @@ impl Server {
             }
 
             for (handler,_) in handlers_inactives {
-                handler.join();
+                // TODO: revisar salida
+                let _ = handler.join();
             }
 
             handlers = handlers_actives;
@@ -156,7 +157,7 @@ impl Server {
             if request.is_err() {
                 break;
             }
-            println!("{:?}", request);
+            //println!("{:?}", request);
             //TODO: Agregar decode
             let mut vector: Vec<String> = vec![];
             for string in request.unwrap().split_whitespace() {
@@ -180,6 +181,7 @@ impl Server {
                             while let Ok(redis_element) = rec.recv() {
                                 let _ = output.write((redis_element.to_string() + "\n").as_ref());
                             }
+                            std::mem::drop(rec);
                         }
                         Response::Error(msg) => {
                             let _ = output.write((msg + "\n").as_ref());
