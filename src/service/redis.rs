@@ -12,6 +12,7 @@ use std::fs;
 use std::io::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
@@ -21,12 +22,12 @@ const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
     log_sender: Sender<Log>,
-    config: Config,
+    config: Arc<Mutex<Config>>,
 }
 
 impl Redis {
     #[allow(dead_code)]
-    pub fn new(log_sender: Sender<Log>, config: Config) -> Self {
+    pub fn new(log_sender: Sender<Log>, config: Arc<Mutex<Config>>) -> Self {
         let db = TtlHashMap::new();
 
         Self {
@@ -40,16 +41,12 @@ impl Redis {
     fn new_for_test() -> Self {
         let db = TtlHashMap::new();
         let (log_sender, _): (Sender<Log>, _) = mpsc::channel();
-        let config = Config::new();
+        let config = Arc::new(Mutex::new(Config::new()));
         Self {
             db,
             log_sender,
             config,
         }
-    }
-
-    pub fn get_config(&self) -> &Config {
-        &self.config
     }
 
     #[allow(dead_code)]
@@ -59,8 +56,8 @@ impl Redis {
             Command::Ping => Ok(Re::String("PONG".to_string())),
             Command::Flushdb => Ok(self.flushdb_method()),
             Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
-            Command::Store { path } => self.store_method(path),
-            Command::Load { path } => self.load_method(path),
+            Command::Store => self.store_method(),
+            Command::Load => self.load_method(),
             Command::Monitor => Err("NotImplemented".to_string()),
             Command::ConfigGet => Ok(Re::List(self.config_get_method())),
             Command::ConfigSet { parameter, value } => self.config_set_method(parameter, value),
@@ -1317,7 +1314,8 @@ impl Redis {
         vector
     }
 
-    fn store_method(&self, path: String) -> Result<Re, String> {
+    fn store_method(&self) -> Result<Re, String> {
+        let path = self.config.lock().unwrap().get_dbfilename();
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1355,7 +1353,8 @@ impl Redis {
         }
     }
 
-    fn load_method(&mut self, path: String) -> Result<Re, String> {
+    fn load_method(&mut self) -> Result<Re, String> {
+        let path = self.config.lock().unwrap().get_dbfilename();
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1406,11 +1405,11 @@ impl Redis {
         ));
 
         vec![
-            self.config.get_dbfilename(),
-            self.config.get_logfile(),
-            self.config.get_port(),
-            self.config.get_verbose(),
-            self.config.get_timeout().to_string(),
+            self.config.lock().unwrap().get_dbfilename(), //revisar unwraps?
+            self.config.lock().unwrap().get_logfile(),
+            self.config.lock().unwrap().get_port(),
+            self.config.lock().unwrap().get_verbose(),
+            self.config.lock().unwrap().get_timeout().to_string(),
         ]
     }
 
@@ -1424,9 +1423,9 @@ impl Redis {
         ));
 
         match parameter.as_str() {
-            "verbose" => self.config.set_verbose(value),
-            "dbfilename" => self.config.set_dbfilename(value),
-            "logfile" => self.config.set_logfile(value),
+            "verbose" => self.config.lock().unwrap().set_verbose(value),
+            "dbfilename" => self.config.lock().unwrap().set_dbfilename(value),
+            "logfile" => self.config.lock().unwrap().set_logfile(value),
             _ => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
@@ -3825,7 +3824,7 @@ mod test {
         let value = "1".to_string();
         let _config_set = redis.execute(Command::ConfigSet { parameter, value });
 
-        assert_eq!("1", redis.get_config().get_verbose());
+        assert_eq!("1", redis.config.lock().unwrap().get_verbose());
     }
 
     #[test]
@@ -3836,7 +3835,10 @@ mod test {
         let value = "new_dump.rdb".to_string();
         let _config_set = redis.execute(Command::ConfigSet { parameter, value });
 
-        assert_eq!("new_dump.rdb", redis.get_config().get_dbfilename());
+        assert_eq!(
+            "new_dump.rdb",
+            redis.config.lock().unwrap().get_dbfilename()
+        );
     }
 
     #[test]
@@ -3847,7 +3849,7 @@ mod test {
         let value = "new_log.log".to_string();
         let _config_set = redis.execute(Command::ConfigSet { parameter, value });
 
-        assert_eq!("new_log.log", redis.get_config().get_logfile());
+        assert_eq!("new_log.log", redis.config.lock().unwrap().get_logfile());
     }
 
     #[test]
@@ -3859,6 +3861,6 @@ mod test {
         let config_set = redis.execute(Command::ConfigSet { parameter, value });
 
         assert!(config_set.is_err());
-        assert_ne!(1, redis.get_config().get_timeout());
+        assert_ne!(1, redis.config.lock().unwrap().get_timeout());
     }
 }

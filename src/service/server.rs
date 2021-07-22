@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -20,6 +21,7 @@ static STORE_TIME_SEC: u64 = 120;
 pub struct Server {
     redis: Redis,
     log_sender: Sender<Log>,
+    config: Arc<Mutex<Config>>,
 }
 
 impl Server {
@@ -27,24 +29,26 @@ impl Server {
     pub fn new(config: Config) -> io::Result<Self> {
         let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
-        let logger = Logger::new(log_receiver, config.get_logfile());
-        let redis = Redis::new(log_sender.clone(), config);
+        let config = Arc::new(Mutex::new(config));
+        let logger = Logger::new(log_receiver, Arc::clone(&config));
+        let redis = Redis::new(log_sender.clone(), Arc::clone(&config));
 
         logger.log();
 
-        Ok(Self { redis, log_sender })
+        Ok(Self {
+            redis,
+            log_sender,
+            config,
+        })
     }
 
     pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
         // load db
-        let command = Command::Load {
-            path: self.redis.get_config().get_dbfilename(),
-        };
+        let command = Command::Load;
         self.redis.execute(command)?;
-
         // endload db
 
-        let address = "0.0.0.0:".to_owned() + self.redis.get_config().get_port().as_str();
+        let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();
         let log_sender = self.log_sender.clone();
         log_sender
             .send(Log::new(
@@ -75,14 +79,13 @@ impl Server {
         let (db_sender, db_receiver) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
-        let timeout = self.redis.get_config().get_timeout();
+        let timeout = self.config.lock().unwrap().get_timeout();
 
-        let db_filename = self.redis.get_config().get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
 
         //Todo: Agregar el handler.
         let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
-            Server::maintenance_thread(db_filename, db_sender_maintenance)?;
+            Server::maintenance_thread(db_sender_maintenance)?;
             Ok(())
         });
 
@@ -197,15 +200,10 @@ impl Server {
         });
     }
 
-    fn maintenance_thread(
-        file: String,
-        db_receiver: Sender<(Command, Sender<String>)>,
-    ) -> io::Result<()> {
+    fn maintenance_thread(db_receiver: Sender<(Command, Sender<String>)>) -> io::Result<()> {
         loop {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
-            let command = Command::Store {
-                path: file.to_string(),
-            };
+            let command = Command::Store;
 
             db_receiver
                 .send((command, client_sndr))
