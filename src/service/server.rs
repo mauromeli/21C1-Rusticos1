@@ -19,7 +19,6 @@ static STORE_TIME_SEC: u64 = 120;
 #[derive(Debug)]
 pub struct Server {
     redis: Redis,
-    config: Config,
     log_sender: Sender<Log>,
 }
 
@@ -28,28 +27,24 @@ impl Server {
     pub fn new(config: Config) -> io::Result<Self> {
         let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
-        let redis = Redis::new(log_sender.clone());
-
         let logger = Logger::new(log_receiver, config.get_logfile());
+        let redis = Redis::new(log_sender.clone(), config);
+
         logger.log();
 
-        Ok(Self {
-            redis,
-            config,
-            log_sender,
-        })
+        Ok(Self { redis, log_sender })
     }
 
     pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
         // load db
         let command = Command::Load {
-            path: self.config.get_dbfilename(),
+            path: self.redis.get_config().get_dbfilename(),
         };
         self.redis.execute(command)?;
 
         // endload db
 
-        let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
+        let address = "0.0.0.0:".to_owned() + self.redis.get_config().get_port().as_str();
         let log_sender = self.log_sender.clone();
         log_sender
             .send(Log::new(
@@ -80,9 +75,9 @@ impl Server {
         let (db_sender, db_receiver) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
-        let timeout = self.config.get_timeout();
+        let timeout = self.redis.get_config().get_timeout();
 
-        let db_filename = self.config.get_dbfilename();
+        let db_filename = self.redis.get_config().get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
 
         //Todo: Agregar el handler.

@@ -15,6 +15,11 @@ pub enum Command {
         path: String,
     },
     Monitor,
+    ConfigGet,
+    ConfigSet {
+        parameter: String,
+        value: String,
+    },
 
     // Strings
     Get {
