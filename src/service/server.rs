@@ -44,7 +44,9 @@ impl Server {
 
     pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
         // load db
-        let command = Command::Load;
+        let command = Command::Load {
+            path: self.config.lock().unwrap().get_dbfilename(),
+        };
         self.redis.execute(command)?;
         // endload db
 
@@ -81,11 +83,12 @@ impl Server {
         let log_sender = self.log_sender.clone();
         let timeout = self.config.lock().unwrap().get_timeout();
 
+        let db_filename = self.config.lock().unwrap().get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
 
         //Todo: Agregar el handler.
         let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
-            Server::maintenance_thread(db_sender_maintenance)?;
+            Server::maintenance_thread(db_filename, db_sender_maintenance)?;
             Ok(())
         });
 
@@ -200,10 +203,15 @@ impl Server {
         });
     }
 
-    fn maintenance_thread(db_receiver: Sender<(Command, Sender<String>)>) -> io::Result<()> {
+    fn maintenance_thread(
+        file: String,
+        db_receiver: Sender<(Command, Sender<String>)>,
+    ) -> io::Result<()> {
         loop {
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
-            let command = Command::Store;
+            let command = Command::Store {
+                path: file.to_string(),
+            };
 
             db_receiver
                 .send((command, client_sndr))

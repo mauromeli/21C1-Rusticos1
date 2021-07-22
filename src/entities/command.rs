@@ -8,8 +8,12 @@ pub enum Command {
     Ping,
     Flushdb,
     Dbsize,
-    Store,
-    Load,
+    Store {
+        path: String,
+    },
+    Load {
+        path: String,
+    },
     Monitor,
     ConfigGet,
     ConfigSet {

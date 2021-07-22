@@ -56,8 +56,8 @@ impl Redis {
             Command::Ping => Ok(Re::String("PONG".to_string())),
             Command::Flushdb => Ok(self.flushdb_method()),
             Command::Dbsize => Ok(Re::String(self.db.len().to_string())),
-            Command::Store => self.store_method(),
-            Command::Load => self.load_method(),
+            Command::Store { path } => self.store_method(path),
+            Command::Load { path } => self.load_method(path),
             Command::Monitor => Err("NotImplemented".to_string()),
             Command::ConfigGet => Ok(Re::List(self.config_get_method())),
             Command::ConfigSet { parameter, value } => self.config_set_method(parameter, value),
@@ -1314,8 +1314,7 @@ impl Redis {
         vector
     }
 
-    fn store_method(&self) -> Result<Re, String> {
-        let path = self.config.lock().unwrap().get_dbfilename();
+    fn store_method(&self, path: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1353,8 +1352,7 @@ impl Redis {
         }
     }
 
-    fn load_method(&mut self) -> Result<Re, String> {
-        let path = self.config.lock().unwrap().get_dbfilename();
+    fn load_method(&mut self, path: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -1404,12 +1402,13 @@ impl Redis {
             "Command CONFIG GET Received".to_string(),
         ));
 
+        let config = self.config.lock().unwrap();
         vec![
-            self.config.lock().unwrap().get_dbfilename(), //revisar unwraps?
-            self.config.lock().unwrap().get_logfile(),
-            self.config.lock().unwrap().get_port(),
-            self.config.lock().unwrap().get_verbose(),
-            self.config.lock().unwrap().get_timeout().to_string(),
+            config.get_dbfilename(),
+            config.get_logfile(),
+            config.get_port(),
+            config.get_verbose(),
+            config.get_timeout().to_string(),
         ]
     }
 
@@ -1421,11 +1420,12 @@ impl Redis {
             file!().to_string(),
             "Command CONFIG SET Received - parameter: ".to_string() + &parameter,
         ));
+        let mut config = self.config.lock().unwrap();
 
         match parameter.as_str() {
-            "verbose" => self.config.lock().unwrap().set_verbose(value),
-            "dbfilename" => self.config.lock().unwrap().set_dbfilename(value),
-            "logfile" => self.config.lock().unwrap().set_logfile(value),
+            "verbose" => config.set_verbose(value),
+            "dbfilename" => config.set_dbfilename(value),
+            "logfile" => config.set_logfile(value),
             _ => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,

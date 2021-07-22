@@ -580,19 +580,21 @@ fn generate_keys(params: Vec<String>) -> Result<Command, String> {
 }
 
 fn generate_store(params: Vec<String>) -> Result<Command, String> {
-    if !params.is_empty() {
+    if params.is_empty() {
         return Err("ERR wrong number of arguments for 'store' command".to_string());
     }
 
-    Ok(Command::Store)
+    let path = params[0].clone();
+    Ok(Command::Store { path })
 }
 
 fn generate_load(params: Vec<String>) -> Result<Command, String> {
-    if !params.is_empty() {
+    if params.is_empty() {
         return Err("ERR wrong number of arguments for 'load' command".to_string());
     }
 
-    Ok(Command::Load)
+    let path = params[0].clone();
+    Ok(Command::Load { path })
 }
 
 #[allow(unused_imports)]
