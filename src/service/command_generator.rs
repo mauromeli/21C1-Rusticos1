@@ -88,7 +88,7 @@ fn generate_monitor(params: Vec<String>) -> Result<Command, String> {
 }
 
 fn generate_config(params: Vec<String>) -> Result<Command, String> {
-    if params.len() == 0 {
+    if params.is_empty() {
         return Err("ERR wrong number of arguments for 'config' command".to_string());
     }
 
@@ -102,7 +102,7 @@ fn generate_config(params: Vec<String>) -> Result<Command, String> {
             Ok(Command::ConfigSet { parameter, value })
         }
         "get" => Ok(Command::ConfigGet),
-        _ => return Err("ERR wrong arguments for 'config' command".to_string()),
+        _ => Err("ERR wrong arguments for 'config' command".to_string()),
     }
 }
 
