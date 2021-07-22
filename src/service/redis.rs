@@ -69,12 +69,13 @@ impl Redis {
             Command::Exists { keys } => Ok(Re::String(self.exists_method(keys))),
             Command::Expire { key, ttl } => Ok(Re::String(self.expire_method(key, ttl))),
             Command::Expireat { key, ttl } => Ok(Re::String(self.expireat_method(key, ttl))),
+            Command::Keys { pattern } => Ok(Re::List(self.keys_method(pattern))),
             Command::Persist { key } => Ok(Re::String(self.persist_method(key))),
             Command::Rename {
                 key_origin,
                 key_destination,
             } => self.rename_method(key_origin, key_destination),
-            Command::Keys { pattern } => Ok(Re::List(self.keys_method(pattern))),
+            Command::Sort { key } => self.sort_method(key),
             Command::Touch { keys } => Ok(Re::String(self.touch_method(keys))),
             Command::Ttl { key } => Ok(Re::String(self.ttl_method(key))),
             Command::Type { key } => Ok(Re::String(self.type_method(key))),
@@ -513,6 +514,61 @@ impl Redis {
                 Err(msg)
             }
         }
+    }
+
+    fn sort_method(&mut self, key: String) -> Result<Re, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SORT Received - key: ".to_string() + &key,
+        ));
+
+        let collection = match self.db.get(&key) {
+            Some(element) => match element {
+                Re::List(list) => list.clone(),
+                Re::Set(set) => set.clone().into_iter().collect::<Vec<String>>(),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    return Err(WRONGTYPE_MSG.to_string());
+                }
+            },
+            None => {
+                return Ok(Re::Nil);
+            }
+        };
+        let transformed_collection: Result<Vec<f64>, String> = collection
+            .iter()
+            .map(|a| a.parse::<f64>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "ERR One or more scores can't be converted into double".to_string());
+        let mut transformed_collection = match transformed_collection {
+            Ok(vec) => vec,
+            Err(msg) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    msg.to_string(),
+                ));
+                return Err(msg);
+            }
+        };
+
+        transformed_collection.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let sorted = transformed_collection
+            .iter()
+            .map(|a| a.to_string())
+            .collect();
+        Ok(Re::List(sorted))
     }
 
     fn touch_method(&mut self, keys: Vec<String>) -> String {
@@ -2042,6 +2098,81 @@ mod test {
         let get = redis.execute(Command::Get { key });
         assert!(get.is_ok());
         assert_eq!("value1".to_string(), get.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_sort_set() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("2".to_string());
+        values.insert("1".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            Re::List(vec!["1".to_string(), "2".to_string()]),
+            sort.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_sort_list() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = vec!["3".to_string(), "2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            Re::List(vec!["2".to_string(), "3".to_string()]),
+            sort.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_sort_string_returns_err() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            sort.err(),
+            Some("WRONGTYPE Operation against a key holding the wrong kind of value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sort_empty_key_returns_nil() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(sort.unwrap(), Re::Nil);
+    }
+
+    #[test]
+    fn test_sort_non_numeric_value_returns_err() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = vec!["value1".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            sort.err(),
+            Some("ERR One or more scores can't be converted into double".to_string())
+        );
     }
 
     #[test]

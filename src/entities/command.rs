@@ -24,9 +24,6 @@ pub enum Command {
         key: String,
         value: String,
     },
-    Keys {
-        pattern: String,
-    },
     Incrby {
         key: String,
         increment: u32,
@@ -67,10 +64,6 @@ pub enum Command {
     Exists {
         keys: Vec<String>,
     },
-    Rename {
-        key_origin: String,
-        key_destination: String,
-    },
     Expire {
         key: String,
         ttl: Duration,
@@ -79,7 +72,17 @@ pub enum Command {
         key: String,
         ttl: SystemTime,
     },
+    Keys {
+        pattern: String,
+    },
     Persist {
+        key: String,
+    },
+    Rename {
+        key_origin: String,
+        key_destination: String,
+    },
+    Sort {
         key: String,
     },
     Touch {
