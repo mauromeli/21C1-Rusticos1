@@ -194,7 +194,7 @@ impl Command {
             Command::Flushdb => "flushdb",
             Command::Dbsize => "dbsize",
             Command::Monitor => "monitor",
-            Command::Info {..} => "info",
+            Command::Info { .. } => "info",
 
             // Strings
             Command::Append { .. } => "append",
