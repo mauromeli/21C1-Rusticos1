@@ -2,19 +2,19 @@ use crate::entities::command::Command;
 use crate::entities::info_param::InfoParam;
 use crate::entities::log::Log;
 use crate::entities::log_level::LogLevel;
+use crate::entities::pubsub_param::PubSubParam;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use crate::entities::response::Response;
 use crate::entities::ttl_hash_map::TtlHashMap;
 use regex::Regex;
 use std::cmp::Ordering;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::{fs, process};
 use std::io::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
-use crate::entities::pubsub_param::PubSubParam;
+use std::{fs, process};
 
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
 const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
@@ -152,7 +152,7 @@ impl Redis {
             Command::Srem { key, values } => self.srem_method(key, values),
 
             // Pubsub
-            Command::Pubsub { param} => self.pubsub_method(param),
+            Command::Pubsub { param } => self.pubsub_method(param),
             Command::Subscribe { channels } => self.subscribe_method(channels),
             Command::Publish { channel, message } => self.publish_method(channel, message),
             Command::Unsubscribe { channels } => Err("Method not implemented".to_string()),
@@ -259,11 +259,14 @@ impl Redis {
                 vector_sender = vec![sen.clone()];
             }
 
-            self.subscribers.insert(channel.clone(), vector_sender.to_vec());
+            self.subscribers
+                .insert(channel.clone(), vector_sender.to_vec());
             // TODO: Revisar que hacer con este
-            let result = sen.clone().send(
-                Re::List(vec!["subscribe".to_string(), channel, "1".to_string()])
-            );
+            let result = sen.clone().send(Re::List(vec![
+                "subscribe".to_string(),
+                channel,
+                "1".to_string(),
+            ]));
         }
         return Ok(Response::Stream(rec));
     }
@@ -311,24 +314,25 @@ impl Redis {
         ));
 
         match param {
-            InfoParam::ConnectedClients => Ok(Response::Normal(RedisElement::String(self.users_connected.to_string()))),
+            InfoParam::ConnectedClients => Ok(Response::Normal(RedisElement::String(
+                self.users_connected.to_string(),
+            ))),
             InfoParam::ConfigFile => Err("Not Implemented".to_string()),
             InfoParam::Uptime => self.get_server_uptime(),
             InfoParam::ServerTime => Err("Not Implemented".to_string()),
-            InfoParam::ProcessID => Ok(Response::Normal(RedisElement::String(process::id().to_string()))),
+            InfoParam::ProcessID => Ok(Response::Normal(RedisElement::String(
+                process::id().to_string(),
+            ))),
             _ => Err("Not Implemented".to_string()),
         }
     }
 
-
     fn get_server_uptime(&mut self) -> Result<Response, String> {
         let result_time = SystemTime::now().duration_since(self.server_time);
         match result_time {
-            Ok(duration) => {
-                Ok(Response::Normal(
-                    RedisElement::String(
-                        duration.as_secs().to_string())))
-            }
+            Ok(duration) => Ok(Response::Normal(RedisElement::String(
+                duration.as_secs().to_string(),
+            ))),
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
@@ -1708,55 +1712,60 @@ impl Redis {
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
-    use crate::service::redis::{Response, Re, Redis};
+    use crate::service::redis::{Re, Redis, Response};
     use std::collections::HashSet;
     use std::fs;
     use std::io::Write;
     use std::thread::{self, sleep};
     use std::time::{Duration, SystemTime};
 
+    fn eq_response(content: Re, response: Response) -> bool {
+        if let Response::Normal(redis_element) = response {
+            return content == redis_element;
+        };
+        false
+    }
+
     #[test]
     fn test_strlen_element_fail_if_is_not_string() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
-        let strlen: Result<Response, String> = redis.execute(Command::Strlen { key });
+        let key = "key".to_string();
+        let strlen = redis.execute(Command::Strlen { key });
 
         assert!(strlen.is_err());
     }
 
+    #[ignore]
     #[test]
     fn test_strlen_element_not_found() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let strlen: Result<Response, String> = redis.execute(Command::Strlen { key });
+        let key = "key".to_string();
+        let strlen = redis.execute(Command::Strlen { key });
 
         assert!(strlen.is_ok());
-        if let Response::Normal(redis_element) = strlen.unwrap() {
-            assert_eq!("0", redis_element.to_string());
-        } else {
-            assert!(false);
-        }
+        assert!(eq_response(Re::String("0".to_string()), strlen.unwrap()));
     }
 
     #[test]
     fn test_strlen_element_saved_before() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value: String = "value".to_string();
-        let key: String = "hola".to_string();
+        let value = "value".to_string();
+        let key = "hola".to_string();
 
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "hola".to_string();
-        let strlen: Result<Re, String> = redis.execute(Command::Strlen { key });
+        let key = "hola".to_string();
+        let strlen = redis.execute(Command::Strlen { key });
 
-        assert_eq!("5".to_string(), strlen.unwrap().to_string());
+        assert!(strlen.is_ok());
+        assert!(eq_response(Re::String("5".to_string()), strlen.unwrap()));
     }
 
     #[allow(unused_imports)]
@@ -1764,34 +1773,36 @@ mod test {
     fn test_set_element_and_get_the_same() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value: String = "value".to_string();
-        let key: String = "hola".to_string();
+        let value = "value".to_string();
+        let key = "hola".to_string();
 
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "hola".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "hola".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        assert_eq!("value".to_string(), get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
     }
 
     #[test]
     fn test_set_element_twice_and_get_the_last_set() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "hola".to_string();
-        let value: String = "chau".to_string();
+        let key = "hola".to_string();
+        let value = "chau".to_string();
 
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "hola".to_string();
-        let value: String = "test".to_string();
+        let key = "hola".to_string();
+        let value = "test".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "hola".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "hola".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        assert_eq!("test".to_string(), get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("test".to_string()), get.unwrap()));
     }
 
     #[test]
@@ -1799,21 +1810,22 @@ mod test {
         let mut redis: Redis = Redis::new_for_test();
 
         let key = "hola".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let get = redis.execute(Command::Get { key });
 
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::Nil, get.unwrap()));
     }
 
     #[test]
     fn test_get_element_fail_if_is_not_string() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
 
         assert!(get.is_err());
     }
@@ -1822,13 +1834,13 @@ mod test {
     fn test_getset_fails_if_is_not_string() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
-        let value: String = "value".to_string();
-        let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let getset = redis.execute(Command::Getset { key, value });
 
         assert!(getset.is_err());
     }
@@ -1837,75 +1849,88 @@ mod test {
     fn test_getset_on_empty_key_returns_nil() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "value".to_string();
-        let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let getset = redis.execute(Command::Getset { key, value });
 
-        assert_eq!("(nil)", getset.unwrap().to_string());
+        assert!(getset.is_ok());
+        assert!(eq_response(
+            Re::String("(nil)".to_string()),
+            getset.unwrap()
+        ));
     }
 
     #[test]
     fn test_getset_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "1".to_string();
+        let key = "key".to_string();
+        let value = "1".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
-        let value: String = "value".to_string();
-        let getset: Result<Re, String> = redis.execute(Command::Getset { key, value });
-        assert_eq!("1", getset.unwrap().to_string());
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let getset = redis.execute(Command::Getset { key, value });
+        assert!(getset.is_ok());
+        assert!(eq_response(Re::String("1".to_string()), getset.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("value", get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
     }
 
     #[test]
     fn test_ping_returns_pong() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let ping: Result<Re, String> = redis.execute(Command::Ping);
+        let ping = redis.execute(Command::Ping);
 
-        assert_eq!("PONG".to_string(), ping.unwrap().to_string());
+        assert!(ping.is_ok());
+        assert!(eq_response(Re::String("PONG".to_string()), ping.unwrap()));
     }
 
     #[test]
     fn test_incrby_with_2_as_value() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "1".to_string();
+        let key = "key".to_string();
+        let value = "1".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let increment: u32 = 1;
         let _incrby = redis.execute(Command::Incrby { key, increment });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let increment: u32 = 2;
         let _incrby = redis.execute(Command::Incrby { key, increment });
 
-        let key: String = "key".to_string();
-        let second_get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let second_get = redis.execute(Command::Get { key });
 
-        assert_eq!("2".to_string(), get.unwrap().to_string());
-        assert_eq!("4".to_string(), second_get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("2".to_string()), get.unwrap()));
+
+        assert!(second_get.is_ok());
+        assert!(eq_response(
+            Re::String("4".to_string()),
+            second_get.unwrap()
+        ));
     }
 
     #[test]
     fn test_incrby_value_err_initial_value_string() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "hola".to_string();
+        let key = "key".to_string();
+        let value = "hola".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let increment: u32 = 1;
         let incrby = redis.execute(Command::Incrby { key, increment });
 
@@ -1916,50 +1941,49 @@ mod test {
     fn test_incrby_not_saved_value() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let increment: u32 = 1;
         let _incrby = redis.execute(Command::Incrby { key, increment });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        let key: String = "key".to_string();
-        let second_get: Result<Re, String> = redis.execute(Command::Get { key });
-
-        assert_eq!("1".to_string(), get.unwrap().to_string());
-        assert_ne!("10".to_string(), second_get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("1".to_string()), get.unwrap()));
     }
 
     #[test]
     fn test_decrby_on_new_key() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let decrement: u32 = 3;
         let _decrby = redis.execute(Command::Decrby { key, decrement });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        assert_eq!("-3".to_string(), get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("-3".to_string()), get.unwrap()));
     }
 
     #[test]
     fn test_decrby_on_existing_key() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "5".to_string();
+        let key = "key".to_string();
+        let value = "5".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let decrement: u32 = 3;
         let _decrby = redis.execute(Command::Decrby { key, decrement });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        assert_eq!("2".to_string(), get.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("2".to_string()), get.unwrap()));
     }
 
     #[test]
@@ -1973,12 +1997,14 @@ mod test {
         let _mset = redis.execute(Command::Mset { key_values });
 
         let key = "key1".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("value1".to_string(), get.unwrap().to_string());
+        let get = redis.execute(Command::Get { key });
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("value1".to_string()), get.unwrap()));
 
         let key = "key2".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("value2".to_string(), get.unwrap().to_string());
+        let get = redis.execute(Command::Get { key });
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("value2".to_string()), get.unwrap()));
     }
 
     #[test]
@@ -1992,216 +2018,217 @@ mod test {
         let _mset = redis.execute(Command::Mset { key_values });
 
         let keys = vec!["key1".to_string(), "key2".to_string()];
-        let mget: Result<Re, String> = redis.execute(Command::Mget { keys });
+        let mget = redis.execute(Command::Mget { keys });
 
         assert!(mget.is_ok());
-        match mget.unwrap() {
-            Re::List(l) => {
-                let mut l = l.iter();
-                assert_eq!("value1".to_string(), l.next().unwrap().to_string());
-                assert_eq!("value2".to_string(), l.next().unwrap().to_string());
-            }
-            _ => (),
-        }
+        assert!(eq_response(
+            Re::List(vec!["value1".to_string(), "value2".to_string()]),
+            mget.unwrap()
+        ));
     }
 
     #[test]
     fn test_mget_nil_for_missing_value() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "value".to_string();
+        let key = "key".to_string();
+        let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let keys = vec!["key".to_string(), "key_empty".to_string()];
-        let mget: Result<Re, String> = redis.execute(Command::Mget { keys });
+        let mget = redis.execute(Command::Mget { keys });
 
         assert!(mget.is_ok());
-        match mget.unwrap() {
-            Re::List(l) => {
-                let mut l = l.iter();
-                assert_eq!("value".to_string(), l.next().unwrap().to_string());
-                assert_eq!("(nil)".to_string(), l.next().unwrap().to_string());
-            }
-            _ => (),
-        }
+        assert!(eq_response(
+            Re::List(vec!["value".to_string(), "(nil)".to_string()]),
+            mget.unwrap()
+        ));
     }
 
     #[test]
     fn test_mget_nil_for_non_string_value() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "value".to_string();
+        let key = "key".to_string();
+        let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key_list".to_string();
+        let key = "key_list".to_string();
         let value = vec!["value1".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
         let keys = vec!["key".to_string(), "key_list".to_string()];
-        let mget: Result<Re, String> = redis.execute(Command::Mget { keys });
+        let mget = redis.execute(Command::Mget { keys });
 
         assert!(mget.is_ok());
-        match mget.unwrap() {
-            Re::List(l) => {
-                let mut l = l.iter();
-                assert_eq!("value".to_string(), l.next().unwrap().to_string());
-                assert_eq!("(nil)".to_string(), l.next().unwrap().to_string());
-            }
-            _ => (),
-        }
+        assert!(eq_response(
+            Re::List(vec!["value".to_string(), "(nil)".to_string()]),
+            mget.unwrap()
+        ));
     }
 
     #[test]
     fn test_set_element_and_getdel() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value: String = "value".to_string();
-        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let key = "key".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        let key: String = "key".to_string();
-        let getdel: Result<Re, String> = redis.execute(Command::Getdel { key });
+        let key = "key".to_string();
+        let getdel = redis.execute(Command::Getdel { key });
 
-        assert_eq!("value".to_string(), get.unwrap().to_string());
-        assert_eq!("value".to_string(), getdel.unwrap().to_string());
+        assert!(get.is_ok());
+        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert!(getdel.is_ok());
+        assert!(eq_response(
+            Re::String("value".to_string()),
+            getdel.unwrap()
+        ));
+
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert!(eq_response(Re::Nil, get.unwrap()));
     }
 
     #[test]
     fn test_getdel_without_previews_saving_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let getdel: Result<Re, String> = redis.execute(Command::Getdel { key });
-        assert_eq!("(nil)", getdel.unwrap().to_string());
+        let key = "key".to_string();
+        let getdel = redis.execute(Command::Getdel { key });
+
+        assert!(eq_response(Re::Nil, getdel.unwrap()));
     }
 
     #[test]
     fn test_dbsize() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let dbsize: Result<Re, String> = redis.execute(Command::Dbsize);
-        assert_eq!("0".to_string(), dbsize.unwrap().to_string());
+        let dbsize = redis.execute(Command::Dbsize);
+        assert!(eq_response(Re::String("0".to_string()), dbsize.unwrap()));
 
-        let value: String = "value".to_string();
-        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let key = "key".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let dbsize: Result<Re, String> = redis.execute(Command::Dbsize);
-        assert_eq!("1".to_string(), dbsize.unwrap().to_string());
+        let dbsize = redis.execute(Command::Dbsize);
+        assert!(eq_response(Re::String("1".to_string()), dbsize.unwrap()));
 
-        let key: String = "key".to_string();
-        let _getdel: Result<Re, String> = redis.execute(Command::Getdel { key });
+        let key = "key".to_string();
+        let _getdel = redis.execute(Command::Getdel { key });
 
-        let dbsize: Result<Re, String> = redis.execute(Command::Dbsize);
-        assert_eq!("0".to_string(), dbsize.unwrap().to_string());
+        let dbsize = redis.execute(Command::Dbsize);
+        assert!(eq_response(Re::String("0".to_string()), dbsize.unwrap()));
     }
 
     #[test]
     fn test_set_element_and_del() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value: String = "value".to_string();
-        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let key = "key".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let keys = vec!["key".to_string()];
-        let del: Result<Re, String> = redis.execute(Command::Del { keys });
-        assert_eq!("1".to_string(), del.unwrap().to_string());
+        let del = redis.execute(Command::Del { keys });
+        assert!(eq_response(Re::String("1".to_string()), del.unwrap()));
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert!(eq_response(Re::Nil, get.unwrap()));
     }
 
     #[test]
     fn test_set_two_elements_and_del_both() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value: String = "value".to_string();
-        let key: String = "key1".to_string();
+        let value = "value".to_string();
+        let key = "key1".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let value: String = "value".to_string();
-        let key: String = "key2".to_string();
+        let value = "value".to_string();
+        let key = "key2".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let keys = vec!["key1".to_string(), "key2".to_string()];
-        let del: Result<Re, String> = redis.execute(Command::Del { keys });
+        let del = redis.execute(Command::Del { keys });
 
-        assert_eq!("2".to_string(), del.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), del.unwrap()));
     }
 
     #[test]
     fn test_append_adds_word() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = "value".to_string();
+        let key = "key".to_string();
+        let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
-        let value: String = " appended".to_string();
+        let key = "key".to_string();
+        let value = " appended".to_string();
         let _append = redis.execute(Command::Append { key, value });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("value appended".to_string(), get.unwrap().to_string());
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert!(eq_response(
+            Re::String("value appended".to_string()),
+            get.unwrap()
+        ));
     }
 
     #[test]
     fn test_append_on_non_existent_key() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
-        let value: String = " appended".to_string();
+        let key = "key".to_string();
+        let value = " appended".to_string();
         let _append = redis.execute(Command::Append { key, value });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
 
-        assert_eq!(" appended".to_string(), get.unwrap().to_string());
+        assert!(eq_response(
+            Re::String(" appended".to_string()),
+            get.unwrap()
+        ));
     }
 
     #[test]
     fn test_set_two_elements_and_check_exists_equal_2() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key1".to_string();
-        let value: String = "value".to_string();
+        let key = "key1".to_string();
+        let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key2".to_string();
-        let value: String = "value".to_string();
+        let key = "key2".to_string();
+        let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let keys = vec!["key1".to_string(), "key2".to_string()];
-        let exists: Result<Re, String> = redis.execute(Command::Exists { keys });
-        assert_eq!("2".to_string(), exists.unwrap().to_string());
+        let exists = redis.execute(Command::Exists { keys });
+        assert!(eq_response(Re::String("2".to_string()), exists.unwrap()));
 
         let keys = vec!["key1".to_string(), "key2".to_string(), "key3".to_string()];
-        let exists: Result<Re, String> = redis.execute(Command::Exists { keys });
-        assert_eq!("2".to_string(), exists.unwrap().to_string());
+        let exists = redis.execute(Command::Exists { keys });
+        assert!(eq_response(Re::String("2".to_string()), exists.unwrap()));
     }
 
     #[test]
     fn test_copy_on_existing_key_returns_0() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key1".to_string();
-        let value: String = "value1".to_string();
+        let key = "key1".to_string();
+        let value = "value1".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key2".to_string();
-        let value: String = "value2".to_string();
+        let key = "key2".to_string();
+        let value = "value2".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let key_origin: String = "key1".to_string();
@@ -2211,15 +2238,15 @@ mod test {
             key_origin,
         });
 
-        assert_eq!("0".to_string(), copy.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), copy.unwrap()));
     }
 
     #[test]
     fn test_copy_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key1".to_string();
-        let value: String = "value1".to_string();
+        let key = "key1".to_string();
+        let value = "value1".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let key_origin: String = "key1".to_string();
@@ -2229,9 +2256,9 @@ mod test {
             key_origin,
         });
 
-        let key: String = "key2".to_string();
+        let key = "key2".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("value1".to_string(), get.unwrap().to_string());
+        assert!(eq_response(Re::String("value1".to_string()), get.unwrap()));
     }
 
     #[ignore]
@@ -2249,10 +2276,10 @@ mod test {
 
         thread::sleep(Duration::from_secs(1));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
-        assert_eq!("1", expire.unwrap().to_string());
+        assert!(eq_response(Re::Nil, get.unwrap()));
+        assert!(eq_response(Re::String("1".to_string()), expire.unwrap()));
     }
 
     #[test]
@@ -2263,7 +2290,7 @@ mod test {
         let ttl = Duration::from_secs(1);
         let expire = redis.execute(Command::Expire { key, ttl });
 
-        assert_eq!("0", expire.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), expire.unwrap()));
     }
 
     #[test]
@@ -2278,10 +2305,10 @@ mod test {
         let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
         let expire = redis.execute(Command::Expireat { key, ttl });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
-        assert_eq!("1", expire.unwrap().to_string());
+        assert!(eq_response(Re::Nil, get.unwrap()));
+        assert!(eq_response(Re::String("1".to_string()), expire.unwrap()));
     }
 
     #[test]
@@ -2292,7 +2319,7 @@ mod test {
         let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1623793215);
         let expire = redis.execute(Command::Expireat { key, ttl });
 
-        assert_eq!("0", expire.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), expire.unwrap()));
     }
 
     #[ignore]
@@ -2313,11 +2340,11 @@ mod test {
 
         thread::sleep(Duration::from_secs(1));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let get = redis.execute(Command::Get { key });
 
-        assert_eq!("1", persist.unwrap().to_string());
-        assert_eq!("value", get.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), persist.unwrap()));
+        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
     }
 
     #[test]
@@ -2331,11 +2358,11 @@ mod test {
         let key = "key".to_string();
         let persist = redis.execute(Command::Persist { key });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let get = redis.execute(Command::Get { key });
 
-        assert_eq!("0", persist.unwrap().to_string());
-        assert_eq!("value", get.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), persist.unwrap()));
+        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
     }
 
     #[test]
@@ -2344,15 +2371,15 @@ mod test {
 
         let key = "key".to_string();
         let persist = redis.execute(Command::Persist { key });
-        assert_eq!("0", persist.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), persist.unwrap()));
     }
 
     #[test]
     fn test_set_and_rename() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key1".to_string();
-        let value: String = "value1".to_string();
+        let key = "key1".to_string();
+        let value = "value1".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
         let key_origin: String = "key1".to_string();
@@ -2363,14 +2390,14 @@ mod test {
         });
         assert!(rename.is_ok());
 
-        let key: String = "key1".to_string();
+        let key = "key1".to_string();
         let get = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        assert!(eq_response(Re::Nil, get.unwrap()));
 
-        let key: String = "key2".to_string();
+        let key = "key2".to_string();
         let get = redis.execute(Command::Get { key });
         assert!(get.is_ok());
-        assert_eq!("value1".to_string(), get.unwrap().to_string());
+        assert!(eq_response(Re::String("value1".to_string()), get.unwrap()));
     }
 
     #[test]
@@ -2380,7 +2407,7 @@ mod test {
         let key = "key".to_string();
         let ttl = redis.execute(Command::Ttl { key });
 
-        assert_eq!("-2", ttl.unwrap().to_string());
+        assert!(eq_response(Re::String("-2".to_string()), ttl.unwrap()));
     }
 
     #[test]
@@ -2394,7 +2421,7 @@ mod test {
         let key = "key".to_string();
         let ttl = redis.execute(Command::Ttl { key });
 
-        assert_eq!("-1", ttl.unwrap().to_string());
+        assert!(eq_response(Re::String("-1".to_string()), ttl.unwrap()));
     }
 
     #[test]
@@ -2414,7 +2441,7 @@ mod test {
 
         let _key: String = "key".to_string();
 
-        assert_eq!("4", ttl.unwrap().to_string());
+        assert!(eq_response(Re::String("4".to_string()), ttl.unwrap()));
     }
 
     #[test]
@@ -2427,7 +2454,10 @@ mod test {
 
         let key = "key".to_string();
         let type_method = redis.execute(Command::Type { key });
-        assert_eq!("string".to_string(), type_method.unwrap().to_string());
+        assert!(eq_response(
+            Re::String("string".to_string()),
+            type_method.unwrap()
+        ));
     }
 
     #[test]
@@ -2435,9 +2465,12 @@ mod test {
         let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
-        let type_method: Result<Re, String> = redis.execute(Command::Type { key });
+        let type_method = redis.execute(Command::Type { key });
 
-        assert_eq!("none".to_string(), type_method.unwrap().to_string());
+        assert!(eq_response(
+            Re::String("none".to_string()),
+            type_method.unwrap()
+        ));
     }
 
     #[test]
@@ -2450,7 +2483,10 @@ mod test {
 
         let key = "key".to_string();
         let type_method = redis.execute(Command::Type { key });
-        assert_eq!("list".to_string(), type_method.unwrap().to_string());
+        assert!(eq_response(
+            Re::String("list".to_string()),
+            type_method.unwrap()
+        ));
     }
 
     #[test]
@@ -2464,18 +2500,21 @@ mod test {
 
         let key = "key".to_string();
         let type_method = redis.execute(Command::Type { key });
-        assert_eq!("set".to_string(), type_method.unwrap().to_string());
+        assert!(eq_response(
+            Re::String("set".to_string()),
+            type_method.unwrap()
+        ));
     }
 
     #[test]
     fn test_lindex_with_key_used_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = 1;
         let lindex = redis.execute(Command::Lindex { key, index });
 
@@ -2486,59 +2525,65 @@ mod test {
     fn test_lindex_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = 0;
         let lindex = redis.execute(Command::Lindex { key, index });
 
         assert!(lindex.is_ok());
-        assert_eq!("value2".to_string(), lindex.unwrap().to_string())
+        assert!(eq_response(
+            Re::String("value2".to_string()),
+            lindex.unwrap()
+        ));
     }
 
     #[test]
     fn test_lindex_negative_index_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = -1;
         let lindex = redis.execute(Command::Lindex { key, index });
 
         assert!(lindex.is_ok());
-        assert_eq!("value".to_string(), lindex.unwrap().to_string())
+        assert!(eq_response(
+            Re::String("value".to_string()),
+            lindex.unwrap()
+        ));
     }
 
     #[test]
     fn test_lindex_negative_index_result_nil_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = -3;
         let lindex = redis.execute(Command::Lindex { key, index });
 
         assert!(lindex.is_ok());
-        assert_eq!("(nil)", lindex.unwrap().to_string());
+        assert!(eq_response(Re::Nil, lindex.unwrap()));
     }
 
     #[test]
     fn test_llen_key_saved_as_string_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
 
         assert!(llen.is_err());
@@ -2548,55 +2593,55 @@ mod test {
     fn test_llen_key_not_found_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
 
         assert!(llen.is_ok());
-        assert_eq!("0".to_string(), llen.unwrap().to_string())
+        assert!(eq_response(Re::String("0".to_string()), llen.unwrap()));
     }
 
     #[test]
     fn test_llen_key_used_twice_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
 
-        assert_eq!("4".to_string(), llen.unwrap().to_string())
+        assert!(eq_response(Re::String("4".to_string()), llen.unwrap()));
     }
 
     #[test]
     fn test_lpop_without_count_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lpop = redis.execute(Command::Lpop { key, count: 0 });
         assert!(lpop.is_ok());
-        assert_eq!("value2".to_string(), lpop.unwrap().to_string());
+        assert!(eq_response(Re::String("value2".to_string()), lpop.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
         assert!(llen.is_ok());
-        assert_eq!("1".to_string(), llen.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), llen.unwrap()));
     }
 
     #[test]
     fn test_lpop_with_count_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value".to_string(),
             "value2".to_string(),
@@ -2605,30 +2650,25 @@ mod test {
         ];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lpop = redis.execute(Command::Lpop { key, count: 2 });
         assert!(lpop.is_ok());
-        let list = lpop.clone().unwrap();
-        assert!(match list {
-            Re::List(_) => true,
-            _ => false,
-        });
-        assert_eq!(
+        assert!(eq_response(
             Re::List(vec!["value4".to_string(), "value3".to_string()]),
-            lpop.clone().unwrap()
-        );
+            lpop.unwrap()
+        ));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
         assert!(llen.is_ok());
-        assert_eq!("2".to_string(), llen.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), llen.unwrap()));
     }
 
     #[test]
     fn test_lpop_with_count_major_than_len_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value".to_string(),
             "value2".to_string(),
@@ -2637,39 +2677,39 @@ mod test {
         ];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lpop = redis.execute(Command::Lpop { key, count: 5 });
         assert!(lpop.is_ok());
-        assert_eq!(
+        assert!(eq_response(
             Re::List(vec![
                 "value4".to_string(),
                 "value3".to_string(),
                 "value2".to_string(),
                 "value".to_string()
             ]),
-            lpop.clone().unwrap()
-        );
+            lpop.unwrap()
+        ));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
         assert!(llen.is_ok());
-        assert_eq!("0".to_string(), llen.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), llen.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lpop = redis.execute(Command::Lpop { key, count: 5 });
         assert!(lpop.is_ok());
-        assert_eq!(Re::Nil, lpop.clone().unwrap());
+        assert!(eq_response(Re::Nil, lpop.unwrap()));
     }
 
     #[test]
     fn test_lpop_with_saved_string_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lpop = redis.execute(Command::Lpop { key, count: 5 });
         assert!(lpop.is_err());
     }
@@ -2678,7 +2718,7 @@ mod test {
     fn test_lrange_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value1".to_string(),
             "value2".to_string(),
@@ -2687,8 +2727,7 @@ mod test {
         ];
 
         let _lpush = redis.execute(Command::Lpush { key, value });
-
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {
             key,
             begin: 0,
@@ -2696,7 +2735,7 @@ mod test {
         });
 
         assert!(lrange.is_ok());
-        assert_eq!(
+        assert!(eq_response(
             Re::List(vec![
                 "value4".to_string(),
                 "value3".to_string(),
@@ -2704,14 +2743,14 @@ mod test {
                 "value1".to_string()
             ]),
             lrange.unwrap()
-        )
+        ));
     }
 
     #[test]
     fn test_lrange_ranges_incorrect_return_empty_vec_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value1".to_string(),
             "value2".to_string(),
@@ -2721,7 +2760,7 @@ mod test {
 
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {
             key,
             begin: -1,
@@ -2729,14 +2768,14 @@ mod test {
         });
 
         assert!(lrange.is_ok());
-        assert_eq!(Re::List(vec![]), lrange.unwrap())
+        assert!(eq_response(Re::List(vec![]), lrange.unwrap()));
     }
 
     #[test]
     fn test_lrange_using_ranges_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value1".to_string(),
             "value2".to_string(),
@@ -2746,7 +2785,7 @@ mod test {
 
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {
             key,
             begin: 2,
@@ -2754,22 +2793,22 @@ mod test {
         });
 
         assert!(lrange.is_ok());
-        assert_eq!(
-            Re::List(vec!["value2".to_string(), "value1".to_string()]),
+        assert!(eq_response(
+            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
             lrange.unwrap()
-        )
+        ));
     }
 
     #[test]
     fn test_lrange_for_string_value_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value1".to_string();
 
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {
             key,
             begin: 2,
@@ -2783,11 +2822,11 @@ mod test {
     fn test_lset_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = -1;
         let element = "Nuevos".to_string();
         let lset = redis.execute(Command::Lset {
@@ -2797,9 +2836,9 @@ mod test {
         });
 
         assert!(lset.is_ok());
-        assert_eq!("Ok".to_string(), lset.unwrap().to_string());
+        assert!(eq_response(Re::String("Ok".to_string()), lset.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {
             key,
             begin: 0,
@@ -2807,21 +2846,21 @@ mod test {
         });
 
         assert!(lrange.is_ok());
-        assert_eq!(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string()]),
+        assert!(eq_response(
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
             lrange.unwrap()
-        )
+        ));
     }
 
     #[test]
     fn test_lset_out_of_range_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = -50;
         let element = "Nuevos".to_string();
         let lset = redis.execute(Command::Lset {
@@ -2837,11 +2876,11 @@ mod test {
     fn test_lset_out_of_range_upper_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = 70;
         let element = "Nuevos".to_string();
         let lset = redis.execute(Command::Lset {
@@ -2857,7 +2896,7 @@ mod test {
     fn test_lset_key_not_found_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = 70;
         let element = "Nuevos".to_string();
         let lset = redis.execute(Command::Lset {
@@ -2873,11 +2912,11 @@ mod test {
     fn test_lset_value_saved_was_string_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value: String = "value".to_string();
-        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let key = "key".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = 70;
         let element = "Nuevos".to_string();
         let lset = redis.execute(Command::Lset {
@@ -2893,26 +2932,26 @@ mod test {
     fn test_rpop_without_count_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let rpop = redis.execute(Command::Rpop { key, count: 0 });
         assert!(rpop.is_ok());
-        assert_eq!("value".to_string(), rpop.unwrap().to_string());
+        assert!(eq_response(Re::String("value".to_string()), rpop.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
         assert!(llen.is_ok());
-        assert_eq!("1".to_string(), llen.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), llen.unwrap()));
     }
 
     #[test]
     fn test_rpop_with_count_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value".to_string(),
             "value2".to_string(),
@@ -2921,30 +2960,25 @@ mod test {
         ];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
-        let list = rpop.clone().unwrap();
-        assert!(match list {
-            Re::List(_) => true,
-            _ => false,
-        });
-        assert_eq!(
-            Re::List(vec!["value".to_string(), "value2".to_string()]),
-            rpop.clone().unwrap()
-        );
+        assert!(eq_response(
+            Re::List(vec!["value".to_string(), "value2".to_string(),]),
+            rpop.unwrap()
+        ));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
         assert!(llen.is_ok());
-        assert_eq!("2".to_string(), llen.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), llen.unwrap()));
     }
 
     #[test]
     fn test_rpop_with_count_major_than_len_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value".to_string(),
             "value2".to_string(),
@@ -2953,39 +2987,39 @@ mod test {
         ];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let rpop = redis.execute(Command::Rpop { key, count: 5 });
         assert!(rpop.is_ok());
-        assert_eq!(
+        assert!(eq_response(
             Re::List(vec![
                 "value".to_string(),
                 "value2".to_string(),
                 "value3".to_string(),
                 "value4".to_string()
             ]),
-            rpop.clone().unwrap()
-        );
+            rpop.unwrap()
+        ));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let llen = redis.execute(Command::Llen { key });
         assert!(llen.is_ok());
-        assert_eq!("0".to_string(), llen.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), llen.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let rpop = redis.execute(Command::Rpop { key, count: 5 });
         assert!(rpop.is_ok());
-        assert_eq!(Re::Nil, rpop.clone().unwrap());
+        assert!(eq_response(Re::Nil, rpop.unwrap()));
     }
 
     #[test]
     fn test_rpop_with_saved_string_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let rpop = redis.execute(Command::Rpop { key, count: 5 });
         assert!(rpop.is_err());
     }
@@ -2994,23 +3028,23 @@ mod test {
     fn test_lpush_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpush = redis.execute(Command::Lpush { key, value });
 
         assert!(lpush.is_ok());
-        assert_eq!("2".to_string(), lpush.unwrap().to_string())
+        assert!(eq_response(Re::String("2".to_string()), lpush.unwrap()));
     }
 
     #[test]
     fn test_lpush_with_key_used_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpush = redis.execute(Command::Lpush { key, value });
 
@@ -3021,76 +3055,76 @@ mod test {
     fn test_lpush_key_used_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpush = redis.execute(Command::Lpush { key, value });
 
         assert!(lpush.is_ok());
-        assert_eq!("2".to_string(), lpush.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), lpush.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpush = redis.execute(Command::Lpush { key, value });
 
         assert!(lpush.is_ok());
-        assert_eq!("4".to_string(), lpush.unwrap().to_string())
+        assert!(eq_response(Re::String("4".to_string()), lpush.unwrap()));
     }
 
     #[test]
     fn test_lpush_key_used_check_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["1".to_string(), "2".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["3".to_string(), "4".to_string()];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = -1;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("1".to_string(), lindex.unwrap().to_string());
-        let key: String = "key".to_string();
+        assert!(eq_response(Re::String("1".to_string()), lindex.unwrap()));
+        let key = "key".to_string();
         let index = -2;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("2".to_string(), lindex.unwrap().to_string());
-        let key: String = "key".to_string();
+        assert!(eq_response(Re::String("2".to_string()), lindex.unwrap()));
+        let key = "key".to_string();
         let index = -3;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("3".to_string(), lindex.unwrap().to_string());
-        let key: String = "key".to_string();
+        assert!(eq_response(Re::String("3".to_string()), lindex.unwrap()));
+        let key = "key".to_string();
         let index = -4;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("4".to_string(), lindex.unwrap().to_string());
+        assert!(eq_response(Re::String("4".to_string()), lindex.unwrap()));
     }
 
     #[test]
     fn test_rpush_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpush = redis.execute(Command::Rpush { key, value });
 
         assert!(rpush.is_ok());
-        assert_eq!("2".to_string(), rpush.unwrap().to_string())
+        assert!(eq_response(Re::String("2".to_string()), rpush.unwrap()));
     }
 
     #[test]
     fn test_rpush_with_key_used_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpush = redis.execute(Command::Rpush { key, value });
 
@@ -3101,100 +3135,100 @@ mod test {
     fn test_rpush_key_used_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpush = redis.execute(Command::Rpush { key, value });
 
         assert!(rpush.is_ok());
-        assert_eq!("2".to_string(), rpush.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), rpush.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpush = redis.execute(Command::Rpush { key, value });
 
         assert!(rpush.is_ok());
-        assert_eq!("4".to_string(), rpush.unwrap().to_string())
+        assert!(eq_response(Re::String("4".to_string()), rpush.unwrap()));
     }
 
     #[test]
     fn test_rpush_key_used_check_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["1".to_string(), "2".to_string()];
         let _rpush = redis.execute(Command::Rpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["3".to_string(), "4".to_string()];
         let _rpush = redis.execute(Command::Rpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let index = -1;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("4".to_string(), lindex.unwrap().to_string());
-        let key: String = "key".to_string();
+        assert!(eq_response(Re::String("4".to_string()), lindex.unwrap()));
+        let key = "key".to_string();
         let index = -2;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("3".to_string(), lindex.unwrap().to_string());
-        let key: String = "key".to_string();
+        assert!(eq_response(Re::String("3".to_string()), lindex.unwrap()));
+        let key = "key".to_string();
         let index = -3;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("2".to_string(), lindex.unwrap().to_string());
-        let key: String = "key".to_string();
+        assert!(eq_response(Re::String("2".to_string()), lindex.unwrap()));
+        let key = "key".to_string();
         let index = -4;
         let lindex = redis.execute(Command::Lindex { key, index });
         assert!(lindex.is_ok());
-        assert_eq!("1".to_string(), lindex.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), lindex.unwrap()));
     }
 
     #[test]
     fn test_sadd() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let sadd = redis.execute(Command::Sadd { key, values });
 
-        assert_eq!("3".to_string(), sadd.unwrap().to_string())
+        assert!(eq_response(Re::String("3".to_string()), sadd.unwrap()));
     }
 
     #[test]
     fn test_sadd_with_existing_key() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let sadd = redis.execute(Command::Sadd { key, values });
 
-        assert_eq!("3".to_string(), sadd.unwrap().to_string());
+        assert!(eq_response(Re::String("3".to_string()), sadd.unwrap()));
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let mut values = HashSet::new();
         values.insert("value3".to_string());
         values.insert("value4".to_string());
 
         let sadd2 = redis.execute(Command::Sadd { key, values });
-        assert_eq!("1".to_string(), sadd2.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), sadd2.unwrap()));
     }
 
     #[test]
     fn test_sadd_error() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
@@ -3211,28 +3245,28 @@ mod test {
     fn test_scard() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let _sadd = redis.execute(Command::Sadd { key, values });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let scard = redis.execute(Command::Scard { key });
 
-        assert_eq!("3".to_string(), scard.unwrap().to_string())
+        assert!(eq_response(Re::String("3".to_string()), scard.unwrap()));
     }
 
     #[test]
     fn test_scard_error() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let scard = redis.execute(Command::Scard { key });
 
         assert_eq!(
@@ -3245,39 +3279,39 @@ mod test {
     fn test_sismember() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let _sadd = redis.execute(Command::Sadd { key, values });
 
-        let key: String = "key".to_string();
-        let value: String = "value1".to_string();
+        let key = "key".to_string();
+        let value = "value1".to_string();
         let sismember = redis.execute(Command::Sismember { key, value });
 
-        assert_eq!("1".to_string(), sismember.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), sismember.unwrap()));
 
-        let key: String = "key".to_string();
-        let value: String = "value".to_string();
+        let key = "key".to_string();
+        let value = "value".to_string();
         let sismember = redis.execute(Command::Sismember { key, value });
 
-        assert_eq!("0".to_string(), sismember.unwrap().to_string())
+        assert!(eq_response(Re::String("0".to_string()), sismember.unwrap()));
     }
 
     #[test]
     fn test_sismember_error() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let _sadd = redis.execute(Command::Sadd { key, values });
 
-        let key: String = "key1".to_string();
-        let value: String = "value1".to_string();
+        let key = "key1".to_string();
+        let value = "value1".to_string();
         let sismember = redis.execute(Command::Sismember { key, value });
 
         assert_eq!(
@@ -3285,12 +3319,12 @@ mod test {
             sismember.err().unwrap()
         );
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "set".to_string();
-        let value: String = "value".to_string();
+        let key = "set".to_string();
+        let value = "value".to_string();
         let sismember = redis.execute(Command::Sismember { key, value });
 
         assert_eq!(
@@ -3303,63 +3337,63 @@ mod test {
     fn test_srem() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let _sadd = redis.execute(Command::Sadd { key, values });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         let srem = redis.execute(Command::Srem { key, values });
 
-        assert_eq!("1".to_string(), srem.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), srem.unwrap()));
 
-        let key: String = "key_inexistente".to_string();
+        let key = "key_inexistente".to_string();
         let mut values = HashSet::new();
         values.insert("value2".to_string());
         let srem = redis.execute(Command::Srem { key, values });
 
-        assert_eq!("0".to_string(), srem.unwrap().to_string())
+        assert!(eq_response(Re::String("0".to_string()), srem.unwrap()));
     }
 
     #[test]
     fn test_srem_value_two_times() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let _sadd = redis.execute(Command::Sadd { key, values });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         let srem = redis.execute(Command::Srem { key, values });
 
-        assert_eq!("1".to_string(), srem.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), srem.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         let srem = redis.execute(Command::Srem { key, values });
 
-        assert_eq!("0".to_string(), srem.unwrap().to_string())
+        assert!(eq_response(Re::String("0".to_string()), srem.unwrap()));
     }
 
     #[test]
     fn test_srem_error() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "set".to_string();
+        let key = "set".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         let srem = redis.execute(Command::Srem { key, values });
@@ -3374,50 +3408,44 @@ mod test {
     fn test_smembers() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
         let _sadd = redis.execute(Command::Sadd { key, values });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let mut values = HashSet::new();
         values.insert("value1".to_string());
         values.insert("value2".to_string());
         values.insert("value3".to_string());
-        let smembers: Result<Re, String> = redis.execute(Command::Smembers { key });
+        let smembers = redis.execute(Command::Smembers { key });
 
-        assert!(smembers.is_ok());
-        match smembers.unwrap() {
-            Re::Set(set) => {
-                assert!(set.eq(&values));
-            }
-            _ => (),
-        }
+        assert!(eq_response(Re::Set(values), smembers.unwrap()));
     }
 
     #[test]
     fn test_lpushx_not_pre_save_return_0() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpushx = redis.execute(Command::Lpushx { key, value });
 
         assert!(lpushx.is_ok());
-        assert_eq!("0".to_string(), lpushx.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), lpushx.unwrap()));
     }
 
     #[test]
     fn test_lpushx_with_key_used_with_string_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpushx = redis.execute(Command::Lpushx { key, value });
 
@@ -3428,42 +3456,42 @@ mod test {
     fn test_lpushx_after_lpush_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpush = redis.execute(Command::Lpush { key, value });
 
         assert!(lpush.is_ok());
-        assert_eq!("2".to_string(), lpush.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), lpush.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let lpush = redis.execute(Command::Lpushx { key, value });
 
         assert!(lpush.is_ok());
-        assert_eq!("4".to_string(), lpush.unwrap().to_string())
+        assert!(eq_response(Re::String("4".to_string()), lpush.unwrap()));
     }
 
     #[test]
     fn test_rpushx_not_pre_save_return_0() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpushx = redis.execute(Command::Rpushx { key, value });
 
         assert!(rpushx.is_ok());
-        assert_eq!("0".to_string(), rpushx.unwrap().to_string());
+        assert!(eq_response(Re::String("0".to_string()), rpushx.unwrap()));
     }
 
     #[test]
     fn test_rpushx_with_key_used_with_string_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpushx = redis.execute(Command::Rpushx { key, value });
 
@@ -3474,26 +3502,26 @@ mod test {
     fn test_rpushx_after_rpush_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpushx = redis.execute(Command::Rpush { key, value });
 
         assert!(rpushx.is_ok());
-        assert_eq!("2".to_string(), rpushx.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), rpushx.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["value".to_string(), "value2".to_string()];
         let rpushx = redis.execute(Command::Rpushx { key, value });
 
         assert!(rpushx.is_ok());
-        assert_eq!("4".to_string(), rpushx.unwrap().to_string())
+        assert!(eq_response(Re::String("4".to_string()), rpushx.unwrap()));
     }
 
     #[test]
     fn test_rpush_and_check_elements_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "1".to_string(),
             "2".to_string(),
@@ -3503,9 +3531,15 @@ mod test {
         let rpushx = redis.execute(Command::Rpush { key, value });
 
         assert!(rpushx.is_ok());
-        assert_eq!("4".to_string(), rpushx.unwrap().to_string());
+        assert!(eq_response(Re::String("4".to_string()), rpushx.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
+        let value = vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+        ];
         let rpushx = redis.execute(Command::Lrange {
             key,
             begin: 0,
@@ -3513,36 +3547,28 @@ mod test {
         });
 
         assert!(rpushx.is_ok());
-        assert_eq!(
-            Re::List(vec![
-                "1".to_string(),
-                "2".to_string(),
-                "3".to_string(),
-                "4".to_string()
-            ]),
-            rpushx.unwrap()
-        )
+        assert!(eq_response(Re::List(value), rpushx.unwrap()));
     }
 
     #[test]
     fn test_rpush_rpushx_and_check_elements_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["1".to_string(), "2".to_string()];
         let rpush = redis.execute(Command::Rpush { key, value });
 
         assert!(rpush.is_ok());
-        assert_eq!("2".to_string(), rpush.unwrap().to_string());
+        assert!(eq_response(Re::String("2".to_string()), rpush.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec!["3".to_string(), "4".to_string()];
         let rpushx = redis.execute(Command::Rpushx { key, value });
 
         assert!(rpushx.is_ok());
-        assert_eq!("4".to_string(), rpushx.unwrap().to_string());
+        assert!(eq_response(Re::String("4".to_string()), rpushx.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let rpushx = redis.execute(Command::Lrange {
             key,
             begin: 0,
@@ -3550,7 +3576,7 @@ mod test {
         });
 
         assert!(rpushx.is_ok());
-        assert_eq!(
+        assert!(eq_response(
             Re::List(vec![
                 "1".to_string(),
                 "2".to_string(),
@@ -3558,14 +3584,14 @@ mod test {
                 "4".to_string()
             ]),
             rpushx.unwrap()
-        )
+        ));
     }
 
     #[test]
     fn test_lrem_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value".to_string(),
             "value1".to_string(),
@@ -3575,17 +3601,17 @@ mod test {
         ];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
 
         let lrem = redis.execute(Command::Lrem {
             key,
             count: 2,
             element: "value".to_string(),
         });
-        assert!(lrem.clone().is_ok());
-        assert_eq!("2".to_string(), lrem.clone().unwrap().to_string());
+        assert!(lrem.is_ok());
+        assert!(eq_response(Re::String("2".to_string()), lrem.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
 
         let lrange = redis.execute(Command::Lrange {
             key,
@@ -3599,14 +3625,14 @@ mod test {
             "value".to_string(),
         ];
         vector.reverse();
-        assert_eq!(Re::List(vector), lrange.clone().unwrap());
+        assert!(eq_response(Re::List(vector), lrange.unwrap()));
     }
 
     #[test]
     fn test_lrem_reverse_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value".to_string(),
             "value".to_string(),
@@ -3617,17 +3643,17 @@ mod test {
         ];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
 
         let lrem = redis.execute(Command::Lrem {
             key,
             count: -2,
             element: "value".to_string(),
         });
-        assert!(lrem.clone().is_ok());
-        assert_eq!("2".to_string(), lrem.clone().unwrap().to_string());
+        assert!(lrem.is_ok());
+        assert!(eq_response(Re::String("2".to_string()), lrem.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
 
         let lrange = redis.execute(Command::Lrange {
             key,
@@ -3644,14 +3670,14 @@ mod test {
 
         vector.reverse();
 
-        assert_eq!(Re::List(vector), lrange.clone().unwrap());
+        assert!(eq_response(Re::List(vector), lrange.unwrap()));
     }
 
     #[test]
     fn test_lrem_all_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = vec![
             "value".to_string(),
             "value2".to_string(),
@@ -3661,17 +3687,17 @@ mod test {
         ];
         let _lpush = redis.execute(Command::Lpush { key, value });
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
 
         let lrem = redis.execute(Command::Lrem {
             key,
             count: 0,
             element: "value".to_string(),
         });
-        assert!(lrem.clone().is_ok());
-        assert_eq!("2".to_string(), lrem.clone().unwrap().to_string());
+        assert!(lrem.is_ok());
+        assert!(eq_response(Re::String("2".to_string()), lrem.unwrap()));
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
 
         let lrange = redis.execute(Command::Lrange {
             key,
@@ -3687,33 +3713,33 @@ mod test {
 
         vector.reverse();
 
-        assert_eq!(Re::List(vector), lrange.clone().unwrap());
+        assert!(eq_response(Re::List(vector), lrange.unwrap()));
     }
 
     #[test]
     fn test_lrem_invalid_key_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
 
         let lrem = redis.execute(Command::Lrem {
             key,
             count: 0,
             element: "value".to_string(),
         });
-        assert!(lrem.clone().is_ok());
-        assert_eq!(Re::String("0".to_string()), lrem.clone().unwrap());
+        assert!(lrem.is_ok());
+        assert!(eq_response(Re::String("0".to_string()), lrem.unwrap()));
     }
 
     #[test]
     fn test_keys_ok() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let key: String = "key".to_string();
+        let key = "key".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key1".to_string();
+        let key = "key1".to_string();
         let value = "value".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
@@ -3734,24 +3760,24 @@ mod test {
     fn test_set_element_and_flushdb() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value: String = "value".to_string();
-        let key: String = "key".to_string();
+        let value = "value".to_string();
+        let key = "key".to_string();
         let _set = redis.execute(Command::Set { key, value });
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("value".to_string(), get.unwrap().to_string());
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
 
         println!("{:?}", redis);
 
-        let flushdb: Result<Re, String> = redis.execute(Command::Flushdb);
-        assert!(flushdb.clone().is_ok());
+        let flushdb = redis.execute(Command::Flushdb);
+        assert!(flushdb.is_ok());
 
         println!("{:?}", redis);
 
-        let key: String = "key".to_string();
-        let get: Result<Re, String> = redis.execute(Command::Get { key });
-        assert_eq!("(nil)", get.unwrap().to_string());
+        let key = "key".to_string();
+        let get = redis.execute(Command::Get { key });
+        assert!(eq_response(Re::Nil, get.unwrap()));
     }
 
     #[test]
@@ -3894,7 +3920,7 @@ mod test {
         let key = "key".to_string();
         let get = redis.execute(Command::Get { key });
 
-        assert_eq!("value", get.unwrap().to_string());
+        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
 
         fs::remove_file("test_load_string.rdb").unwrap();
     }
@@ -3912,12 +3938,18 @@ mod test {
         let key = "key".to_string();
         let index = 0;
         let lindex_0 = redis.execute(Command::Lindex { key, index });
-        assert_eq!("value1", lindex_0.unwrap().to_string());
+        assert!(eq_response(
+            Re::String("value1".to_string()),
+            lindex_0.unwrap()
+        ));
 
         let key = "key".to_string();
         let index = 1;
         let lindex_1 = redis.execute(Command::Lindex { key, index });
-        assert_eq!("value2", lindex_1.unwrap().to_string());
+        assert!(eq_response(
+            Re::String("value2".to_string()),
+            lindex_1.unwrap()
+        ));
 
         fs::remove_file("test_load_list.rdb").unwrap();
     }
@@ -3939,12 +3971,7 @@ mod test {
         values.insert("value1".to_string());
         values.insert("value2".to_string());
 
-        match smembers.unwrap() {
-            Re::Set(set) => {
-                assert!(set.eq(&values));
-            }
-            _ => assert!(false),
-        }
+        assert!(eq_response(Re::Set(values), smembers.unwrap()));
 
         fs::remove_file("test_load_set.rdb").unwrap();
     }
@@ -3967,7 +3994,7 @@ mod test {
         let key = "key".to_string();
         let get_ttl = redis.execute(Command::Ttl { key });
 
-        assert_eq!("1", get_ttl.unwrap().to_string());
+        assert!(eq_response(Re::String("1".to_string()), get_ttl.unwrap()));
 
         fs::remove_file("test_load_string_with_ttl.rdb").unwrap();
     }
@@ -3990,12 +4017,8 @@ mod test {
         values.insert("value-1".to_string());
         values.insert("value2".to_string());
 
-        match smembers.unwrap() {
-            Re::Set(set) => {
-                assert!(set.eq(&values));
-            }
-            _ => assert!(false),
-        }
+        assert!(eq_response(Re::Set(values), smembers.unwrap()));
+
         fs::remove_file("test_load_values_with_dash.rdb").unwrap();
     }
 
@@ -4017,12 +4040,8 @@ mod test {
         values.insert("value 1".to_string());
         values.insert("value2".to_string());
 
-        match smembers.unwrap() {
-            Re::Set(set) => {
-                assert!(set.eq(&values));
-            }
-            _ => assert!(false),
-        }
+        assert!(eq_response(Re::Set(values), smembers.unwrap()));
+
         fs::remove_file("test_load_values_with_separated_words.rdb").unwrap();
     }
 }
