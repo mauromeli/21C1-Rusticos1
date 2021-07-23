@@ -9,7 +9,7 @@ mod pubsub;
 mod protocol;
 
 
-fn main() -> Result<(), ()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let argv: Vec<String> = env::args().collect();
     let config: Config;
 
@@ -18,15 +18,15 @@ fn main() -> Result<(), ()> {
         1 => config = Config::new(),
         // one argument passed
         2 => {
-            config = Config::new_from_file(argv[1].to_string());
+            config = Config::new_from_file(argv[1].to_string())?;
         }
         _ => {
             println!("Incorrect params, Try passing one or two arguments!");
-            return Err(());
+            return Err("Incorrect params".into());
         }
     }
 
-    let server = Server::new(config);
-    server.serve();
+    let server = Server::new(config)?;
+    server.serve()?;
     Ok(())
 }

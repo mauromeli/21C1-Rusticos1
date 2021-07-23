@@ -1,4 +1,6 @@
-use crate::entities::command::{Command, InfoParam};
+use crate::entities::command::Command;
+use crate::entities::info_param::InfoParam;
+use crate::entities::pubsub_param::PubSubParam;
 use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
@@ -14,6 +16,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
 
     let command = params.first().unwrap();
     let params = Vec::from(params.get(1..).unwrap());
+
     match command.to_lowercase().as_str() {
         // Server
         "ping" => generate_ping(params),
@@ -102,16 +105,26 @@ fn generate_info(params: Vec<String>) -> Result<Command, String> {
     }
 
     match params[0].to_lowercase().as_str() {
-        "processid" => Ok(Command::Info {param: InfoParam::ProcessID}),
-        "port" => Ok(Command::Info {param: InfoParam::Port}),
-        "servertime" => Ok(Command::Info {param: InfoParam::ServerTime}),
-        "uptime" => Ok(Command::Info {param: InfoParam::Uptime}),
-        "configfile" => Ok(Command::Info {param: InfoParam::ConfigFile}),
-        "connectedclients" => Ok(Command::Info {param: InfoParam::ConnectedClients}),
-        _ => Err("ERR wrong command param".to_string())
-
+        "processid" => Ok(Command::Info {
+            param: InfoParam::ProcessID,
+        }),
+        "port" => Ok(Command::Info {
+            param: InfoParam::Port,
+        }),
+        "servertime" => Ok(Command::Info {
+            param: InfoParam::ServerTime,
+        }),
+        "uptime" => Ok(Command::Info {
+            param: InfoParam::Uptime,
+        }),
+        "configfile" => Ok(Command::Info {
+            param: InfoParam::ConfigFile,
+        }),
+        "connectedclients" => Ok(Command::Info {
+            param: InfoParam::ConnectedClients,
+        }),
+        _ => Err("ERR wrong command param".to_string()),
     }
-
 }
 
 fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
@@ -609,16 +622,42 @@ fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'pubsub' command".to_string());
     }
-    let args = params.clone();
-    Ok(Command::Pubsub { args })
+
+    println!("{:?}", params.get(1..));
+    match params[0].clone().to_lowercase().as_str() {
+        "channels" => match params.len() {
+            1 => Ok(Command::Pubsub {
+                param: PubSubParam::Channels,
+            }),
+            2 => Ok(Command::Pubsub {
+                param: PubSubParam::ChannelsWithChannel(params[1].clone()),
+            }),
+            _ => Err(
+                "ERR Unknown subcommand or wrong number of arguments for ".to_string()
+                    + params[0].as_str(),
+            ),
+        },
+        "numsub" => match params.len() {
+            1 => Ok(Command::Pubsub {
+                param: PubSubParam::Numsub,
+            }),
+            _ => Ok(Command::Pubsub {
+                param: PubSubParam::NumsubWithChannels(Vec::from(params.get(1..).unwrap())),
+            }),
+        },
+        _ => Err(
+            "ERR Unknown subcommand or wrong number of arguments for ".to_string()
+                + params[0].as_str(),
+        ),
+    }
 }
 
 fn generate_subscribe(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
     }
-    let channels = params[0].clone();
-    Ok(Command::Subscribe { channels })
+
+    Ok(Command::Subscribe { channels: params })
 }
 
 fn generate_publish(params: Vec<String>) -> Result<Command, String> {

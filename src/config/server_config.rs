@@ -1,11 +1,11 @@
 use crate::entities::log_level::LogLevel;
 use std::fs::File;
+use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 
-// Struct usado para representar la configuración posible de nuestra base de datos Redis.
-
+/// Struct usado para representar la configuración posible de nuestra base de datos Redis.
 #[derive(Debug)]
 pub struct Config {
     verbose: u8,
@@ -29,26 +29,26 @@ impl Config {
         }
     }
 
-    pub fn new_from_file(path: String) -> Config {
+    pub fn new_from_file(path: String) -> Result<Config, io::Error> {
         let path = Path::new(&path);
-        let file = File::open(path).expect("File not found or cannot be opened");
+        let file = File::open(path)?;
         let content = BufReader::new(&file);
         let mut config = Config::new();
 
         for line in content.lines() {
-            let line = line.expect("Could not read the line");
             // Remuevo espacios al principio y al final de la línea.
+            let line = line?;
             let line = line.trim();
 
-            // Verifíco si la línea es valida; eg: comentarios, linea en blanco, etc.
+            // Verifico si la línea es valida; eg: comentarios, linea en blanco, etc.
             if is_invalid_line(line) {
                 continue;
             }
 
             // Separo el attributo de la config con el valor de la config.
             let splited: Vec<&str> = line.split_whitespace().collect();
-            let name = splited.first().unwrap();
-            let tokens = splited.get(1..).unwrap();
+            let name = splited.first().unwrap_or(&"");
+            let tokens = splited.get(1..).unwrap_or(&[""]);
 
             let parameters = Config::clean_and_parse_lines(tokens);
             let param = parameters[0].clone();
@@ -65,7 +65,7 @@ impl Config {
             }
         }
 
-        config
+        Ok(config)
     }
 
     fn clean_and_parse_lines(tokens: &[&str]) -> Vec<String> {

@@ -317,6 +317,7 @@ impl Redis {
             InfoParam::ConnectedClients => Ok(Response::Normal(RedisElement::String(
                 self.users_connected.to_string(),
             ))),
+            InfoParam::Port => Err("Not Implemented".to_string()),
             InfoParam::ConfigFile => Err("Not Implemented".to_string()),
             InfoParam::Uptime => self.get_server_uptime(),
             InfoParam::ServerTime => Err("Not Implemented".to_string()),
