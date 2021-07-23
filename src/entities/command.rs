@@ -1,7 +1,7 @@
-use std::collections::HashSet;
-use std::time::{Duration, SystemTime};
 use crate::entities::info_param::InfoParam;
 use crate::entities::pubsub_param::PubSubParam;
+use std::collections::HashSet;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -11,8 +11,8 @@ pub enum Command {
     Flushdb,
     Dbsize,
     Monitor,
-    Info{
-        param : InfoParam,
+    Info {
+        param: InfoParam,
     },
 
     // System
@@ -171,7 +171,7 @@ pub enum Command {
 
     // pubsub
     Pubsub {
-        param: PubSubParam
+        param: PubSubParam,
     },
     Subscribe {
         channels: Vec<String>,
@@ -179,23 +179,22 @@ pub enum Command {
     },
     Publish {
         channel: String,
-        message: String
+        message: String,
     },
     Unsubscribe {
-        channels: Vec<String>
-        //local_address: String,
-    }
+        channels: Vec<String>, //local_address: String,
+    },
 }
 
 impl Command {
     pub fn as_str(&self) -> &'static str {
         match *self {
-
             // Server
             Command::Ping => "ping",
             Command::Flushdb => "flushdb",
             Command::Dbsize => "dbsize",
             Command::Monitor => "monitor",
+            Command::Info {..} => "info",
 
             // Strings
             Command::Append { .. } => "append",
@@ -243,7 +242,7 @@ impl Command {
             Command::Srem { .. } => "srem",
 
             // Pubsub
-            Command::Pubsub { ..} => "pubsub",
+            Command::Pubsub { .. } => "pubsub",
             Command::Subscribe { .. } => "subscribe",
             Command::Publish { .. } => "publish",
             Command::Unsubscribe { .. } => "unsubscribe",

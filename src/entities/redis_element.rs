@@ -25,7 +25,7 @@ impl fmt::Display for RedisElement {
                 write!(fmt, "}}")?;
             }
             RedisElement::List(list) => {
-                if list.is_empty(){
+                if list.is_empty() {
                     write!(fmt, "[]")?;
                 } else {
                     write!(fmt, "[")?;

@@ -24,13 +24,12 @@ impl Logger {
 
     #[allow(unused_must_use)]
     pub fn log(self) {
-        let _ = thread::spawn(move || {
+        let _: std::thread::JoinHandle<Result<(), std::io::Error>> = thread::spawn(move || {
             let mut file = OpenOptions::new()
                 .write(true)
                 .create(true)
                 .append(true)
-                .open(self.path)
-                .expect("Fail Open logfile");
+                .open(self.path.clone())?;
 
             while let Ok(log) = self.receiver.recv() {
                 /*if path != path_new => {
@@ -47,6 +46,7 @@ impl Logger {
 
                 file.write(log.to_string().as_bytes());
             }
+            Ok(())
         });
     }
 }
