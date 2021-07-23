@@ -1,13 +1,29 @@
+use crate::entities::info_param::InfoParam;
+use crate::entities::pubsub_param::PubSubParam;
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
-use std::sync::mpsc::Sender;
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Command {
     // Server
     Ping,
+    Flushdb,
     Dbsize,
+    Monitor,
+    Info {
+        param: InfoParam,
+    },
+
+    // System
+    Store {
+        path: String,
+    },
+    Load {
+        path: String,
+    },
+    AddClient,
+    RemoveClient,
 
     // Strings
     Get {
@@ -16,6 +32,9 @@ pub enum Command {
     Set {
         key: String,
         value: String,
+    },
+    Keys {
+        pattern: String,
     },
     Incrby {
         key: String,
@@ -41,6 +60,9 @@ pub enum Command {
     },
     Mset {
         key_values: Vec<(String, String)>,
+    },
+    Strlen {
+        key: String,
     },
 
     // Keys
@@ -126,6 +148,7 @@ pub enum Command {
         key: String,
         value: Vec<String>,
     },
+
     // Sets
     Sadd {
         key: String,
@@ -145,21 +168,86 @@ pub enum Command {
         key: String,
         values: HashSet<String>,
     },
+
+    // pubsub
     Pubsub {
-        args: Vec<String>
+        param: PubSubParam,
     },
     Subscribe {
         channels: Vec<String>,
-        local_address: String,
-        sender: Sender<String>
+        //local_address: String,
     },
     Publish {
         channel: String,
-        message: String
+        message: String,
     },
     Unsubscribe {
-        local_address: String,
-        channels: Vec<String>
+        channels: Vec<String>, //local_address: String,
     },
-    Command
+}
+
+impl Command {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            // Server
+            Command::Ping => "ping",
+            Command::Flushdb => "flushdb",
+            Command::Dbsize => "dbsize",
+            Command::Monitor => "monitor",
+            Command::Info { .. } => "info",
+
+            // Strings
+            Command::Append { .. } => "append",
+            Command::Decrby { .. } => "decrby",
+            Command::Get { .. } => "get",
+            Command::Getdel { .. } => "getdel",
+            Command::Getset { .. } => "getset",
+            Command::Incrby { .. } => "incrby",
+            Command::Mget { .. } => "mget",
+            Command::Mset { .. } => "mset",
+            Command::Set { .. } => "set",
+            Command::Strlen { .. } => "strlen",
+
+            // Keys
+            Command::Copy { .. } => "copy",
+            Command::Del { .. } => "del",
+            Command::Exists { .. } => "exists",
+            Command::Expire { .. } => "expire",
+            Command::Expireat { .. } => "expireat",
+            Command::Persist { .. } => "persist",
+            Command::Rename { .. } => "rename",
+            Command::Keys { .. } => "keys",
+            Command::Touch { .. } => "touch",
+            Command::Ttl { .. } => "ttl",
+            Command::Type { .. } => "type",
+
+            // Lists
+            Command::Lindex { .. } => "lindex",
+            Command::Llen { .. } => "llen",
+            Command::Lpop { .. } => "lpop",
+            Command::Lpush { .. } => "lpush",
+            Command::Lpushx { .. } => "lpushx",
+            Command::Lrange { .. } => "lrange",
+            Command::Lrem { .. } => "lrem",
+            Command::Lset { .. } => "lset",
+            Command::Rpop { .. } => "rpop",
+            Command::Rpush { .. } => "rpush",
+            Command::Rpushx { .. } => "rpushx",
+
+            // Sets
+            Command::Sadd { .. } => "sadd",
+            Command::Scard { .. } => "scard",
+            Command::Sismember { .. } => "sismember",
+            Command::Smembers { .. } => "smember",
+            Command::Srem { .. } => "srem",
+
+            // Pubsub
+            Command::Pubsub { .. } => "pubsub",
+            Command::Subscribe { .. } => "subscribe",
+            Command::Publish { .. } => "publish",
+            Command::Unsubscribe { .. } => "unsubscribe",
+
+            _ => "",
+        }
+    }
 }

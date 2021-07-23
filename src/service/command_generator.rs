@@ -1,4 +1,4 @@
-use crate::entities::command::Command;
+use crate::entities::command::{Command, InfoParam};
 use core::time::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
@@ -16,8 +16,14 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
     let params = Vec::from(params.get(1..).unwrap());
     match command.to_lowercase().as_str() {
         // Server
-        "dbsize" => generate_dbsize(params),
         "ping" => generate_ping(params),
+        "flushdb" => generate_flushdb(params),
+        "dbsize" => generate_dbsize(params),
+        "monitor" => generate_monitor(params),
+        "info" => generate_info(params),
+
+        "store" => generate_store(params),
+        "load" => generate_load(params),
 
         // Strings
         "get" => generate_get(params),
@@ -29,6 +35,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "append" => generate_append(params),
         "mget" => generate_mget(params),
         "mset" => generate_mset(params),
+        "strlen" => generate_strlen(params),
 
         // Keys
         "copy" => generate_copy(params),
@@ -61,13 +68,13 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "sismember" => generate_sismember(params),
         "smembers" => generate_smembers(params),
         "srem" => generate_srem(params),
+        "keys" => generate_keys(params),
 
         //PubSub
         "pubsub" => generate_pubsub(params),
         "subscribe" => generate_subscribe(params),
         "publish" => generate_publish(params),
         "unsubscribe" => generate_unsubscribe(params),
-        "command" => Ok(Command::Command),
 
         _ => Err("Command not valid".to_string()),
     }
@@ -79,6 +86,40 @@ fn generate_ping(params: Vec<String>) -> Result<Command, String> {
     }
 
     Ok(Command::Ping)
+}
+
+fn generate_monitor(params: Vec<String>) -> Result<Command, String> {
+    if params.len() > 1 {
+        return Err("ERR wrong number of arguments for 'monitor' command".to_string());
+    }
+
+    Ok(Command::Monitor)
+}
+
+fn generate_info(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'info' command".to_string());
+    }
+
+    match params[0].to_lowercase().as_str() {
+        "processid" => Ok(Command::Info {param: InfoParam::ProcessID}),
+        "port" => Ok(Command::Info {param: InfoParam::Port}),
+        "servertime" => Ok(Command::Info {param: InfoParam::ServerTime}),
+        "uptime" => Ok(Command::Info {param: InfoParam::Uptime}),
+        "configfile" => Ok(Command::Info {param: InfoParam::ConfigFile}),
+        "connectedclients" => Ok(Command::Info {param: InfoParam::ConnectedClients}),
+        _ => Err("ERR wrong command param".to_string())
+
+    }
+
+}
+
+fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
+    if params.len() > 1 {
+        return Err("ERR wrong number of arguments for 'flushdb' command".to_string());
+    }
+
+    Ok(Command::Flushdb)
 }
 
 fn generate_copy(params: Vec<String>) -> Result<Command, String> {
@@ -292,6 +333,15 @@ fn generate_mset(params: Vec<String>) -> Result<Command, String> {
         key_values.push(tuple);
     }
     Ok(Command::Mset { key_values })
+}
+
+fn generate_strlen(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'strlen' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Strlen { key })
 }
 
 fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
@@ -529,6 +579,32 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Smembers { key })
 }
 
+fn generate_keys(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'keys' command".to_string());
+    }
+    let pattern = params[0].clone();
+    Ok(Command::Keys { pattern })
+}
+
+fn generate_store(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'store' command".to_string());
+    }
+
+    let path = params[0].clone();
+    Ok(Command::Store { path })
+}
+
+fn generate_load(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'load' command".to_string());
+    }
+
+    let path = params[0].clone();
+    Ok(Command::Load { path })
+}
+
 fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'pubsub' command".to_string());
@@ -541,9 +617,8 @@ fn generate_subscribe(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
     }
-    let channels = params.clone();
-    let (sender, db_receiver) = mpsc::channel();
-    Ok(Command::Subscribe { channels, local_address: "".to_string(), sender })
+    let channels = params[0].clone();
+    Ok(Command::Subscribe { channels })
 }
 
 fn generate_publish(params: Vec<String>) -> Result<Command, String> {
@@ -556,7 +631,7 @@ fn generate_publish(params: Vec<String>) -> Result<Command, String> {
 }
 
 fn generate_unsubscribe(params: Vec<String>) -> Result<Command, String> {
-    Ok(Command::Unsubscribe { local_address: "".to_string(), channels: params })
+    Ok(Command::Unsubscribe { channels: params })
 }
 
 #[allow(unused_imports)]
@@ -591,6 +666,30 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Ping => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_with_command_monitor() {
+        let params = vec!["monitor".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Monitor => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_with_command_flushdb() {
+        let params = vec!["flushdb".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Flushdb => true,
             _ => false,
         });
     }
@@ -796,6 +895,27 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Mset { key_values: _pairs } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_strlen_without_param_err() {
+        let params = vec!["strlen".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_strlen_ok() {
+        let params = vec!["strlen".to_string(), "key".to_string()];
+        let result = generate(params);
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Strlen { key: _key } => true,
             _ => false,
         });
     }
@@ -1728,6 +1848,61 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Smembers { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_keys_ok() {
+        let params = vec!["keys".to_string(), "/*".to_string()];
+        let result = generate(params);
+
+        let _pattern = "/*".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Keys { pattern: _pattern } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_store_without_param_err() {
+        let params = vec!["store".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_store_ok() {
+        let params = vec!["store".to_string(), "/store.file".to_string()];
+        let result = generate(params);
+
+        let _path = "/store.file".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Store { path: _path } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_load_without_param_err() {
+        let params = vec!["load".to_string()];
+        let result = generate(params);
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_load_ok() {
+        let params = vec!["load".to_string(), "/store.file".to_string()];
+        let result = generate(params);
+
+        let _path = "/store.file".to_string();
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::Load { path: _path } => true,
             _ => false,
         });
     }
