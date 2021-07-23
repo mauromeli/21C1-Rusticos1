@@ -5,8 +5,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 
-// Struct usado para representar la configuración posible de nuestra base de datos Redis.
-
+/// Struct usado para representar la configuración posible de nuestra base de datos Redis.
 #[derive(Debug)]
 pub struct Config {
     verbose: u8,

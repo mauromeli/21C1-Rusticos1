@@ -198,7 +198,9 @@ impl Server {
                         Response::Stream(rec) => {
                             while let Ok(redis_element) = rec.recv() {
                                 output.write((redis_element.to_string() + "\n").as_ref())?;
+                                println!("msg");
                             }
+                            println!("SALIO");
                             std::mem::drop(rec);
                         }
                         Response::Error(msg) => {
@@ -212,7 +214,6 @@ impl Server {
             };
         }
 
-        //TODO: flag = false
         used.swap(false, Ordering::Relaxed);
         Server::disconnected_user(&db_sender_clone);
 
