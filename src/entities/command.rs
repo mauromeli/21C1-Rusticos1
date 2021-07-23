@@ -160,5 +160,6 @@ pub enum Command {
     Unsubscribe {
         local_address: String,
         channels: Vec<String>
-    }
+    },
+    Command
 }

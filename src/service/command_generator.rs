@@ -67,6 +67,7 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
         "subscribe" => generate_subscribe(params),
         "publish" => generate_publish(params),
         "unsubscribe" => generate_unsubscribe(params),
+        "command" => Ok(Command::Command),
 
         _ => Err("Command not valid".to_string()),
     }

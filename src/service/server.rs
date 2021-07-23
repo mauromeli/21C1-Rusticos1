@@ -9,6 +9,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use crate::protocol::parse_data::parse_data;
 use std::borrow::BorrowMut;
+use crate::protocol::decode::{decode, TypeData};
 
 pub const CRLF: &[u8] = b"\r\n";
 
@@ -59,19 +60,10 @@ impl Server {
         // iteramos las lineas que recibimos de nuestro cliente
         while let Some(line) = LinesIterator::new(&mut input).next() {
 
-            println!("line: {:?}", line);
-
             let (client_sndr, client_rcvr): (Sender<String>, Receiver<String>) = mpsc::channel();
+
             //TODO: Agregar decode
-
-            let vector = parse_data(&line);
-            println!("vector: {:?}", vector);
-
-            //for string in request.unwrap().split(" ") {
-                //vector.push(request.unwrap().to_string());
-            //}
-
-           // let vector = parse_data(request.unwrap().as_bytes());
+            let vector = parse_data(line);
             //TODO: FIN Agregar decode
 
             let command = generate(vector);
@@ -79,6 +71,13 @@ impl Server {
 
             // TODO: Agregar forma de escritura
             match command {
+                /*
+                Ok(Command::Command) => {
+                    //output_response = "*200\r\n".to_string();
+                }
+
+                 */
+
                 Ok(command) => {
                     let _ = db_sender_clone.send((command, client_sndr, local_address.clone()));
                     let response = client_rcvr.recv();
@@ -89,7 +88,7 @@ impl Server {
                 }
             };
 
-            let _ = output.write(output_response.as_ref());
+            let _ = output.write(output_response.as_bytes());
         }
 
     }
@@ -122,10 +121,12 @@ impl Server {
 
 pub struct LinesIterator<'a>{
     input: &'a mut BufReader<TcpStream>
+    //input: &'a mut Lines<BufReader<TcpStream>>
 }
 
 
     impl<'a> LinesIterator<'a> {
+        //pub fn new(input: &'a mut Lines<BufReader<TcpStream>>) -> Self {
         pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
             let input = input;
             Self {input}
@@ -133,14 +134,37 @@ pub struct LinesIterator<'a>{
     }
 
     impl Iterator for LinesIterator<'_> {
-        type Item = Vec<u8>;
+        type Item = TypeData;
 
         fn next(&mut self) -> Option<<Self as Iterator>::Item> {
             let mut buf = String::new();
             while self.input.read_line(&mut buf).unwrap() != 0 {
                 println!("read: {:?}", buf);
+                if let Ok(result) = decode(buf.as_bytes(), 0) {
+                    let (data, _) = result;
+                    println!("CORTA EJECUCION devuelve: {:?}", data);
+                    return Some(data);
+                    break
+                }
             }
-            Some(Vec::from(buf.as_bytes()))
+            Some(TypeData::Nil)
         }
+
+
+        /*
+        fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+            let mut bytes = Vec::new();
+            while let Some(line) = self.input.next() {
+                println!("next");
+                let read = line.unwrap();
+                println!("read: {:?}", read.clone());
+                bytes = [bytes, read.as_bytes().to_vec(), "\r\n".as_bytes().to_vec()].concat();
+            }
+            Some(bytes)
+        }
+
+
+         */
+
     }
 

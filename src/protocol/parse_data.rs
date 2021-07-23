@@ -1,8 +1,11 @@
 use crate::protocol::decode::{decode, TypeData};
 
-pub fn parse_data(bytes: &[u8]) -> Vec<String> {
-    let (type_data, _) = decode(bytes, 0).unwrap();
-    parse_array(type_data).unwrap()
+pub fn parse_data(data: TypeData) -> Vec<String> {
+    let empty_vector = Vec::new();
+    if let Ok(vector) = parse_array(data) {
+        return vector;
+    }
+    empty_vector
 }
 
 fn parse_array(type_data: TypeData) -> Result<Vec<String>, String> {

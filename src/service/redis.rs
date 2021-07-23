@@ -91,6 +91,7 @@ impl Redis {
             Command::Subscribe {channels, local_address, sender } => self.subscribe_method(channels, local_address, sender),
             Command::Publish { channel, message } => self.publish_method(channel, message),
             Command::Unsubscribe { local_address, channels } => self.unsubscribe_method(local_address, channels),
+            Command::Command => Err("Not found".to_string()),
         }
     }
 

@@ -1,0 +1,35 @@
+[DEBUG] - src/service/redis.rs - 1577:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1577:13 - Command LOAD Received - path: dump.rdb
+[ERROR] - src/service/redis.rs - 1587:21 - No such file or directory (os error 2)
+[DEBUG] - src/service/server.rs - 56:13 - =======Server Start Running======
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[INFO]  - src/service/server.rs - 96:17 - =======New Client Connected======
+[INFO]  - src/service/server.rs - 96:17 - =======New Client Connected======
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1577:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - src/service/server.rs - 56:13 - =======Server Start Running======
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[INFO]  - src/service/server.rs - 96:17 - =======New Client Connected======
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1539:13 - Command STORE Received - path: dump.rdb
