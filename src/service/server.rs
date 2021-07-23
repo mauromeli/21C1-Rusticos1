@@ -280,7 +280,6 @@ impl Server {
             Ok(())
         });
     }
-}
 
     fn maintenance_thread(
         file: String,
@@ -303,6 +302,7 @@ impl Server {
             thread::sleep(Duration::from_secs(STORE_TIME_SEC));
         }
     }
+}
 
 pub struct LinesIterator<'a>{
     input: &'a mut BufReader<TcpStream>

@@ -83,7 +83,7 @@ impl Config {
         // Splits the parameters and trims
         let parameters = parameters.split(',').map(|s| s.trim());
         // Converts them from Vec<&str> into Vec<String>
-        let parameters: Vec<String> = parameters.map(|s| s.to_stri>>>>>>> monitortomodifyng()).collect();
+        let parameters: Vec<String> = parameters.map(|s| s.to_string()).collect();
         parameters
     }
 
