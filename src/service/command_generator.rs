@@ -77,7 +77,7 @@ pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, Strin
         "pubsub" => generate_pubsub(params),
         "subscribe" => generate_subscribe(params, client_id),
         "publish" => generate_publish(params),
-        "unsubscribe" => generate_unsubscribe(params, client_id),
+        "unsubscribe" => Ok(generate_unsubscribe(params, client_id)),
 
         _ => Err("Command not valid".to_string()),
     }
@@ -700,11 +700,11 @@ fn generate_publish(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Publish { channel, message })
 }
 
-fn generate_unsubscribe(params: Vec<String>, client_id: String) -> Result<Command, String> {
-    Ok(Command::Unsubscribe {
+fn generate_unsubscribe(params: Vec<String>, client_id: String) -> Command {
+    Command::Unsubscribe {
         channels: params,
         client_id,
-    })
+    }
 }
 
 #[allow(unused_imports)]

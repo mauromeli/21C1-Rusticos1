@@ -178,13 +178,12 @@ impl Redis {
     }
 
     fn pubsub_method(&mut self, param: PubSubParam) -> Response {
-        Response::Normal(
-            match param {
-                PubSubParam::Channels => self.channels_method(),
-                PubSubParam::ChannelsWithChannel(channel) => self.channels_with_channel_method(channel),
-                PubSubParam::Numsub => self.numsub_method(),
-                PubSubParam::NumsubWithChannels(channels) => self.numsub_with_channels_method(channels),
-            })
+        Response::Normal(match param {
+            PubSubParam::Channels => self.channels_method(),
+            PubSubParam::ChannelsWithChannel(channel) => self.channels_with_channel_method(channel),
+            PubSubParam::Numsub => self.numsub_method(),
+            PubSubParam::NumsubWithChannels(channels) => self.numsub_with_channels_method(channels),
+        })
     }
 
     fn channels_method(&mut self) -> Re {
