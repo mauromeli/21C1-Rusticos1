@@ -1,9 +1,11 @@
+use crate::entities::log_level::LogLevel;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 
+/// Struct usado para representar la configuración posible de nuestra base de datos Redis.
 #[derive(Debug)]
 pub struct Config {
     verbose: u8,
@@ -11,6 +13,8 @@ pub struct Config {
     timeout: u64,
     dbfilename: String,
     logfile: String,
+    loglevel: LogLevel,
+    configfile: String,
 }
 
 #[allow(dead_code)]
@@ -22,14 +26,17 @@ impl Config {
             timeout: 0,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
+            loglevel: LogLevel::Debug,
+            configfile: "file.conf".to_string(),
         }
     }
 
     pub fn new_from_file(path: String) -> Result<Config, io::Error> {
+        let mut config = Config::new();
+        config.set_configfile(path.clone());
         let path = Path::new(&path);
         let file = File::open(path)?;
         let content = BufReader::new(&file);
-        let mut config = Config::new();
 
         for line in content.lines() {
             // Remuevo espacios al principio y al final de la línea.
@@ -56,6 +63,7 @@ impl Config {
                 "timeout" => config.set_timeout(param),
                 "dbfilename" => config.set_dbfilename(param),
                 "logfile" => config.set_logfile(param),
+                "loglevel" => config.set_loglevel(param),
                 _ => (),
             }
         }
@@ -111,6 +119,18 @@ impl Config {
         self.logfile = logfile;
     }
 
+    fn set_configfile(&mut self, configfile: String) {
+        self.configfile = configfile;
+    }
+
+    fn set_loglevel(&mut self, loglevel: String) {
+        match loglevel.to_lowercase().as_str() {
+            "error" => self.loglevel = LogLevel::Error,
+            "info" => self.loglevel = LogLevel::Info,
+            _ => self.loglevel = LogLevel::Debug,
+        }
+    }
+
     pub fn get_port(&self) -> String {
         self.port.to_string()
     }
@@ -130,6 +150,10 @@ impl Config {
     pub fn get_logfile(&self) -> String {
         self.logfile.to_string()
     }
+
+    pub fn get_configfile(&self) -> String {
+        self.configfile.to_string()
+    }
 }
 
 fn is_invalid_line(line: &str) -> bool {
@@ -139,6 +163,7 @@ fn is_invalid_line(line: &str) -> bool {
 #[allow(unused_imports)]
 mod test {
     use crate::config::server_config::{is_invalid_line, Config};
+    use crate::entities::log_level::LogLevel;
     use std::iter::FromIterator;
 
     #[test]
@@ -149,6 +174,7 @@ mod test {
         assert_eq!(0, config.get_timeout());
         assert_eq!("dump.rdb".to_string(), config.get_dbfilename());
         assert_eq!("log.log".to_string(), config.get_logfile());
+        assert_eq!(LogLevel::Debug, config.loglevel);
     }
 
     #[test]

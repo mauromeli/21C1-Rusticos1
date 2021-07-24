@@ -11,8 +11,8 @@ use std::thread::JoinHandle;
 #[derive(Debug)]
 pub struct Logger {
     receiver: Receiver<Log>,
+    verbose: u8,
     config: Arc<Mutex<Config>>,
-    level: u8,
 }
 
 impl Logger {
@@ -20,8 +20,8 @@ impl Logger {
     pub fn new(receiver: Receiver<Log>, config: Arc<Mutex<Config>>) -> Self {
         Self {
             receiver,
+            verbose: 1,
             config,
-            level: 1,
         }
     }
 
@@ -35,7 +35,7 @@ impl Logger {
                 .open(self.config.lock().unwrap().get_logfile())?;
 
             while let Ok(log) = self.receiver.recv() {
-                if self.level == 1 {
+                if self.verbose == 1 {
                     println!("{:?}", log.to_string());
                 }
 
