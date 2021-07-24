@@ -2534,9 +2534,11 @@ mod test {
 
         let key = "key".to_string();
         let sort = redis.execute(Command::Sort { key });
-        assert_eq!(
-            Re::List(vec!["1".to_string(), "2".to_string()]),
-            sort.unwrap()
+        assert!(
+            eq_response(
+                Re::List(vec!["1".to_string(), "2".to_string()]),
+                sort.unwrap(),
+            )
         );
     }
 
@@ -2550,9 +2552,12 @@ mod test {
 
         let key = "key".to_string();
         let sort = redis.execute(Command::Sort { key });
-        assert_eq!(
-            Re::List(vec!["2".to_string(), "3".to_string()]),
-            sort.unwrap()
+
+        assert!(
+            eq_response(
+                Re::List(vec!["2".to_string(), "3".to_string()]),
+                sort.unwrap(),
+            )
         );
     }
 
@@ -2578,7 +2583,12 @@ mod test {
 
         let key = "key".to_string();
         let sort = redis.execute(Command::Sort { key });
-        assert_eq!(sort.unwrap(), Re::Nil);
+        assert!(
+            eq_response(
+                Re::Nil,
+                sort.unwrap(),
+            )
+        );
     }
 
     #[test]
@@ -2991,7 +3001,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -3044,7 +3054,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -3161,7 +3171,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(),]),
+            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
             rpop.unwrap(),
         ));
 
@@ -4297,7 +4307,8 @@ mod test {
             "0".to_string(),
             "0".to_string(),
         ];
-        assert_eq!(config_get.unwrap(), Re::List(conf));
+
+        assert!(eq_response(Re::List(conf), config_get.unwrap()));
     }
 
     #[test]
