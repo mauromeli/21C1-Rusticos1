@@ -25,6 +25,7 @@ pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, Strin
 
         "store" => generate_store(params),
         "load" => generate_load(params),
+        "config" => generate_config(params),
 
         // Strings
         "get" => generate_get(params),
@@ -46,6 +47,7 @@ pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, Strin
         "expireat" => generate_expireat(params),
         "persist" => generate_persist(params),
         "rename" => generate_rename(params),
+        "sort" => generate_sort(params),
         "touch" => generate_touch(params),
         "ttl" => generate_ttl(params),
         "type" => generate_type(params),
@@ -122,6 +124,25 @@ fn generate_info(params: Vec<String>) -> Result<Command, String> {
             param: InfoParam::ConnectedClients,
         }),
         _ => Err("ERR wrong command param".to_string()),
+    }
+}
+
+fn generate_config(params: Vec<String>) -> Result<Command, String> {
+    if params.is_empty() {
+        return Err("ERR wrong number of arguments for 'config' command".to_string());
+    }
+
+    match params[0].as_str() {
+        "set" => {
+            if params.len() != 3 {
+                return Err("ERR wrong number of arguments for 'config set' command".to_string());
+            }
+            let parameter = params[1].clone();
+            let value = params[2].clone();
+            Ok(Command::ConfigSet { parameter, value })
+        }
+        "get" => Ok(Command::ConfigGet),
+        _ => Err("ERR wrong arguments for 'config' command".to_string()),
     }
 }
 
@@ -297,6 +318,15 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
         key_origin,
         key_destination,
     })
+}
+
+fn generate_sort(params: Vec<String>) -> Result<Command, String> {
+    if params.len() != 1 {
+        return Err("ERR wrong number of arguments for 'sort' command".to_string());
+    }
+
+    let key = params[0].clone();
+    Ok(Command::Sort { key })
 }
 
 fn generate_touch(params: Vec<String>) -> Result<Command, String> {
@@ -655,7 +685,10 @@ fn generate_subscribe(params: Vec<String>, client_id: String) -> Result<Command,
         return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
     }
 
-    Ok(Command::Subscribe { channels: params, client_id})
+    Ok(Command::Subscribe {
+        channels: params,
+        client_id,
+    })
 }
 
 fn generate_publish(params: Vec<String>) -> Result<Command, String> {
@@ -668,7 +701,10 @@ fn generate_publish(params: Vec<String>) -> Result<Command, String> {
 }
 
 fn generate_unsubscribe(params: Vec<String>, client_id: String) -> Result<Command, String> {
-    Ok(Command::Unsubscribe { channels: params, client_id})
+    Ok(Command::Unsubscribe {
+        channels: params,
+        client_id,
+    })
 }
 
 #[allow(unused_imports)]
@@ -1106,6 +1142,28 @@ mod test {
 
         assert!(match result.unwrap() {
             Command::Persist { key: _key } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_sort_without_param_err() {
+        let params = vec!["sort".to_string()];
+        let result = generate(params, "client-test".to_string());
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_sort_ok() {
+        let params = vec!["sort".to_string(), "key".to_string()];
+        let result = generate(params, "client-test".to_string());
+
+        let _key = "key".to_string();
+        assert!(result.is_ok());
+
+        assert!(match result.unwrap() {
+            Command::Sort { key: _key } => true,
             _ => false,
         });
     }
@@ -1919,6 +1977,48 @@ mod test {
         assert!(result.is_ok());
         assert!(match result.unwrap() {
             Command::Store { path: _path } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_config_set_without_param_err() {
+        let params = vec!["config".to_string(), "set".to_string()];
+        let result = generate(params, "client-test".to_string());
+
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn generate_command_config_set_ok() {
+        let params = vec![
+            "config".to_string(),
+            "set".to_string(),
+            "verbose".to_string(),
+            "1".to_string(),
+        ];
+        let result = generate(params, "client-test".to_string());
+
+        assert!(result.is_ok());
+        let _parameter = "verbose".to_string();
+        let _value = "1".to_string();
+        assert!(match result.unwrap() {
+            Command::ConfigSet {
+                parameter: _parameter,
+                value: _value,
+            } => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn generate_command_config_get_ok() {
+        let params = vec!["config".to_string(), "get".to_string()];
+        let result = generate(params, "client-test".to_string());
+
+        assert!(result.is_ok());
+        assert!(match result.unwrap() {
+            Command::ConfigGet => true,
             _ => false,
         });
     }

@@ -1,3 +1,4 @@
+use crate::config::server_config::Config;
 use crate::entities::command::Command;
 use crate::entities::info_param::InfoParam;
 use crate::entities::log::Log;
@@ -6,6 +7,7 @@ use crate::entities::pubsub_param::PubSubParam;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use crate::entities::response::Response;
 use crate::entities::ttl_hash_map::TtlHashMap;
+use crate::service::timestamp_to_string::timestamp_to_string;
 use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -13,6 +15,7 @@ use std::fmt::Debug;
 use std::io::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{fs, process};
 
@@ -28,11 +31,12 @@ pub struct Redis {
     client_channel: HashMap<String, Vec<String>>,
     users_connected: u64,
     server_time: SystemTime,
+    config: Arc<Mutex<Config>>,
 }
 
 impl Redis {
     #[allow(dead_code)]
-    pub fn new(log_sender: Sender<Log>) -> Self {
+    pub fn new(log_sender: Sender<Log>, config: Arc<Mutex<Config>>) -> Self {
         let db = TtlHashMap::new();
         let vec_senders: Vec<Sender<Re>> = Vec::new();
 
@@ -44,6 +48,7 @@ impl Redis {
             subscribers: HashMap::new(),
             client_channel: HashMap::new(),
             server_time: SystemTime::now(),
+            config,
         }
     }
 
@@ -52,6 +57,7 @@ impl Redis {
         let db = TtlHashMap::new();
         let (log_sender, _): (Sender<Log>, _) = mpsc::channel();
         let vec_senders: Vec<Sender<Re>> = Vec::new();
+        let config = Arc::new(Mutex::new(Config::new()));
 
         Self {
             db,
@@ -61,6 +67,7 @@ impl Redis {
             subscribers: HashMap::new(),
             client_channel: HashMap::new(),
             server_time: SystemTime::now(),
+            config,
         }
     }
 
@@ -79,6 +86,8 @@ impl Redis {
             // System
             Command::Store { path } => self.store_method(path),
             Command::Load { path } => self.load_method(path),
+            Command::ConfigGet => Ok(Response::Normal(Re::List(self.config_get_method()))),
+            Command::ConfigSet { parameter, value } => self.config_set_method(parameter, value),
             Command::AddClient => Ok(self.addclient_method()),
             Command::RemoveClient => Ok(self.removeclient_method()),
 
@@ -124,6 +133,7 @@ impl Redis {
             Command::Touch { keys } => Ok(Response::Normal(Re::String(self.touch_method(keys)))),
             Command::Ttl { key } => Ok(Response::Normal(Re::String(self.ttl_method(key)))),
             Command::Type { key } => Ok(Response::Normal(Re::String(self.type_method(key)))),
+            Command::Sort { key } => self.sort_method(key),
 
             // Lists
             Command::Lindex { key, index } => self.lindex_method(key, index),
@@ -155,9 +165,15 @@ impl Redis {
 
             // Pubsub
             Command::Pubsub { param } => Ok(self.pubsub_method(param)),
-            Command::Subscribe { channels, client_id } => Ok(self.subscribe_method(channels, client_id)),
+            Command::Subscribe {
+                channels,
+                client_id,
+            } => Ok(self.subscribe_method(channels, client_id)),
             Command::Publish { channel, message } => Ok(self.publish_method(channel, message)),
-            Command::Unsubscribe { channels, client_id } => Ok(self.unsubscribe_method(channels, client_id)),
+            Command::Unsubscribe {
+                channels,
+                client_id,
+            } => Ok(self.unsubscribe_method(channels, client_id)),
         }
     }
 
@@ -199,7 +215,7 @@ impl Redis {
 
         let mut vec_response = vec![];
         for (key, _) in self.subscribers.iter() {
-            if channel == key.to_string() {
+            if channel == *key {
                 vec_response.push(key.to_string());
             }
         }
@@ -263,14 +279,14 @@ impl Redis {
                 vector_sender = vec![(client_id.clone(), sen.clone())];
             }
 
-            self.subscribers.insert(channel.clone(), vector_sender.to_vec());
+            self.subscribers
+                .insert(channel.clone(), vector_sender.to_vec());
             // TODO: Revisar que hacer con este
             let _result = sen.clone().send(Re::List(vec![
                 "subscribe".to_string(),
                 channel.clone(),
                 "1".to_string(),
             ]));
-
 
             self.set_client_channels(client_id.clone(), channel);
         }
@@ -282,12 +298,13 @@ impl Redis {
         let mut vector_channels;
         if let Some(vector) = self.client_channel.get_mut(&client_id) {
             vector_channels = vector.clone();
-            vector_channels.push(channel.clone());
+            vector_channels.push(channel);
         } else {
-            vector_channels = vec![channel.clone()];
+            vector_channels = vec![channel];
         }
 
-        self.client_channel.insert(client_id.clone(), vector_channels.to_vec());
+        self.client_channel
+            .insert(client_id, vector_channels.to_vec());
     }
 
     fn publish_method(&mut self, channel: String, msg: String) -> Response {
@@ -306,20 +323,24 @@ impl Redis {
         if let Some(vector) = self.subscribers.get_mut(&channel) {
             let mut empty_vec: Vec<(String, Sender<RedisElement>)> = Vec::new();
             for (client, sender) in vector {
-                if sender.send(
-                    Re::List(vec!["message".to_string(), channel.clone(), msg.to_string()])
-                ).is_ok() {
+                if sender
+                    .send(Re::List(vec![
+                        "message".to_string(),
+                        channel.clone(),
+                        msg.to_string(),
+                    ]))
+                    .is_ok()
+                {
                     empty_vec.push((client.to_string(), sender.clone()));
-                } else {
-                    if let Some(vector) = self.client_channel.get_mut(client) {
-                        let mut vector_update: Vec<String> = Vec::new();
-                        for element in vector {
-                            if element.to_string() != channel {
-                                vector_update.push(element.to_string());
-                            }
+                } else if let Some(vector) = self.client_channel.get_mut(client) {
+                    let mut vector_update: Vec<String> = Vec::new();
+                    for element in vector {
+                        if *element != channel {
+                            vector_update.push(element.to_string());
                         }
-                        self.client_channel.insert(client.to_string(), vector_update);
                     }
+                    self.client_channel
+                        .insert(client.to_string(), vector_update);
                 }
             }
 
@@ -343,7 +364,7 @@ impl Redis {
             let mut channels_to_keep = Vec::new();
             let mut channels_to_delete = Vec::new();
             for sub_channel in subscribed_channels {
-                if channels.iter().any(|i| *i == sub_channel.to_string()) {
+                if channels.iter().any(|i| *i == *sub_channel) {
                     channels_to_delete.push(sub_channel.to_string());
                     return_vec.push("unsubscribe".to_string());
                     return_vec.push(sub_channel.to_string());
@@ -353,13 +374,14 @@ impl Redis {
                 }
             }
 
-            self.client_channel.insert(client_id.clone(), channels_to_keep);
+            self.client_channel
+                .insert(client_id.clone(), channels_to_keep);
 
             for channel in channels_to_delete {
                 if let Some(senders) = self.subscribers.get(&channel) {
                     let mut vec_senders: Vec<(String, Sender<Re>)> = Vec::new();
                     for (client, sender) in senders {
-                        if client_id != client.to_string() {
+                        if client_id != *client {
                             vec_senders.push((client.to_string(), sender.clone()));
                         }
                     }
@@ -370,7 +392,11 @@ impl Redis {
             return Response::Normal(Re::List(return_vec));
         }
 
-        Response::Normal(Re::List(vec!["unsubscribe".to_string(), "nil".to_string(), "0".to_string()]))
+        Response::Normal(Re::List(vec![
+            "unsubscribe".to_string(),
+            "nil".to_string(),
+            "0".to_string(),
+        ]))
     }
 
     fn addclient_method(&mut self) -> Response {
@@ -384,6 +410,7 @@ impl Redis {
     }
 
     fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
+        //TODO: agregar test
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -396,13 +423,17 @@ impl Redis {
             InfoParam::ConnectedClients => Ok(Response::Normal(RedisElement::String(
                 self.users_connected.to_string(),
             ))),
-            InfoParam::Port => Err("Not Implemented".to_string()),
-            InfoParam::ConfigFile => Err("Not Implemented".to_string()),
-            InfoParam::Uptime => self.get_server_uptime(),
-            InfoParam::ServerTime => Err("Not Implemented".to_string()),
-            InfoParam::ProcessId => Ok(Response::Normal(RedisElement::String(
-                process::id().to_string(),
+            InfoParam::Port => Ok(Response::Normal(RedisElement::String(
+                self.config.lock().unwrap().get_port(),
             ))),
+            InfoParam::ConfigFile => Ok(Response::Normal(RedisElement::String(
+                self.config.lock().unwrap().get_configfile(),
+            ))),
+            InfoParam::Uptime => self.get_server_uptime(),
+            InfoParam::ServerTime => Ok(Response::Normal(Re::String(timestamp_to_string(
+                SystemTime::now(),
+            )))),
+            InfoParam::ProcessId => Ok(Response::Normal(Re::String(process::id().to_string()))),
         }
     }
 
@@ -446,10 +477,8 @@ impl Redis {
 
         for sender in &self.vec_senders {
             let command_str = command.as_str().to_string();
-            if !command_str.is_empty() {
-                if sender.send(Re::String(command_str)).is_ok() {
-                    empty_vec.push(sender.clone());
-                }
+            if !command_str.is_empty() && sender.send(Re::String(command_str)).is_ok() {
+                empty_vec.push(sender.clone());
             }
         }
 
@@ -904,6 +933,61 @@ impl Redis {
                 Err(msg)
             }
         }
+    }
+
+    fn sort_method(&mut self, key: String) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SORT Received - key: ".to_string() + &key,
+        ));
+
+        let collection = match self.db.get(&key) {
+            Some(element) => match element {
+                Re::List(list) => list.clone(),
+                Re::Set(set) => set.clone().into_iter().collect::<Vec<String>>(),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    return Err(WRONGTYPE_MSG.to_string());
+                }
+            },
+            None => {
+                return Ok(Response::Normal(Re::Nil));
+            }
+        };
+        let transformed_collection: Result<Vec<f64>, String> = collection
+            .iter()
+            .map(|a| a.parse::<f64>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "ERR One or more scores can't be converted into double".to_string());
+        let mut transformed_collection = match transformed_collection {
+            Ok(vec) => vec,
+            Err(msg) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    msg.to_string(),
+                ));
+                return Err(msg);
+            }
+        };
+
+        transformed_collection.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let sorted = transformed_collection
+            .iter()
+            .map(|a| a.to_string())
+            .collect();
+        Ok(Response::Normal(Re::List(sorted)))
     }
 
     fn touch_method(&mut self, keys: Vec<String>) -> String {
@@ -1791,6 +1875,53 @@ impl Redis {
             }
         }
     }
+
+    fn config_get_method(&mut self) -> Vec<String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command CONFIG GET Received".to_string(),
+        ));
+
+        let config = self.config.lock().unwrap();
+        vec![
+            config.get_dbfilename(),
+            config.get_logfile(),
+            config.get_port(),
+            config.get_verbose(),
+            config.get_timeout().to_string(),
+        ]
+    }
+
+    fn config_set_method(&mut self, parameter: String, value: String) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command CONFIG SET Received - parameter: ".to_string() + &parameter,
+        ));
+        let mut config = self.config.lock().unwrap();
+
+        match parameter.as_str() {
+            "verbose" => config.set_verbose(value),
+            "dbfilename" => config.set_dbfilename(value),
+            "logfile" => config.set_logfile(value),
+            _ => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    "Parameter does not exist".to_string(),
+                ));
+                return Err("Parameter does not exist".to_string());
+            }
+        }
+        Ok(Response::Normal(Re::String("Ok".to_string())))
+    }
 }
 
 #[allow(unused_imports)]
@@ -2483,6 +2614,82 @@ mod test {
     }
 
     #[test]
+    fn test_sort_set() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("2".to_string());
+        values.insert("1".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert!(eq_response(
+            Re::List(vec!["1".to_string(), "2".to_string()]),
+            sort.unwrap(),
+        ));
+    }
+
+    #[test]
+    fn test_sort_list() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = vec!["3".to_string(), "2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+
+        assert!(eq_response(
+            Re::List(vec!["2".to_string(), "3".to_string()]),
+            sort.unwrap(),
+        ));
+    }
+
+    #[test]
+    fn test_sort_string_returns_err() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            sort.err(),
+            Some("WRONGTYPE Operation against a key holding the wrong kind of value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sort_empty_key_returns_nil() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert!(eq_response(Re::Nil, sort.unwrap(),));
+    }
+
+    #[test]
+    fn test_sort_non_numeric_value_returns_err() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = vec!["value1".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            sort.err(),
+            Some("ERR One or more scores can't be converted into double".to_string())
+        );
+    }
+
+    #[test]
     fn test_ttl_returns_neg2_on_unexisting_key() {
         let mut redis: Redis = Redis::new_for_test();
 
@@ -2876,7 +3083,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -2929,7 +3136,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -3046,7 +3253,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
+            Re::List(vec!["value".to_string(), "value2".to_string(),]),
             rpop.unwrap(),
         ));
 
@@ -4164,5 +4371,69 @@ mod test {
         assert!(eq_response(Re::Set(values), smembers.unwrap()));
 
         fs::remove_file("test_load_values_with_separated_words.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_config_get_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let config_get = redis.execute(Command::ConfigGet);
+        let conf = vec![
+            "dump.rdb".to_string(),
+            "log.log".to_string(),
+            "6379".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+        ];
+
+        assert!(eq_response(Re::List(conf), config_get.unwrap()));
+    }
+
+    #[test]
+    fn test_config_set_verbose() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "verbose".to_string();
+        let value = "1".to_string();
+        let _config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert_eq!("1", redis.config.lock().unwrap().get_verbose());
+    }
+
+    #[test]
+    fn test_config_set_dbfilename() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "dbfilename".to_string();
+        let value = "new_dump.rdb".to_string();
+        let _config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert_eq!(
+            "new_dump.rdb",
+            redis.config.lock().unwrap().get_dbfilename()
+        );
+    }
+
+    #[test]
+    fn test_config_set_logfile() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "logfile".to_string();
+        let value = "new_log.log".to_string();
+        let _config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert_eq!("new_log.log", redis.config.lock().unwrap().get_logfile());
+    }
+
+    #[test]
+    fn test_config_set_wrong_parameter() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "timeout".to_string();
+        let value = "1".to_string();
+        let config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert!(config_set.is_err());
+        assert_ne!(1, redis.config.lock().unwrap().get_timeout());
     }
 }
