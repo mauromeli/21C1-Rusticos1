@@ -10,17 +10,5 @@ pub fn timestamp_to_string(time: SystemTime) -> String {
     let hs = secs_offset / 3600;
     let mins = secs_offset % 3600 / 60;
     let secs = secs_offset % 60;
-    format!(
-        "{}:{}:{}",
-        format_ceros(hs),
-        format_ceros(mins),
-        format_ceros(secs)
-    )
-}
-
-fn format_ceros(num: u64) -> String {
-    if num < 10 {
-        return format!("0{}", num);
-    }
-    format!("{}", num)
+    format!("{:02}:{:02}:{:02}", hs, mins, secs)
 }

@@ -32,9 +32,9 @@ impl ToString for Log {
             LogLevel::Error => "[ERROR]",
         };
 
-        timestamp_to_string(SystemTime::now())
+        level.to_owned()
             + " - "
-            + level
+            + &timestamp_to_string(SystemTime::now())
             + " - "
             + &self.file
             + " - "
