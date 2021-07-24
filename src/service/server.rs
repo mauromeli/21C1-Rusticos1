@@ -212,7 +212,7 @@ impl Server {
                             output.write_all((msg + "\n").as_ref())?;
                         }
                     }
-                }
+                },
                 _ => {
                     output.write_all((command.err().unwrap() + "\n").as_ref())?;
                 }
