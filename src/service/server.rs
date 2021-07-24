@@ -198,9 +198,7 @@ impl Server {
                         Response::Stream(rec) => {
                             while let Ok(redis_element) = rec.recv() {
                                 output.write(&parse_response_ok(redis_element))?;
-                                println!("msg");
                             }
-                            println!("SALIO");
                             std::mem::drop(rec);
                         }
                         Response::Error(msg) => {
@@ -316,7 +314,6 @@ pub struct LinesIterator<'a>{
             while self.input.read_line(&mut buf).unwrap() != 0 {
                 if let Ok(result) = decode(buf.as_bytes(), 0) {
                     let (data, _) = result;
-                    println!("CORTA EJECUCION devuelve: {:?}", data);
                     return Some(data);
                 }
             }

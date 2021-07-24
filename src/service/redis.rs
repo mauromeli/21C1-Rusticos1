@@ -292,7 +292,7 @@ impl Redis {
             }
         }
 
-        Ok(Response::Normal(Re::String("Ok".to_string())))
+        Ok(Response::Normal(Re::String("OK".to_string())))
     }
 
     fn addclient_method(&mut self) -> Response {
@@ -302,7 +302,7 @@ impl Redis {
 
     fn removeclient_method(&mut self) -> Response {
         self.users_connected -= 1;
-        Response::Normal(RedisElement::String("Ok".to_string()))
+        Response::Normal(RedisElement::String("OK".to_string()))
     }
 
     fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
@@ -554,7 +554,7 @@ impl Redis {
 
         self.db.insert(key, Re::String(value));
 
-        "Ok".to_string()
+        "OK".to_string()
     }
 
     #[allow(dead_code)]
@@ -643,7 +643,7 @@ impl Redis {
             self.set_method(key.to_string(), value.to_string());
         }
 
-        Response::Normal(Re::String("Ok".to_string()))
+        Response::Normal(Re::String("OK".to_string()))
     }
 
     #[allow(dead_code)]
@@ -1280,7 +1280,7 @@ impl Redis {
 
                     saved_value[position as usize] = element;
 
-                    Ok(Response::Normal(Re::String("Ok".to_string())))
+                    Ok(Response::Normal(Re::String("OK".to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1667,7 +1667,7 @@ impl Redis {
         };
 
         match file.write_all(self.db.serialize().as_bytes()) {
-            Ok(_) => Ok(Response::Normal(RedisElement::String("Ok".to_string()))),
+            Ok(_) => Ok(Response::Normal(RedisElement::String("OK".to_string()))),
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
@@ -1707,7 +1707,7 @@ impl Redis {
         match TtlHashMap::deserialize(text) {
             Ok(map) => {
                 self.db = map;
-                Ok(Response::Normal(RedisElement::String("Ok".to_string())))
+                Ok(Response::Normal(RedisElement::String("OK".to_string())))
             }
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
@@ -2848,7 +2848,7 @@ mod test {
         });
 
         assert!(lset.is_ok());
-        assert!(eq_response(Re::String("Ok".to_string()), lset.unwrap()));
+        assert!(eq_response(Re::String("OK".to_string()), lset.unwrap()));
 
         let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {

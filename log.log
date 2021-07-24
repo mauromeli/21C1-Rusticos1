@@ -143,3 +143,88 @@
 [DEBUG] - src/service/redis.rs - 438:13 - Command COPY Received - key origin:sofi - key destination: clone
 [DEBUG] - src/service/redis.rs - 466:13 - Command GET Received - key: clone
 [DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1687:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - src/service/server.rs - 64:17 - =======Server Start Running======
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[INFO]  - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - src/service/redis.rs - 358:13 - Command PING Received
+[DEBUG] - src/service/redis.rs - 549:13 - Command SET Received - key: hola
+[DEBUG] - src/service/redis.rs - 466:13 - Command GET Received - key: hola
+[DEBUG] - src/service/redis.rs - 246:13 - Command Subscribe Received
+[INFO]  - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 278:13 - Command Publish Received
+[DEBUG] - src/service/redis.rs - 278:13 - Command Publish Received
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1687:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - src/service/server.rs - 64:17 - =======Server Start Running======
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[INFO]  - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - src/service/redis.rs - 358:13 - Command PING Received
+[DEBUG] - src/service/redis.rs - 549:13 - Command SET Received - key: hola
+[DEBUG] - src/service/redis.rs - 466:13 - Command GET Received - key: hola
+[DEBUG] - src/service/redis.rs - 438:13 - Command COPY Received - key origin:hola - key destination: clone
+[DEBUG] - src/service/redis.rs - 466:13 - Command GET Received - key: clone
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - src/service/redis.rs - 1649:13 - Command STORE Received - path: dump.rdb
