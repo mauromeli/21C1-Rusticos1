@@ -21,7 +21,7 @@ impl Config {
     pub fn new() -> Config {
         Config {
             verbose: 0,
-            port: 6379,
+            port: 8080,
             timeout: 0,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),

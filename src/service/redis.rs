@@ -156,6 +156,7 @@ impl Redis {
             Command::Subscribe { channels } => self.subscribe_method(channels),
             Command::Publish { channel, message } => self.publish_method(channel, message),
             Command::Unsubscribe { channels } => Err("Method not implemented".to_string()),
+            Command::Command => Ok(Response::Normal(RedisElement::Nil)),
         }
     }
 
@@ -296,7 +297,7 @@ impl Redis {
 
     fn addclient_method(&mut self) -> Response {
         self.users_connected += 1;
-        Response::Normal(RedisElement::String("Ok".to_string()))
+        Response::Normal(RedisElement::String("OK".to_string()))
     }
 
     fn removeclient_method(&mut self) -> Response {

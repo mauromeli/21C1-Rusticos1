@@ -13,12 +13,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 use std::thread;
-use crate::protocol::parse_data::parse_data;
 use std::borrow::BorrowMut;
 use crate::protocol::decode::{decode, TypeData};
 
 use std::thread::JoinHandle;
 use std::time::Duration;
+use crate::protocol::parse_data::{parse_command, parse_response_ok, parse_response_error};
 
 static STORE_TIME_SEC: u64 = 120;
 
@@ -176,19 +176,12 @@ impl Server {
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
 
-            let vector = parse_data(line);
+            let vector = parse_command(line);
 
             let command = generate(vector);
 
             // TODO: Agregar forma de escritura por cada tipo.
             match command {
-                /*
-                Ok(Command::Command) => {
-                    //output_response = "*200\r\n".to_string();
-                }
-
-                 */
-
                 Ok(command) => {
                     db_sender_clone
                         .send((command, client_sndr))
@@ -200,23 +193,23 @@ impl Server {
 
                     match response {
                         Response::Normal(redis_string) => {
-                            output.write((redis_string.to_string() + "\n").as_ref())?;
+                            output.write(&parse_response_ok(redis_string))?;
                         }
                         Response::Stream(rec) => {
                             while let Ok(redis_element) = rec.recv() {
-                                output.write((redis_element.to_string() + "\n").as_ref())?;
+                                output.write(&parse_response_ok(redis_element))?;
                                 println!("msg");
                             }
                             println!("SALIO");
                             std::mem::drop(rec);
                         }
                         Response::Error(msg) => {
-                            output.write((msg + "\n").as_ref())?;
+                            output.write(&parse_response_error(msg))?;
                         }
                     }
                 }
                 _ => {
-                    output.write((command.err().unwrap() + "\n").as_ref())?;
+                    output.write(&parse_response_error(command.err().unwrap()))?;
                 }
             };
         }
@@ -306,13 +299,9 @@ impl Server {
 
 pub struct LinesIterator<'a>{
     input: &'a mut BufReader<TcpStream>
-    //input: &'a mut Lines<BufReader<TcpStream>>
-
 }
 
-
     impl<'a> LinesIterator<'a> {
-        //pub fn new(input: &'a mut Lines<BufReader<TcpStream>>) -> Self {
         pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
             let input = input;
             Self {input}
@@ -325,12 +314,10 @@ pub struct LinesIterator<'a>{
         fn next(&mut self) -> Option<<Self as Iterator>::Item> {
             let mut buf = String::new();
             while self.input.read_line(&mut buf).unwrap() != 0 {
-                println!("read: {:?}", buf);
                 if let Ok(result) = decode(buf.as_bytes(), 0) {
                     let (data, _) = result;
                     println!("CORTA EJECUCION devuelve: {:?}", data);
                     return Some(data);
-                    break
                 }
             }
             Some(TypeData::Nil)
