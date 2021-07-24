@@ -90,7 +90,7 @@ impl Config {
         parameters
     }
 
-    fn set_verbose(&mut self, verbose: String) {
+    pub fn set_verbose(&mut self, verbose: String) {
         let val = verbose.parse::<u8>();
         if let Ok(value) = val {
             self.verbose = value
@@ -111,11 +111,11 @@ impl Config {
         }
     }
 
-    fn set_dbfilename(&mut self, dbfilename: String) {
+    pub fn set_dbfilename(&mut self, dbfilename: String) {
         self.dbfilename = dbfilename;
     }
 
-    fn set_logfile(&mut self, logfile: String) {
+    pub fn set_logfile(&mut self, logfile: String) {
         self.logfile = logfile;
     }
 

@@ -1,3 +1,4 @@
+use crate::config::server_config::Config;
 use crate::entities::command::Command;
 use crate::entities::info_param::InfoParam;
 use crate::entities::log::Log;
@@ -14,6 +15,7 @@ use std::fmt::Debug;
 use std::io::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{fs, process};
 
@@ -29,11 +31,12 @@ pub struct Redis {
     subscribers: HashMap<String, Vec<Sender<Re>>>,
     users_connected: u64,
     server_time: SystemTime,
+    config: Arc<Mutex<Config>>,
 }
 
 impl Redis {
     #[allow(dead_code)]
-    pub fn new(log_sender: Sender<Log>) -> Self {
+    pub fn new(log_sender: Sender<Log>, config: Arc<Mutex<Config>>) -> Self {
         let db = TtlHashMap::new();
         let vec_senders: Vec<Sender<Re>> = Vec::new();
 
@@ -44,6 +47,7 @@ impl Redis {
             users_connected: 0,
             subscribers: HashMap::new(),
             server_time: SystemTime::now(),
+            config,
         }
     }
 
@@ -52,6 +56,7 @@ impl Redis {
         let db = TtlHashMap::new();
         let (log_sender, _): (Sender<Log>, _) = mpsc::channel();
         let vec_senders: Vec<Sender<Re>> = Vec::new();
+        let config = Arc::new(Mutex::new(Config::new()));
 
         Self {
             db,
@@ -60,6 +65,7 @@ impl Redis {
             users_connected: 0,
             subscribers: HashMap::new(),
             server_time: SystemTime::now(),
+            config,
         }
     }
 
@@ -78,6 +84,8 @@ impl Redis {
             // System
             Command::Store { path } => self.store_method(path),
             Command::Load { path } => self.load_method(path),
+            Command::ConfigGet => Ok(Response::Normal(Re::List(self.config_get_method()))),
+            Command::ConfigSet { parameter, value } => self.config_set_method(parameter, value),
             Command::AddClient => Ok(self.addclient_method()),
             Command::RemoveClient => Ok(self.removeclient_method()),
 
@@ -123,6 +131,7 @@ impl Redis {
             Command::Touch { keys } => Ok(Response::Normal(Re::String(self.touch_method(keys)))),
             Command::Ttl { key } => Ok(Response::Normal(Re::String(self.ttl_method(key)))),
             Command::Type { key } => Ok(Response::Normal(Re::String(self.type_method(key)))),
+            Command::Sort { key } => self.sort_method(key),
 
             // Lists
             Command::Lindex { key, index } => self.lindex_method(key, index),
@@ -833,6 +842,61 @@ impl Redis {
                 Err(msg)
             }
         }
+    }
+
+    fn sort_method(&mut self, key: String) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command SORT Received - key: ".to_string() + &key,
+        ));
+
+        let collection = match self.db.get(&key) {
+            Some(element) => match element {
+                Re::List(list) => list.clone(),
+                Re::Set(set) => set.clone().into_iter().collect::<Vec<String>>(),
+                _ => {
+                    let _ = self.log_sender.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        WRONGTYPE_MSG.to_string(),
+                    ));
+                    return Err(WRONGTYPE_MSG.to_string());
+                }
+            },
+            None => {
+                return Ok(Response::Normal(Re::Nil));
+            }
+        };
+        let transformed_collection: Result<Vec<f64>, String> = collection
+            .iter()
+            .map(|a| a.parse::<f64>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "ERR One or more scores can't be converted into double".to_string());
+        let mut transformed_collection = match transformed_collection {
+            Ok(vec) => vec,
+            Err(msg) => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    msg.to_string(),
+                ));
+                return Err(msg);
+            }
+        };
+
+        transformed_collection.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let sorted = transformed_collection
+            .iter()
+            .map(|a| a.to_string())
+            .collect();
+        Ok(Response::Normal(Re::List(sorted)))
     }
 
     fn touch_method(&mut self, keys: Vec<String>) -> String {
@@ -1720,6 +1784,53 @@ impl Redis {
             }
         }
     }
+
+    fn config_get_method(&mut self) -> Vec<String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command CONFIG GET Received".to_string(),
+        ));
+
+        let config = self.config.lock().unwrap();
+        vec![
+            config.get_dbfilename(),
+            config.get_logfile(),
+            config.get_port(),
+            config.get_verbose(),
+            config.get_timeout().to_string(),
+        ]
+    }
+
+    fn config_set_method(&mut self, parameter: String, value: String) -> Result<Response, String> {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command CONFIG SET Received - parameter: ".to_string() + &parameter,
+        ));
+        let mut config = self.config.lock().unwrap();
+
+        match parameter.as_str() {
+            "verbose" => config.set_verbose(value),
+            "dbfilename" => config.set_dbfilename(value),
+            "logfile" => config.set_logfile(value),
+            _ => {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    "Parameter does not exist".to_string(),
+                ));
+                return Err("Parameter does not exist".to_string());
+            }
+        }
+        Ok(Response::Normal(Re::String("Ok".to_string())))
+    }
 }
 
 #[allow(unused_imports)]
@@ -2409,6 +2520,81 @@ mod test {
         let get = redis.execute(Command::Get { key });
         assert!(get.is_ok());
         assert!(eq_response(Re::String("value1".to_string()), get.unwrap()));
+    }
+
+    #[test]
+    fn test_sort_set() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let mut values = HashSet::new();
+        values.insert("2".to_string());
+        values.insert("1".to_string());
+        let _sadd = redis.execute(Command::Sadd { key, values });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            Re::List(vec!["1".to_string(), "2".to_string()]),
+            sort.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_sort_list() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = vec!["3".to_string(), "2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            Re::List(vec!["2".to_string(), "3".to_string()]),
+            sort.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_sort_string_returns_err() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = "value".to_string();
+        let _set = redis.execute(Command::Set { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            sort.err(),
+            Some("WRONGTYPE Operation against a key holding the wrong kind of value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sort_empty_key_returns_nil() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(sort.unwrap(), Re::Nil);
+    }
+
+    #[test]
+    fn test_sort_non_numeric_value_returns_err() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let key = "key".to_string();
+        let value = vec!["value1".to_string(), "value2".to_string()];
+        let _lpush = redis.execute(Command::Lpush { key, value });
+
+        let key = "key".to_string();
+        let sort = redis.execute(Command::Sort { key });
+        assert_eq!(
+            sort.err(),
+            Some("ERR One or more scores can't be converted into double".to_string())
+        );
     }
 
     #[test]
@@ -4097,5 +4283,68 @@ mod test {
         assert!(eq_response(Re::Set(values), smembers.unwrap()));
 
         fs::remove_file("test_load_values_with_separated_words.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_config_get_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let config_get = redis.execute(Command::ConfigGet);
+        let conf = vec![
+            "dump.rdb".to_string(),
+            "log.log".to_string(),
+            "6379".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+        ];
+        assert_eq!(config_get.unwrap(), Re::List(conf));
+    }
+
+    #[test]
+    fn test_config_set_verbose() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "verbose".to_string();
+        let value = "1".to_string();
+        let _config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert_eq!("1", redis.config.lock().unwrap().get_verbose());
+    }
+
+    #[test]
+    fn test_config_set_dbfilename() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "dbfilename".to_string();
+        let value = "new_dump.rdb".to_string();
+        let _config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert_eq!(
+            "new_dump.rdb",
+            redis.config.lock().unwrap().get_dbfilename()
+        );
+    }
+
+    #[test]
+    fn test_config_set_logfile() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "logfile".to_string();
+        let value = "new_log.log".to_string();
+        let _config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert_eq!("new_log.log", redis.config.lock().unwrap().get_logfile());
+    }
+
+    #[test]
+    fn test_config_set_wrong_parameter() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let parameter = "timeout".to_string();
+        let value = "1".to_string();
+        let config_set = redis.execute(Command::ConfigSet { parameter, value });
+
+        assert!(config_set.is_err());
+        assert_ne!(1, redis.config.lock().unwrap().get_timeout());
     }
 }

@@ -24,6 +24,11 @@ pub enum Command {
     },
     AddClient,
     RemoveClient,
+    ConfigGet,
+    ConfigSet {
+        parameter: String,
+        value: String,
+    },
 
     // Strings
     Get {
@@ -32,9 +37,6 @@ pub enum Command {
     Set {
         key: String,
         value: String,
-    },
-    Keys {
-        pattern: String,
     },
     Incrby {
         key: String,
@@ -76,10 +78,6 @@ pub enum Command {
     Exists {
         keys: Vec<String>,
     },
-    Rename {
-        key_origin: String,
-        key_destination: String,
-    },
     Expire {
         key: String,
         ttl: Duration,
@@ -88,7 +86,17 @@ pub enum Command {
         key: String,
         ttl: SystemTime,
     },
+    Keys {
+        pattern: String,
+    },
     Persist {
+        key: String,
+    },
+    Rename {
+        key_origin: String,
+        key_destination: String,
+    },
+    Sort {
         key: String,
     },
     Touch {
