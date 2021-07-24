@@ -7,7 +7,7 @@ use std::iter::FromIterator;
 use std::time::SystemTime;
 
 #[allow(dead_code)]
-pub fn generate(params: Vec<String>) -> Result<Command, String> {
+pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, String> {
     if params.is_empty() {
         return Err("Params can't be empty".to_string());
     }
@@ -73,9 +73,9 @@ pub fn generate(params: Vec<String>) -> Result<Command, String> {
 
         //PubSub
         "pubsub" => generate_pubsub(params),
-        "subscribe" => generate_subscribe(params),
+        "subscribe" => generate_subscribe(params, client_id),
         "publish" => generate_publish(params),
-        "unsubscribe" => generate_unsubscribe(params),
+        "unsubscribe" => generate_unsubscribe(params, client_id),
 
         _ => Err("Command not valid".to_string()),
     }
@@ -650,12 +650,12 @@ fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
     }
 }
 
-fn generate_subscribe(params: Vec<String>) -> Result<Command, String> {
+fn generate_subscribe(params: Vec<String>, client_id: String) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
     }
 
-    Ok(Command::Subscribe { channels: params })
+    Ok(Command::Subscribe { channels: params, client_id})
 }
 
 fn generate_publish(params: Vec<String>) -> Result<Command, String> {
@@ -667,8 +667,8 @@ fn generate_publish(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Publish { channel, message })
 }
 
-fn generate_unsubscribe(params: Vec<String>) -> Result<Command, String> {
-    Ok(Command::Unsubscribe { channels: params })
+fn generate_unsubscribe(params: Vec<String>, client_id: String) -> Result<Command, String> {
+    Ok(Command::Unsubscribe { channels: params, client_id})
 }
 
 #[allow(unused_imports)]
@@ -682,7 +682,7 @@ mod test {
     #[test]
     fn generate_command_with_params_empty_err() {
         let params = vec![];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -690,7 +690,7 @@ mod test {
     #[test]
     fn generate_command_with_command_invalid_err() {
         let params = vec!["metodo".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -698,7 +698,7 @@ mod test {
     #[test]
     fn generate_command_with_command_ping() {
         let params = vec!["ping".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_ok());
         assert!(match result.unwrap() {
@@ -710,7 +710,7 @@ mod test {
     #[test]
     fn generate_command_with_command_monitor() {
         let params = vec!["monitor".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_ok());
         assert!(match result.unwrap() {
@@ -722,7 +722,7 @@ mod test {
     #[test]
     fn generate_command_with_command_flushdb() {
         let params = vec!["flushdb".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_ok());
         assert!(match result.unwrap() {
@@ -734,7 +734,7 @@ mod test {
     #[test]
     fn generate_command_copy_without_params_err() {
         let params = vec!["copy".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -742,7 +742,7 @@ mod test {
     #[test]
     fn generate_command_copy_with_one_param_err() {
         let params = vec!["copy".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -750,7 +750,7 @@ mod test {
     #[test]
     fn generate_command_copy_ok() {
         let params = vec!["copy".to_string(), "key".to_string(), "key1".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _key2 = "key1".to_string();
@@ -767,7 +767,7 @@ mod test {
     #[test]
     fn generate_command_get_without_param_err() {
         let params = vec!["get".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -775,7 +775,7 @@ mod test {
     #[test]
     fn generate_command_get_ok() {
         let params = vec!["get".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -788,7 +788,7 @@ mod test {
     #[test]
     fn generate_command_getset_without_param_err() {
         let params = vec!["getset".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -796,7 +796,7 @@ mod test {
     #[test]
     fn generate_command_getset_with_one_param_err() {
         let params = vec!["getset".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -804,7 +804,7 @@ mod test {
     #[test]
     fn generate_command_getset_ok() {
         let params = vec!["getset".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _value = "value".to_string();
@@ -821,7 +821,7 @@ mod test {
     #[test]
     fn generate_command_set_without_param_err() {
         let params = vec!["set".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -829,7 +829,7 @@ mod test {
     #[test]
     fn generate_command_set_with_one_param_err() {
         let params = vec!["set".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -837,7 +837,7 @@ mod test {
     #[test]
     fn generate_command_set_ok() {
         let params = vec!["set".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _value = "value".to_string();
@@ -854,7 +854,7 @@ mod test {
     #[test]
     fn generate_command_del_without_param_err() {
         let params = vec!["del".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -862,7 +862,7 @@ mod test {
     #[test]
     fn generate_command_del_ok() {
         let params = vec!["del".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _keys = vec!["key".to_string()];
         assert!(result.is_ok());
@@ -875,7 +875,7 @@ mod test {
     #[test]
     fn generate_command_mget_without_param_err() {
         let params = vec!["mget".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -883,7 +883,7 @@ mod test {
     #[test]
     fn generate_command_mget_ok() {
         let params = vec!["mget".to_string(), "key1".to_string(), "key2".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _keys = vec!["key1".to_string(), "key2".to_string()];
         assert!(result.is_ok());
@@ -896,7 +896,7 @@ mod test {
     #[test]
     fn generate_command_mset_without_param_err() {
         let params = vec!["mset".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -909,7 +909,7 @@ mod test {
             "value1".to_string(),
             "key2".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -923,7 +923,7 @@ mod test {
             "key2".to_string(),
             "value2".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _pairs = vec![
             ("key1".to_string(), "value1".to_string()),
@@ -939,7 +939,7 @@ mod test {
     #[test]
     fn generate_command_strlen_without_param_err() {
         let params = vec!["strlen".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -947,7 +947,7 @@ mod test {
     #[test]
     fn generate_command_strlen_ok() {
         let params = vec!["strlen".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -960,7 +960,7 @@ mod test {
     #[test]
     fn generate_command_exists_without_param_err() {
         let params = vec!["exists".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -968,7 +968,7 @@ mod test {
     #[test]
     fn generate_command_exists_ok() {
         let params = vec!["exists".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _keys = vec!["key".to_string()];
         assert!(result.is_ok());
@@ -979,7 +979,7 @@ mod test {
         });
 
         let params = vec!["exists".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(match result.unwrap() {
             Command::Ping => false,
@@ -990,7 +990,7 @@ mod test {
     #[test]
     fn generate_command_rename_without_param_err() {
         let params = vec!["rename".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -998,7 +998,7 @@ mod test {
     #[test]
     fn generate_command_rename_ok() {
         let params = vec!["rename".to_string(), "key1".to_string(), "key2".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key_origin = "key1".to_string();
         let _key_destination = "key2".to_string();
@@ -1017,7 +1017,7 @@ mod test {
     #[test]
     fn generate_command_expire_without_param_err() {
         let params = vec!["expire".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
     }
@@ -1025,7 +1025,7 @@ mod test {
     #[test]
     fn generate_command_expire_with_fractional_time_err() {
         let params = vec!["expire".to_string(), "key".to_string(), "10.5".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
     }
@@ -1033,7 +1033,7 @@ mod test {
     #[test]
     fn generate_command_expire_ok() {
         let params = vec!["expire".to_string(), "key".to_string(), "1".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _ttl = Duration::from_secs(1);
@@ -1052,7 +1052,7 @@ mod test {
     #[test]
     fn generate_command_expireat_without_param_err() {
         let params = vec!["expireat".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
     }
@@ -1064,7 +1064,7 @@ mod test {
             "key".to_string(),
             "10.5".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
     }
@@ -1072,7 +1072,7 @@ mod test {
     #[test]
     fn generate_command_expireat_ok() {
         let params = vec!["expireat".to_string(), "key".to_string(), "1".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
@@ -1091,7 +1091,7 @@ mod test {
     #[test]
     fn generate_command_persist_without_param_err() {
         let params = vec!["persist".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1099,7 +1099,7 @@ mod test {
     #[test]
     fn generate_command_persist_ok() {
         let params = vec!["persist".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1113,7 +1113,7 @@ mod test {
     #[test]
     fn generate_command_touch_without_param_err() {
         let params = vec!["touch".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1121,7 +1121,7 @@ mod test {
     #[test]
     fn generate_command_touch_ok() {
         let params = vec!["touch".to_string(), "key1".to_string(), "key2".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _keys = vec!["key1".to_string(), "key2".to_string()];
         assert!(result.is_ok());
@@ -1135,7 +1135,7 @@ mod test {
     #[test]
     fn generate_command_ttl_without_param_err() {
         let params = vec!["ttl".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1143,7 +1143,7 @@ mod test {
     #[test]
     fn generate_command_ttl_ok() {
         let params = vec!["ttl".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1157,7 +1157,7 @@ mod test {
     #[test]
     fn generate_command_type_without_param_err() {
         let params = vec!["type".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1165,7 +1165,7 @@ mod test {
     #[test]
     fn generate_command_type_ok() {
         let params = vec!["type".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
 
@@ -1180,12 +1180,12 @@ mod test {
     #[test]
     fn generate_command_incrby_without_param_err() {
         let params = vec!["incrby".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["incrby".to_string(), "key".to_string(), "hola".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1193,7 +1193,7 @@ mod test {
     #[test]
     fn generate_command_incrby_ok() {
         let params = vec!["incrby".to_string(), "key1".to_string(), "1".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key1".to_string();
 
@@ -1211,12 +1211,12 @@ mod test {
     #[test]
     fn generate_command_decrby_without_param_err() {
         let params = vec!["decrby".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["decrby".to_string(), "key".to_string(), "hola".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1224,7 +1224,7 @@ mod test {
     #[test]
     fn generate_command_decrby_ok() {
         let params = vec!["decrby".to_string(), "key1".to_string(), "1".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key1".to_string();
 
@@ -1242,7 +1242,7 @@ mod test {
     #[test]
     fn generate_command_getdel_without_param_err() {
         let params = vec!["getdel".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1250,7 +1250,7 @@ mod test {
     #[test]
     fn generate_command_getdel_ok() {
         let params = vec!["getdel".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1260,7 +1260,7 @@ mod test {
         });
 
         let params = vec!["getdel".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(match result.unwrap() {
             Command::Ping => false,
@@ -1271,7 +1271,7 @@ mod test {
     #[test]
     fn generate_command_append_without_param_err() {
         let params = vec!["append".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1279,7 +1279,7 @@ mod test {
     #[test]
     fn generate_command_append_ok() {
         let params = vec!["append".to_string(), "key".to_string(), "Value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _value = "Value".to_string();
@@ -1294,7 +1294,7 @@ mod test {
         });
 
         let params = vec!["append".to_string(), "key".to_string(), "Value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(match result.unwrap() {
             Command::Ping => false,
@@ -1305,7 +1305,7 @@ mod test {
     #[test]
     fn generate_command_with_command_dbsize() {
         let params = vec!["dbsize".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_ok());
         assert!(match result.unwrap() {
@@ -1317,17 +1317,17 @@ mod test {
     #[test]
     fn generate_command_lindex_incorrect_params_err() {
         let params = vec!["lindex".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["lindex".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["lindex".to_string(), "key".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
@@ -1337,7 +1337,7 @@ mod test {
             "1".to_string(),
             "value".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
     }
@@ -1345,7 +1345,7 @@ mod test {
     #[test]
     fn generate_command_lindex_ok() {
         let params = vec!["lindex".to_string(), "key".to_string(), "1".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _index = 1;
@@ -1359,7 +1359,7 @@ mod test {
         });
 
         let params = vec!["lindex".to_string(), "key".to_string(), "-1".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _index = -1;
@@ -1376,7 +1376,7 @@ mod test {
     #[test]
     fn generate_command_llen_without_param_err() {
         let params = vec!["llen".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1384,7 +1384,7 @@ mod test {
     #[test]
     fn generate_command_llen_ok() {
         let params = vec!["llen".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1397,7 +1397,7 @@ mod test {
     #[test]
     fn generate_command_lpop_without_param_err() {
         let params = vec!["lpop".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1405,7 +1405,7 @@ mod test {
     #[test]
     fn generate_command_lpop_without_param_count_not_u32_err() {
         let params = vec!["lpop".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1413,7 +1413,7 @@ mod test {
     #[test]
     fn generate_command_lpop_ok() {
         let params = vec!["lpop".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1426,7 +1426,7 @@ mod test {
         });
 
         let params = vec!["lpop".to_string(), "key".to_string(), "3".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1442,7 +1442,7 @@ mod test {
     #[test]
     fn generate_command_lrange_bad_params_err() {
         let params = vec!["lrange".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
@@ -1452,7 +1452,7 @@ mod test {
             "a".to_string(),
             "1".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
@@ -1462,7 +1462,7 @@ mod test {
             "1".to_string(),
             "a".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
@@ -1473,7 +1473,7 @@ mod test {
             "2".to_string(),
             "3".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
         assert!(result.is_err())
     }
 
@@ -1485,7 +1485,7 @@ mod test {
             "0".to_string(),
             "-1".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1508,12 +1508,12 @@ mod test {
             "element".to_string(),
             "element".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["lrem".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
@@ -1523,7 +1523,7 @@ mod test {
             "a".to_string(),
             "element".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
     }
@@ -1536,7 +1536,7 @@ mod test {
             "0".to_string(),
             "element".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _element = "element".to_string();
@@ -1561,12 +1561,12 @@ mod test {
             "element".to_string(),
             "element".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["lset".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
@@ -1576,7 +1576,7 @@ mod test {
             "a".to_string(),
             "element".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
     }
@@ -1589,7 +1589,7 @@ mod test {
             "1".to_string(),
             "Hola".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _index = "1".to_string();
@@ -1608,7 +1608,7 @@ mod test {
     #[test]
     fn generate_command_rpop_without_param_err() {
         let params = vec!["rpop".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1616,7 +1616,7 @@ mod test {
     #[test]
     fn generate_command_rpop_without_param_count_not_u32_err() {
         let params = vec!["rpop".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1624,7 +1624,7 @@ mod test {
     #[test]
     fn generate_command_rpop_ok() {
         let params = vec!["rpop".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1637,7 +1637,7 @@ mod test {
         });
 
         let params = vec!["rpop".to_string(), "key".to_string(), "3".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1653,12 +1653,12 @@ mod test {
     #[test]
     fn generate_command_lpush_incorrect_params_err() {
         let params = vec!["lpush".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["lpush".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1666,7 +1666,7 @@ mod test {
     #[test]
     fn generate_command_lpush_ok() {
         let params = vec!["lpush".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _value = vec!["value".to_string()];
@@ -1683,12 +1683,12 @@ mod test {
     #[test]
     fn generate_command_lpushx_incorrect_params_err() {
         let params = vec!["lpushx".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["lpushx".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1696,12 +1696,12 @@ mod test {
     #[test]
     fn generate_command_rpush_incorrect_params_err() {
         let params = vec!["rpush".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["rpush".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1709,7 +1709,7 @@ mod test {
     #[test]
     fn generate_command_rpush_ok() {
         let params = vec!["rpush".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _value = vec!["value".to_string()];
@@ -1726,12 +1726,12 @@ mod test {
     #[test]
     fn generate_command_rpushx_incorrect_params_err() {
         let params = vec!["rpushx".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["rpushx".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1739,12 +1739,12 @@ mod test {
     #[test]
     fn generate_command_sadd_incorrect_params_err() {
         let params = vec!["sadd".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["sadd".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1752,7 +1752,7 @@ mod test {
     #[test]
     fn generate_command_lpushx_ok() {
         let params = vec!["lpushx".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _value = vec!["value".to_string()];
@@ -1769,7 +1769,7 @@ mod test {
     #[test]
     fn generate_command_sadd_ok() {
         let params = vec!["sadd".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let mut _values = HashSet::new();
@@ -1788,7 +1788,7 @@ mod test {
     #[test]
     fn generate_command_scard_without_param_err() {
         let params = vec!["scard".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1796,7 +1796,7 @@ mod test {
     #[test]
     fn generate_command_scard_ok() {
         let params = vec!["scard".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1809,7 +1809,7 @@ mod test {
     #[test]
     fn generate_command_sismember_without_param_err() {
         let params = vec!["sismember".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1821,7 +1821,7 @@ mod test {
             "key".to_string(),
             "value".to_string(),
         ];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let _value = "value".to_string();
@@ -1839,12 +1839,12 @@ mod test {
     #[test]
     fn generate_command_srem_incorrect_params_err() {
         let params = vec!["srem".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err());
 
         let params = vec!["srem".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1852,7 +1852,7 @@ mod test {
     #[test]
     fn generate_command_srem_ok() {
         let params = vec!["srem".to_string(), "key".to_string(), "value".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         let mut _values = HashSet::new();
@@ -1871,7 +1871,7 @@ mod test {
     #[test]
     fn generate_command_smembers_without_param_err() {
         let params = vec!["smembers".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1879,7 +1879,7 @@ mod test {
     #[test]
     fn generate_command_smembers_ok() {
         let params = vec!["smembers".to_string(), "key".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _key = "key".to_string();
         assert!(result.is_ok());
@@ -1892,7 +1892,7 @@ mod test {
     #[test]
     fn generate_command_keys_ok() {
         let params = vec!["keys".to_string(), "/*".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _pattern = "/*".to_string();
         assert!(result.is_ok());
@@ -1905,7 +1905,7 @@ mod test {
     #[test]
     fn generate_command_store_without_param_err() {
         let params = vec!["store".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1913,7 +1913,7 @@ mod test {
     #[test]
     fn generate_command_store_ok() {
         let params = vec!["store".to_string(), "/store.file".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _path = "/store.file".to_string();
         assert!(result.is_ok());
@@ -1926,7 +1926,7 @@ mod test {
     #[test]
     fn generate_command_load_without_param_err() {
         let params = vec!["load".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         assert!(result.is_err())
     }
@@ -1934,7 +1934,7 @@ mod test {
     #[test]
     fn generate_command_load_ok() {
         let params = vec!["load".to_string(), "/store.file".to_string()];
-        let result = generate(params);
+        let result = generate(params, "client-test".to_string());
 
         let _path = "/store.file".to_string();
         assert!(result.is_ok());

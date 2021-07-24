@@ -117,7 +117,6 @@ impl Server {
                 client.set_read_timeout(Option::from(Duration::from_secs(timeout)))?;
             }
             let db_sender_clone: Sender<(Command, Sender<Response>)> = db_sender.clone();
-            //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
 
             let flag = Arc::new(AtomicBool::new(true));
             let used_flag = flag.clone();
@@ -162,11 +161,13 @@ impl Server {
         let mut output = client_output;
         let mut lines = input.lines();
 
+        let client_id = output.try_clone()?.local_addr()?.to_string();
+
         //TODO: ver error
         Server::connected_user(&db_sender_clone);
 
         // iteramos las lineas que recibimos de nuestro cliente
-        while let Some(request) = lines.next() {
+        'principal: while let Some(request) = lines.next() {
             //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
@@ -178,7 +179,7 @@ impl Server {
             }
             //TODO: FIN Agregar decode
 
-            let command = generate(vector);
+            let command = generate(vector, client_id.clone());
 
             // TODO: Agregar forma de escritura por cada tipo.
             match command {
@@ -194,20 +195,22 @@ impl Server {
                     match response {
                         Response::Normal(redis_string) => {
                             output.write_all((redis_string.to_string() + "\n").as_ref())?;
-                        }
+                        },
                         Response::Stream(rec) => {
-                            while let Ok(redis_element) = rec.recv() {
-                                output.write_all((redis_element.to_string() + "\n").as_ref())?;
-                                println!("msg");
+                            'inner: while let Ok(redis_element) = rec.recv() {
+                                if output.write_all((redis_element.to_string() + "\n").as_ref()).is_err() {
+                                    break 'inner;
+                                }
                             }
-                            println!("SALIO");
+
                             std::mem::drop(rec);
-                        }
+                            break 'principal;
+                        },
                         Response::Error(msg) => {
                             output.write_all((msg + "\n").as_ref())?;
-                        }
+                        },
                     }
-                }
+                },
                 _ => {
                     output.write_all((command.err().unwrap() + "\n").as_ref())?;
                 }

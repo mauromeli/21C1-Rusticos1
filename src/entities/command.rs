@@ -176,14 +176,15 @@ pub enum Command {
     },
     Subscribe {
         channels: Vec<String>,
-        //local_address: String,
+        client_id: String,
     },
     Publish {
         channel: String,
         message: String,
     },
     Unsubscribe {
-        channels: Vec<String>, //local_address: String,
+        channels: Vec<String>,
+        client_id: String,
     },
 }
 

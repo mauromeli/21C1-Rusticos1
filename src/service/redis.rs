@@ -24,8 +24,8 @@ pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
     log_sender: Sender<Log>,
     vec_senders: Vec<Sender<Re>>,
-    //pubsub
-    subscribers: HashMap<String, Vec<Sender<Re>>>,
+    subscribers: HashMap<String, Vec<(String, Sender<Re>)>>,
+    client_channel: HashMap<String, Vec<String>>,
     users_connected: u64,
     server_time: SystemTime,
 }
@@ -42,6 +42,7 @@ impl Redis {
             vec_senders,
             users_connected: 0,
             subscribers: HashMap::new(),
+            client_channel: HashMap::new(),
             server_time: SystemTime::now(),
         }
     }
@@ -58,6 +59,7 @@ impl Redis {
             vec_senders,
             users_connected: 0,
             subscribers: HashMap::new(),
+            client_channel: HashMap::new(),
             server_time: SystemTime::now(),
         }
     }
@@ -153,9 +155,9 @@ impl Redis {
 
             // Pubsub
             Command::Pubsub { param } => Ok(self.pubsub_method(param)),
-            Command::Subscribe { channels } => Ok(self.subscribe_method(channels)),
+            Command::Subscribe { channels, client_id } => Ok(self.subscribe_method(channels, client_id)),
             Command::Publish { channel, message } => Ok(self.publish_method(channel, message)),
-            Command::Unsubscribe { channels } => Err("Method not implemented".to_string()),
+            Command::Unsubscribe { channels, client_id } => Ok(self.unsubscribe_method(channels, client_id)),
         }
     }
 
@@ -239,7 +241,7 @@ impl Redis {
         Response::Normal(Re::List(vec_response))
     }
 
-    fn subscribe_method(&mut self, channels: Vec<String>) -> Response {
+    fn subscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -254,22 +256,36 @@ impl Redis {
 
             if let Some(vector) = self.subscribers.get_mut(&channel) {
                 vector_sender = vector.clone();
-                vector_sender.push(sen.clone());
+                vector_sender.push((client_id.clone(), sen.clone()));
             } else {
-                vector_sender = vec![sen.clone()];
+                vector_sender = vec![(client_id.clone(), sen.clone())];
             }
 
-            self.subscribers
-                .insert(channel.clone(), vector_sender.to_vec());
+            self.subscribers.insert(channel.clone(), vector_sender.to_vec());
             // TODO: Revisar que hacer con este
             let _result = sen.clone().send(Re::List(vec![
                 "subscribe".to_string(),
-                channel,
+                channel.clone(),
                 "1".to_string(),
             ]));
+
+
+            self.set_client_channels(client_id.clone(), channel);
         }
 
         Response::Stream(rec)
+    }
+
+    fn set_client_channels(&mut self, client_id: String, channel: String) {
+        let mut vector_channels;
+        if let Some(vector) = self.client_channel.get_mut(&client_id) {
+            vector_channels = vector.clone();
+            vector_channels.push(channel.clone());
+        } else {
+            vector_channels = vec![channel.clone()];
+        }
+
+        self.client_channel.insert(client_id.clone(), vector_channels.to_vec());
     }
 
     fn publish_method(&mut self, channel: String, msg: String) -> Response {
@@ -286,13 +302,73 @@ impl Redis {
         }
 
         if let Some(vector) = self.subscribers.get_mut(&channel) {
-            for x in vector {
-                // TODO: revisar salida
-                let _ = x.send(Re::String(msg.to_string()));
+            let mut empty_vec: Vec<(String, Sender<RedisElement>)> = Vec::new();
+            for (client, sender) in vector {
+                if sender.send(
+                    Re::List(vec!["message".to_string(), channel.clone(), msg.to_string()])
+                ).is_ok() {
+                    empty_vec.push((client.to_string(), sender.clone()));
+                } else {
+                    if let Some(vector) = self.client_channel.get_mut(client) {
+                        let mut vector_update: Vec<String> = Vec::new();
+                        for element in vector {
+                            if element.to_string() != channel {
+                                vector_update.push(element.to_string());
+                            }
+                        }
+                        self.client_channel.insert(client.to_string(), vector_update);
+                    }
+                }
             }
+
+            self.subscribers.insert(channel, empty_vec);
         }
 
         Response::Normal(Re::String("Ok".to_string()))
+    }
+
+    fn unsubscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
+        let _ = self.log_sender.send(Log::new(
+            LogLevel::Debug,
+            line!(),
+            column!(),
+            file!().to_string(),
+            "Command Unsubscribe Received".to_string(),
+        ));
+
+        let mut return_vec = Vec::new();
+        if let Some(subscribed_channels) = self.client_channel.get_mut(&client_id) {
+            let mut channels_to_keep = Vec::new();
+            let mut channels_to_delete = Vec::new();
+            for sub_channel in subscribed_channels {
+                if channels.iter().any(|i| *i == sub_channel.to_string()) {
+                    channels_to_delete.push(sub_channel.to_string());
+                    return_vec.push("unsubscribe".to_string());
+                    return_vec.push(sub_channel.to_string());
+                    return_vec.push("0".to_string());
+                } else {
+                    channels_to_keep.push(sub_channel.to_string());
+                }
+            }
+
+            self.client_channel.insert(client_id.clone(), channels_to_keep);
+
+            for channel in channels_to_delete {
+                if let Some(senders) = self.subscribers.get(&channel) {
+                    let mut vec_senders: Vec<(String, Sender<Re>)> = Vec::new();
+                    for (client, sender) in senders {
+                        if client_id != client.to_string() {
+                            vec_senders.push((client.to_string(), sender.clone()));
+                        }
+                    }
+                    self.subscribers.insert(channel, vec_senders);
+                }
+            }
+
+            return Response::Normal(Re::List(return_vec))
+        }
+
+        Response::Normal(Re::List(vec!["unsubscribe".to_string(), "nil".to_string(), "0".to_string()]))
     }
 
     fn addclient_method(&mut self) -> Response {
@@ -364,24 +440,18 @@ impl Redis {
     }
 
     fn notify_monitor(&mut self, command: &Command) {
-        /*
-            let empty_vec = vec<sender>
-            for sender in vec_senders {
-                match let result = sender.send(command.to_string()) {
-                    Ok(_) => empty_vec.push(sender),
-                    Err(_) => _,
-                }
-            }
-            Similar al flag del otro.
-        */
+        let mut empty_vec: Vec<Sender<Re>> = Vec::new();
 
         for sender in &self.vec_senders {
-            // TODO: Revisar que hacer con este porque queda viviendo y el send no muere
             let command_str = command.as_str().to_string();
             if !command_str.is_empty() {
-                let _result = sender.send(Re::String(command_str));
+                if sender.send(Re::String(command_str)).is_ok() {
+                    empty_vec.push(sender.clone());
+                }
             }
         }
+
+        self.vec_senders = empty_vec;
     }
 
     fn monitor_method(&mut self) -> Result<Response, String> {
@@ -2804,7 +2874,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -2857,7 +2927,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -2974,7 +3044,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(),]),
+            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
             rpop.unwrap(),
         ));
 
@@ -3821,12 +3891,8 @@ mod test {
         let get = redis.execute(Command::Get { key });
         assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
 
-        println!("{:?}", redis);
-
         let flushdb = redis.execute(Command::Flushdb);
         assert!(flushdb.is_ok());
-
-        println!("{:?}", redis);
 
         let key = "key".to_string();
         let get = redis.execute(Command::Get { key });
