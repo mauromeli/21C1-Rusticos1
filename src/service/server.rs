@@ -18,6 +18,10 @@ use std::time::Duration;
 
 static STORE_TIME_SEC: u64 = 120;
 
+type VecHandler = Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)>;
+type DbSender = Sender<(Command, Sender<Response>)>;
+type DbReceiver = Receiver<(Command, Sender<Response>)>;
+
 #[derive(Debug)]
 pub struct Server {
     redis: Redis,
@@ -79,10 +83,7 @@ impl Server {
 
     fn server_run(self, address: &str) -> io::Result<()> {
         let listener = TcpListener::bind(address)?;
-        let (db_sender, db_receiver): (
-            Sender<(Command, Sender<Response>)>,
-            Receiver<(Command, Sender<Response>)>,
-        ) = mpsc::channel();
+        let (db_sender, db_receiver): (DbSender, DbReceiver) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
         let timeout = self.config.lock().unwrap().get_timeout();
@@ -98,7 +99,7 @@ impl Server {
 
         self.db_thread(db_receiver);
 
-        let mut handlers: Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)> = vec![];
+        let mut handlers: VecHandler = vec![];
 
         while let Ok(connection) = listener.accept() {
             //accepter thread
@@ -117,7 +118,6 @@ impl Server {
                 client.set_read_timeout(Option::from(Duration::from_secs(timeout)))?;
             }
             let db_sender_clone: Sender<(Command, Sender<Response>)> = db_sender.clone();
-            //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
 
             let flag = Arc::new(AtomicBool::new(true));
             let used_flag = flag.clone();
@@ -127,10 +127,8 @@ impl Server {
             });
             handlers.push((handler, flag));
 
-            let mut handlers_actives: Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)> =
-                vec![];
-            let mut handlers_inactives: Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)> =
-                vec![];
+            let mut handlers_actives: VecHandler = vec![];
+            let mut handlers_inactives: VecHandler = vec![];
             for (handler, used) in handlers {
                 if used.load(Ordering::Relaxed) {
                     handlers_actives.push((handler, used));
@@ -162,11 +160,13 @@ impl Server {
         let mut output = client_output;
         let mut lines = input.lines();
 
+        let client_id = output.try_clone()?.local_addr()?.to_string();
+
         //TODO: ver error
         Server::connected_user(&db_sender_clone);
 
         // iteramos las lineas que recibimos de nuestro cliente
-        while let Some(request) = lines.next() {
+        'principal: while let Some(request) = lines.next() {
             //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
@@ -178,7 +178,7 @@ impl Server {
             }
             //TODO: FIN Agregar decode
 
-            let command = generate(vector);
+            let command = generate(vector, client_id.clone());
 
             // TODO: Agregar forma de escritura por cada tipo.
             match command {
@@ -193,23 +193,28 @@ impl Server {
 
                     match response {
                         Response::Normal(redis_string) => {
-                            output.write((redis_string.to_string() + "\n").as_ref())?;
+                            output.write_all((redis_string.to_string() + "\n").as_ref())?;
                         }
                         Response::Stream(rec) => {
-                            while let Ok(redis_element) = rec.recv() {
-                                output.write((redis_element.to_string() + "\n").as_ref())?;
-                                println!("msg");
+                            'inner: while let Ok(redis_element) = rec.recv() {
+                                if output
+                                    .write_all((redis_element.to_string() + "\n").as_ref())
+                                    .is_err()
+                                {
+                                    break 'inner;
+                                }
                             }
-                            println!("SALIO");
+
                             std::mem::drop(rec);
+                            break 'principal;
                         }
                         Response::Error(msg) => {
-                            output.write((msg + "\n").as_ref())?;
+                            output.write_all((msg + "\n").as_ref())?;
                         }
                     }
                 }
                 _ => {
-                    output.write((command.err().unwrap() + "\n").as_ref())?;
+                    output.write_all((command.err().unwrap() + "\n").as_ref())?;
                 }
             };
         }

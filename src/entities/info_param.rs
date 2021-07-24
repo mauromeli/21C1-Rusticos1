@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub enum InfoParam {
-    ProcessID,
+    ProcessId,
     Port,
     ServerTime,
     Uptime,
