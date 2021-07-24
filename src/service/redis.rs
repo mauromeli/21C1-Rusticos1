@@ -162,15 +162,16 @@ impl Redis {
     }
 
     fn pubsub_method(&mut self, param: PubSubParam) -> Response {
-        match param {
-            PubSubParam::Channels => self.channels_method(),
-            PubSubParam::ChannelsWithChannel(channel) => self.channels_with_channel_method(channel),
-            PubSubParam::Numsub => self.numsub_method(),
-            PubSubParam::NumsubWithChannels(channels) => self.numsub_with_channels_method(channels),
-        }
+        Response::Normal(
+            match param {
+                PubSubParam::Channels => self.channels_method(),
+                PubSubParam::ChannelsWithChannel(channel) => self.channels_with_channel_method(channel),
+                PubSubParam::Numsub => self.numsub_method(),
+                PubSubParam::NumsubWithChannels(channels) => self.numsub_with_channels_method(channels),
+            })
     }
 
-    fn channels_method(&mut self) -> Response {
+    fn channels_method(&mut self) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -184,10 +185,10 @@ impl Redis {
             vec_response.push(key.to_string());
         }
 
-        Response::Normal(Re::List(vec_response))
+        Re::List(vec_response)
     }
 
-    fn channels_with_channel_method(&mut self, channel: String) -> Response {
+    fn channels_with_channel_method(&mut self, channel: String) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -203,10 +204,10 @@ impl Redis {
             }
         }
 
-        Response::Normal(Re::List(vec_response))
+        Re::List(vec_response)
     }
 
-    fn numsub_method(&mut self) -> Response {
+    fn numsub_method(&mut self) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -215,10 +216,10 @@ impl Redis {
             "Command Pubsub Numsub Received".to_string(),
         ));
 
-        Response::Normal(Re::List(vec![]))
+        Re::List(vec![])
     }
 
-    fn numsub_with_channels_method(&mut self, channels: Vec<String>) -> Response {
+    fn numsub_with_channels_method(&mut self, channels: Vec<String>) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -228,17 +229,18 @@ impl Redis {
         ));
 
         let mut vec_response = vec![];
-        for (key, value) in self.subscribers.iter() {
-            if channels.iter().any(|i| i.to_string() == key.to_string()) {
-                vec_response.push(key.to_string());
+
+        for channel in channels {
+            if let Some(value) = self.subscribers.get(&channel) {
+                vec_response.push(channel.to_string());
                 vec_response.push(value.len().to_string());
             } else {
-                vec_response.push(key.to_string());
+                vec_response.push(channel.to_string());
                 vec_response.push("0".to_string());
             }
         }
 
-        Response::Normal(Re::List(vec_response))
+        Re::List(vec_response)
     }
 
     fn subscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
@@ -365,7 +367,7 @@ impl Redis {
                 }
             }
 
-            return Response::Normal(Re::List(return_vec))
+            return Response::Normal(Re::List(return_vec));
         }
 
         Response::Normal(Re::List(vec!["unsubscribe".to_string(), "nil".to_string(), "0".to_string()]))
