@@ -6,6 +6,7 @@ use crate::entities::pubsub_param::PubSubParam;
 use crate::entities::redis_element::{RedisElement as Re, RedisElement};
 use crate::entities::response::Response;
 use crate::entities::ttl_hash_map::TtlHashMap;
+use crate::service::timestamp_to_string::timestamp_to_string;
 use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -317,14 +318,13 @@ impl Redis {
             InfoParam::ConnectedClients => Ok(Response::Normal(RedisElement::String(
                 self.users_connected.to_string(),
             ))),
-            InfoParam::Port => Err("Not Implemented".to_string()),
-            InfoParam::ConfigFile => Err("Not Implemented".to_string()),
+            InfoParam::Port => Err("Not Implemented".to_string()), //self.config.lock().unwrap().get_port()
+            InfoParam::ConfigFile => Err("Not Implemented".to_string()), //self.config.lock().unwrap().get_configfile()
             InfoParam::Uptime => self.get_server_uptime(),
-            InfoParam::ServerTime => Err("Not Implemented".to_string()),
-            InfoParam::ProcessID => Ok(Response::Normal(RedisElement::String(
-                process::id().to_string(),
-            ))),
-            _ => Err("Not Implemented".to_string()),
+            InfoParam::ServerTime => Ok(Response::Normal(Re::String(timestamp_to_string(
+                SystemTime::now(),
+            )))),
+            InfoParam::ProcessID => Ok(Response::Normal(Re::String(process::id().to_string()))),
         }
     }
 
@@ -2805,7 +2805,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -2858,7 +2858,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -2975,7 +2975,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
+            Re::List(vec!["value".to_string(), "value2".to_string(),]),
             rpop.unwrap(),
         ));
 
@@ -3789,7 +3789,7 @@ mod test {
         let keys = redis.execute(Command::Keys { pattern });
 
         assert!(eq_response(Re::String("0".to_string()), touch.unwrap()));
-        assert!(eq_response( Re::List(Vec::new()), keys.unwrap()));
+        assert!(eq_response(Re::List(Vec::new()), keys.unwrap()));
     }
 
     #[test]
