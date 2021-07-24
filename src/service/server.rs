@@ -193,23 +193,23 @@ impl Server {
 
                     match response {
                         Response::Normal(redis_string) => {
-                            output.write((redis_string.to_string() + "\n").as_ref())?;
+                            output.write_all((redis_string.to_string() + "\n").as_ref())?;
                         }
                         Response::Stream(rec) => {
                             while let Ok(redis_element) = rec.recv() {
-                                output.write((redis_element.to_string() + "\n").as_ref())?;
+                                output.write_all((redis_element.to_string() + "\n").as_ref())?;
                                 println!("msg");
                             }
                             println!("SALIO");
                             std::mem::drop(rec);
                         }
                         Response::Error(msg) => {
-                            output.write((msg + "\n").as_ref())?;
+                            output.write_all((msg + "\n").as_ref())?;
                         }
                     }
                 }
                 _ => {
-                    output.write((command.err().unwrap() + "\n").as_ref())?;
+                    output.write_all((command.err().unwrap() + "\n").as_ref())?;
                 }
             };
         }

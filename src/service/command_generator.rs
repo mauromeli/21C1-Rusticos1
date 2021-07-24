@@ -104,7 +104,7 @@ fn generate_info(params: Vec<String>) -> Result<Command, String> {
 
     match params[0].to_lowercase().as_str() {
         "processid" => Ok(Command::Info {
-            param: InfoParam::ProcessID,
+            param: InfoParam::ProcessId,
         }),
         "port" => Ok(Command::Info {
             param: InfoParam::Port,

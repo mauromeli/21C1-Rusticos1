@@ -68,7 +68,7 @@ impl Redis {
 
         match command {
             // Server
-            Command::Ping => self.ping_method(),
+            Command::Ping => Ok(self.ping_method()),
             Command::Flushdb => Ok(self.flushdb_method()),
             Command::Dbsize => Ok(self.dbsize_method()),
             Command::Monitor => self.monitor_method(),
@@ -152,14 +152,14 @@ impl Redis {
             Command::Srem { key, values } => self.srem_method(key, values),
 
             // Pubsub
-            Command::Pubsub { param } => self.pubsub_method(param),
-            Command::Subscribe { channels } => self.subscribe_method(channels),
-            Command::Publish { channel, message } => self.publish_method(channel, message),
+            Command::Pubsub { param } => Ok(self.pubsub_method(param)),
+            Command::Subscribe { channels } => Ok(self.subscribe_method(channels)),
+            Command::Publish { channel, message } => Ok(self.publish_method(channel, message)),
             Command::Unsubscribe { channels } => Err("Method not implemented".to_string()),
         }
     }
 
-    fn pubsub_method(&mut self, param: PubSubParam) -> Result<Response, String> {
+    fn pubsub_method(&mut self, param: PubSubParam) -> Response {
         match param {
             PubSubParam::Channels => self.channels_method(),
             PubSubParam::ChannelsWithChannel(channel) => self.channels_with_channel_method(channel),
@@ -168,7 +168,7 @@ impl Redis {
         }
     }
 
-    fn channels_method(&mut self) -> Result<Response, String> {
+    fn channels_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -182,10 +182,10 @@ impl Redis {
             vec_response.push(key.to_string());
         }
 
-        Ok(Response::Normal(Re::List(vec_response)))
+        Response::Normal(Re::List(vec_response))
     }
 
-    fn channels_with_channel_method(&mut self, channel: String) -> Result<Response, String> {
+    fn channels_with_channel_method(&mut self, channel: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -201,10 +201,10 @@ impl Redis {
             }
         }
 
-        Ok(Response::Normal(Re::List(vec_response)))
+        Response::Normal(Re::List(vec_response))
     }
 
-    fn numsub_method(&mut self) -> Result<Response, String> {
+    fn numsub_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -213,10 +213,10 @@ impl Redis {
             "Command Pubsub Numsub Received".to_string(),
         ));
 
-        Ok(Response::Normal(Re::List(vec![])))
+        Response::Normal(Re::List(vec![]))
     }
 
-    fn numsub_with_channels_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+    fn numsub_with_channels_method(&mut self, channels: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -236,10 +236,10 @@ impl Redis {
             }
         }
 
-        Ok(Response::Normal(Re::List(vec_response)))
+        Response::Normal(Re::List(vec_response))
     }
 
-    fn subscribe_method(&mut self, channels: Vec<String>) -> Result<Response, String> {
+    fn subscribe_method(&mut self, channels: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -268,10 +268,11 @@ impl Redis {
                 "1".to_string(),
             ]));
         }
-        return Ok(Response::Stream(rec));
+
+        Response::Stream(rec)
     }
 
-    fn publish_method(&mut self, channel: String, msg: String) -> Result<Response, String> {
+    fn publish_method(&mut self, channel: String, msg: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -281,7 +282,7 @@ impl Redis {
         ));
 
         if !self.subscribers.contains_key(&channel) {
-            return Ok(Response::Normal(Re::String("0".to_string())));
+            return Response::Normal(Re::String("0".to_string()));
         }
 
         if let Some(vector) = self.subscribers.get_mut(&channel) {
@@ -291,7 +292,7 @@ impl Redis {
             }
         }
 
-        Ok(Response::Normal(Re::String("Ok".to_string())))
+        Response::Normal(Re::String("Ok".to_string()))
     }
 
     fn addclient_method(&mut self) -> Response {
@@ -321,10 +322,9 @@ impl Redis {
             InfoParam::ConfigFile => Err("Not Implemented".to_string()),
             InfoParam::Uptime => self.get_server_uptime(),
             InfoParam::ServerTime => Err("Not Implemented".to_string()),
-            InfoParam::ProcessID => Ok(Response::Normal(RedisElement::String(
+            InfoParam::ProcessId => Ok(Response::Normal(RedisElement::String(
                 process::id().to_string(),
             ))),
-            _ => Err("Not Implemented".to_string()),
         }
     }
 
@@ -351,7 +351,7 @@ impl Redis {
         Response::Normal(Re::String(self.db.len().to_string()))
     }
 
-    fn ping_method(&mut self) -> Result<Response, String> {
+    fn ping_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -360,7 +360,7 @@ impl Redis {
             "Command PING Received".to_string(),
         ));
 
-        Ok(Response::Normal(Re::String("PONG".to_string())))
+        Response::Normal(Re::String("PONG".to_string()))
     }
 
     fn notify_monitor(&mut self, command: &Command) {
@@ -378,7 +378,7 @@ impl Redis {
         for sender in &self.vec_senders {
             // TODO: Revisar que hacer con este porque queda viviendo y el send no muere
             let command_str = command.as_str().to_string();
-            if command_str != "" {
+            if !command_str.is_empty() {
                 let _result = sender.send(Re::String(command_str));
             }
         }
@@ -401,8 +401,7 @@ impl Redis {
         match result {
             Ok(_) => {
                 self.vec_senders.push(sen);
-
-                return Ok(Response::Stream(rec));
+                Ok(Response::Stream(rec))
             }
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
@@ -2805,7 +2804,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -2858,7 +2857,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -2975,7 +2974,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
+            Re::List(vec!["value".to_string(), "value2".to_string(),]),
             rpop.unwrap(),
         ));
 
@@ -3789,7 +3788,7 @@ mod test {
         let keys = redis.execute(Command::Keys { pattern });
 
         assert!(eq_response(Re::String("0".to_string()), touch.unwrap()));
-        assert!(eq_response( Re::List(Vec::new()), keys.unwrap()));
+        assert!(eq_response(Re::List(Vec::new()), keys.unwrap()));
     }
 
     #[test]

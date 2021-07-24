@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 #[allow(dead_code)]
+/// Command: Enum usado para representar los comandos que puede ejecutar nuestra base de datos redis.
 pub enum Command {
     // Server
     Ping,
