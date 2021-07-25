@@ -312,12 +312,12 @@ impl Iterator for LinesIterator<'_> {
 
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         let mut buf = String::new();
-        while self.input.read_line(&mut buf).unwrap() != 0 {
+        while self.input.read_line(&mut buf).ok()? != 0 {
             if let Ok(result) = decode(buf.as_bytes(), 0) {
                 let (data, _) = result;
                 return Some(data);
             }
         }
-        Some(TypeData::Nil)
+        Some(TypeData::Error("Se ha producido un error".to_string()))
     }
 }

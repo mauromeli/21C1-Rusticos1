@@ -2,7 +2,7 @@ use crate::protocol::decode::TypeData;
 
 pub fn encode(data: TypeData) -> Vec<u8> {
     match data {
-        TypeData::String(ref string) => {
+        TypeData::String(string) => {
             let bytes = [
                 "+".to_string().as_bytes(),
                 string.as_bytes(),
@@ -11,7 +11,7 @@ pub fn encode(data: TypeData) -> Vec<u8> {
             .concat();
             bytes
         }
-        TypeData::Error(ref error) => {
+        TypeData::Error(error) => {
             let bytes = [
                 "-".to_string().as_bytes(),
                 error.as_bytes(),
@@ -20,7 +20,7 @@ pub fn encode(data: TypeData) -> Vec<u8> {
             .concat();
             bytes
         }
-        TypeData::Integer(ref int) => {
+        TypeData::Integer(int) => {
             let bytes = [
                 ":".to_string().as_bytes(),
                 int.to_string().as_bytes(),
@@ -29,7 +29,7 @@ pub fn encode(data: TypeData) -> Vec<u8> {
             .concat();
             bytes
         }
-        TypeData::BulkString(ref bulk) => {
+        TypeData::BulkString(bulk) => {
             let bytes = [
                 "$".to_string().as_bytes(),
                 bulk.len().to_string().as_bytes(),
@@ -40,7 +40,7 @@ pub fn encode(data: TypeData) -> Vec<u8> {
             .concat();
             bytes
         }
-        TypeData::Array(ref array) => {
+        TypeData::Array(array) => {
             let mut bytes = [
                 "*".to_string().as_bytes(),
                 array.len().to_string().as_bytes(),
@@ -53,7 +53,14 @@ pub fn encode(data: TypeData) -> Vec<u8> {
             }
             bytes
         }
-        _ => Vec::new(),
+        TypeData::Nil => {
+            let bytes = [
+                "$".to_string().as_bytes(),
+                "-1".to_string().as_bytes(),
+                "\r\n".as_bytes(),
+            ].concat();
+            bytes
+        }
     }
 }
 
