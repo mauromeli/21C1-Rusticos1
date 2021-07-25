@@ -22,9 +22,6 @@ pub fn parse_response_error(error: String) -> Vec<u8> {
 fn parse_response(redis_element: RedisElement) -> TypeData {
     match redis_element {
         RedisElement::String(string) => {
-            if string == "OK" || string == "PONG" {
-                return TypeData::String(string);
-            }
             let number = string.parse::<i64>();
             match number {
                 Ok(number) => TypeData::Integer(number),
@@ -34,7 +31,7 @@ fn parse_response(redis_element: RedisElement) -> TypeData {
         RedisElement::List(list) => parse_list_and_set(list),
         RedisElement::Set(set) => parse_list_and_set(Vec::from_iter(set)),
         RedisElement::Nil => TypeData::Nil,
-        RedisElement::SpecialString(string) => {
+        RedisElement::SimpleString(string) => {
             return TypeData::String(string);
         }
     }

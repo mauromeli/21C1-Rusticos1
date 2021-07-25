@@ -177,7 +177,7 @@ mod test {
     fn check_default_config_values() {
         let config = Config::new();
         assert_eq!("0", config.get_verbose());
-        assert_eq!("6379", config.get_port());
+        assert_eq!("8080", config.get_port());
         assert_eq!(0, config.get_timeout());
         assert_eq!("dump.rdb".to_string(), config.get_dbfilename());
         assert_eq!("log.log".to_string(), config.get_logfile());

@@ -209,3 +209,19 @@
 [INFO]  - 19:17:44 - src/service/server.rs - 113:21 - =======New Client Connected======
 [DEBUG] - 19:17:46 - src/service/redis.rs - 477:13 - Command PING Received
 [DEBUG] - 19:19:36 - src/service/redis.rs - 1816:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 19:36:03 - src/service/redis.rs - 1854:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 19:36:03 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 19:36:03 - src/service/redis.rs - 1816:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 19:36:04 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 19:36:06 - src/service/redis.rs - 477:13 - Command PING Received
+[DEBUG] - 19:36:12 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 19:36:18 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 19:38:03 - src/service/redis.rs - 1816:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 19:38:44 - src/service/redis.rs - 1854:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 19:38:44 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 19:38:44 - src/service/redis.rs - 1816:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 19:38:49 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 19:38:56 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 19:39:03 - src/service/redis.rs - 660:13 - Command SET Received - key: lala
+[DEBUG] - 19:39:43 - src/service/redis.rs - 503:13 - Command MONITOR Received
+[DEBUG] - 19:40:44 - src/service/redis.rs - 1816:13 - Command STORE Received - path: dump.rdb
