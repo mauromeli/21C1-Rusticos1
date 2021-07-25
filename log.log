@@ -334,3 +334,208 @@
 [DEBUG] - 02:53:24 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
 [DEBUG] - 02:53:24 - src/service/server.rs - 67:17 - =======Server Start Running======
 [DEBUG] - 02:53:24 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 02:58:12 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 02:58:12 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 02:58:12 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 02:59:55 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 03:00:12 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:02:12 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:04:07 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 03:04:07 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 03:04:07 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 03:04:41 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 03:06:04 - src/service/redis.rs - 535:13 - Command FLUSHDB Received
+[DEBUG] - 03:06:07 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:08:04 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 03:08:04 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 03:08:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 03:08:12 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 03:08:27 - src/service/redis.rs - 796:13 - Command DEL Received - keys: key
+[DEBUG] - 03:08:31 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:08:38 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 03:08:43 - src/service/redis.rs - 796:13 - Command DEL Received - keys: key
+[DEBUG] - 03:08:46 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:09:01 - src/service/redis.rs - 856:13 - Command EXISTS Received - key: key
+[DEBUG] - 03:09:10 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 03:09:12 - src/service/redis.rs - 856:13 - Command EXISTS Received - key: key
+[DEBUG] - 03:09:30 - src/service/redis.rs - 875:13 - Command EXPIRE Received - key: key
+[DEBUG] - 03:09:57 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:10:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:10:23 - src/service/redis.rs - 1796:13 - Command KEYS Received
+[DEBUG] - 03:11:25 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 03:11:44 - src/service/redis.rs - 924:13 - Command RENAME Received - key origin: key - key destination: sofia
+[DEBUG] - 03:11:44 - src/service/redis.rs - 764:13 - Command GETDEL Received - keys: key
+[DEBUG] - 03:11:44 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:11:44 - src/service/redis.rs - 660:13 - Command SET Received - key: sofia
+[DEBUG] - 03:11:48 - src/service/redis.rs - 577:13 - Command GET Received - key: sofia
+[DEBUG] - 03:11:51 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:12:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:12:10 - src/service/redis.rs - 924:13 - Command RENAME Received - key origin: key - key destination: hola
+[DEBUG] - 03:12:10 - src/service/redis.rs - 764:13 - Command GETDEL Received - keys: key
+[DEBUG] - 03:12:10 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:12:10 - src/service/redis.rs - 660:13 - Command SET Received - key: hola
+[DEBUG] - 03:12:15 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:12:17 - src/service/redis.rs - 577:13 - Command GET Received - key: hola
+[DEBUG] - 03:14:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:15:59 - src/service/redis.rs - 924:13 - Command RENAME Received - key origin: nueva - key destination: otra
+[DEBUG] - 03:15:59 - src/service/redis.rs - 764:13 - Command GETDEL Received - keys: nueva
+[DEBUG] - 03:15:59 - src/service/redis.rs - 577:13 - Command GET Received - key: nueva
+[DEBUG] - 03:15:59 - src/service/redis.rs - 660:13 - Command SET Received - key: otra
+[DEBUG] - 03:16:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:18:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:20:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:22:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:24:04 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:24:34 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 03:24:34 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 03:24:34 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 03:24:47 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 03:24:52 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:24:57 - src/service/redis.rs - 796:13 - Command DEL Received - keys: key
+[DEBUG] - 03:25:03 - src/service/redis.rs - 924:13 - Command RENAME Received - key origin: key - key destination: newkey
+[DEBUG] - 03:25:03 - src/service/redis.rs - 764:13 - Command GETDEL Received - keys: key
+[DEBUG] - 03:25:03 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[ERROR] - 03:25:03 - src/service/redis.rs - 940:21 - ERR no such key
+[DEBUG] - 03:26:34 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:28:26 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:28:31 - src/service/redis.rs - 953:13 - Command SORT Received - key: lista
+[ERROR] - 03:28:31 - src/service/redis.rs - 988:21 - ERR One or more scores can't be converted into double
+[DEBUG] - 03:28:34 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:30:23 - src/service/redis.rs - 577:13 - Command GET Received - key: lista
+[ERROR] - 03:30:23 - src/service/redis.rs - 589:25 - WRONGTYPE Operation against a key holding the wrong kind of value
+[DEBUG] - 03:30:28 - src/service/redis.rs - 796:13 - Command DEL Received - keys: lista
+[DEBUG] - 03:30:34 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:30:38 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:30:48 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:30:52 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:30:55 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:30:57 - src/service/redis.rs - 577:13 - Command GET Received - key: lista
+[ERROR] - 03:30:57 - src/service/redis.rs - 589:25 - WRONGTYPE Operation against a key holding the wrong kind of value
+[DEBUG] - 03:31:46 - src/service/redis.rs - 1285:13 - Command LRANGE Received - key: lista
+[DEBUG] - 03:31:52 - src/service/redis.rs - 953:13 - Command SORT Received - key: lista
+[DEBUG] - 03:32:01 - src/service/redis.rs - 953:13 - Command SORT Received - key: jua
+[DEBUG] - 03:32:34 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:35:15 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 03:35:15 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 03:35:15 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 03:35:34 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 03:35:40 - src/service/redis.rs - 953:13 - Command SORT Received - key: jua
+[DEBUG] - 03:36:35 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: unalistaquenoexiste
+[DEBUG] - 03:36:49 - src/service/redis.rs - 796:13 - Command DEL Received - keys: unalistaquenoexiste
+[DEBUG] - 03:36:54 - src/service/redis.rs - 1243:13 - Command LPUSHX Received - key: unalistaquenoexiste
+[DEBUG] - 03:37:04 - src/service/redis.rs - 1243:13 - Command LPUSHX Received - key: lista
+[DEBUG] - 03:37:15 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:37:21 - src/service/redis.rs - 1285:13 - Command LRANGE Received - key: lista
+[DEBUG] - 03:37:32 - src/service/redis.rs - 953:13 - Command SORT Received - key: lista
+[ERROR] - 03:37:32 - src/service/redis.rs - 988:21 - ERR One or more scores can't be converted into double
+[DEBUG] - 03:38:23 - src/service/redis.rs - 1339:13 - Command LREM Received - key: lista
+[DEBUG] - 03:38:28 - src/service/redis.rs - 1285:13 - Command LRANGE Received - key: lista
+[DEBUG] - 03:38:36 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:38:37 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:38:38 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:38:46 - src/service/redis.rs - 1339:13 - Command LREM Received - key: lista
+[DEBUG] - 03:38:48 - src/service/redis.rs - 1285:13 - Command LRANGE Received - key: lista
+[DEBUG] - 03:38:55 - src/service/redis.rs - 1339:13 - Command LREM Received - key: lista
+[DEBUG] - 03:38:57 - src/service/redis.rs - 1199:13 - Command LPUSH Received - key: lista
+[DEBUG] - 03:39:01 - src/service/redis.rs - 1339:13 - Command LREM Received - key: lista
+[DEBUG] - 03:39:03 - src/service/redis.rs - 1285:13 - Command LRANGE Received - key: lista
+[DEBUG] - 03:39:15 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:39:46 - src/service/redis.rs - 1339:13 - Command LREM Received - key: unalista
+[DEBUG] - 03:40:04 - src/service/redis.rs - 1418:13 - Command LSET Received - key: unalista
+[ERROR] - 03:40:04 - src/service/redis.rs - 1465:21 - ERR no such key
+[DEBUG] - 03:40:33 - src/service/redis.rs - 1418:13 - Command LSET Received - key: lista
+[DEBUG] - 03:40:37 - src/service/redis.rs - 1285:13 - Command LRANGE Received - key: lista
+[DEBUG] - 03:41:15 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:41:27 - src/service/redis.rs - 1478:13 - Command RPOP Received - key: keke
+[DEBUG] - 03:41:34 - src/service/redis.rs - 1478:13 - Command RPOP Received - key: lista
+[DEBUG] - 03:42:20 - src/service/redis.rs - 1605:13 - Command SADD Received - key: set
+[DEBUG] - 03:42:30 - src/service/redis.rs - 1645:13 - Command SCARD Received - key: set
+[DEBUG] - 03:42:48 - src/service/redis.rs - 1645:13 - Command SCARD Received - key: noexiste
+[DEBUG] - 03:43:14 - src/service/redis.rs - 1676:13 - Command SISMEMBER Received - key: set
+[DEBUG] - 03:43:15 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:43:23 - src/service/redis.rs - 1676:13 - Command SISMEMBER Received - key: set
+[DEBUG] - 03:43:36 - src/service/redis.rs - 1720:13 - Command SMEMBERS Received - key: ser
+[ERROR] - 03:43:36 - src/service/redis.rs - 1746:21 - The key doesn't exist
+[DEBUG] - 03:43:39 - src/service/redis.rs - 1720:13 - Command SMEMBERS Received - key: set
+[DEBUG] - 03:45:15 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:45:30 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 03:45:30 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 03:45:30 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 03:45:33 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 03:45:35 - src/service/redis.rs - 1720:13 - Command SMEMBERS Received - key: n
+[ERROR] - 03:45:35 - src/service/redis.rs - 1746:21 - The key doesn't exist
+[DEBUG] - 03:45:39 - src/service/redis.rs - 1720:13 - Command SMEMBERS Received - key: set
+[DEBUG] - 03:46:11 - src/service/redis.rs - 1759:13 - Command SREM Received - key: n
+[DEBUG] - 03:46:26 - src/service/redis.rs - 1645:13 - Command SCARD Received - key: set
+[DEBUG] - 03:46:34 - src/service/redis.rs - 1605:13 - Command SADD Received - key: set
+[DEBUG] - 03:46:42 - src/service/redis.rs - 1720:13 - Command SMEMBERS Received - key: set
+[DEBUG] - 03:46:51 - src/service/redis.rs - 1759:13 - Command SREM Received - key: set
+[DEBUG] - 03:46:52 - src/service/redis.rs - 1720:13 - Command SMEMBERS Received - key: set
+[DEBUG] - 03:47:25 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:47:31 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:47:52 - src/service/redis.rs - 1008:13 - Command TOUCH Received - keys: key - nuevakey
+[DEBUG] - 03:48:15 - src/service/redis.rs - 1008:13 - Command TOUCH Received - keys: key - valor
+[DEBUG] - 03:48:26 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 03:48:31 - src/service/redis.rs - 1008:13 - Command TOUCH Received - keys: key
+[DEBUG] - 03:48:31 - src/service/redis.rs - 1023:25 - Key key previous access: 5 secs ago.
+[DEBUG] - 03:48:35 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:49:06 - src/service/redis.rs - 1038:13 - Command TTL Received - key: key
+[DEBUG] - 03:49:21 - src/service/redis.rs - 1038:13 - Command TTL Received - key: nan
+[DEBUG] - 03:49:31 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:49:58 - src/service/redis.rs - 1058:13 - Command TYPE Received - key: key
+[DEBUG] - 03:50:41 - src/service/redis.rs - 660:13 - Command SET Received - key: number
+[DEBUG] - 03:50:45 - src/service/redis.rs - 1058:13 - Command TYPE Received - key: number
+[DEBUG] - 03:51:31 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:52:03 - src/service/redis.rs - 816:13 - Command APPEND Received - key: key
+[DEBUG] - 03:52:03 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:52:03 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 03:52:07 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:52:19 - src/service/redis.rs - 816:13 - Command APPEND Received - key: alalal
+[DEBUG] - 03:52:19 - src/service/redis.rs - 577:13 - Command GET Received - key: alalal
+[DEBUG] - 03:52:19 - src/service/redis.rs - 660:13 - Command SET Received - key: alalal
+[DEBUG] - 03:52:25 - src/service/redis.rs - 577:13 - Command GET Received - key: alalal
+[DEBUG] - 03:53:17 - src/service/redis.rs - 675:13 - Command INCRBY Received - key: key
+[DEBUG] - 03:53:17 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[ERROR] - 03:53:17 - src/service/redis.rs - 688:29 - ERR value is not an integer or out of range
+[DEBUG] - 03:53:31 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:53:35 - src/service/redis.rs - 675:13 - Command INCRBY Received - key: number
+[DEBUG] - 03:53:35 - src/service/redis.rs - 577:13 - Command GET Received - key: number
+[DEBUG] - 03:53:35 - src/service/redis.rs - 660:13 - Command SET Received - key: number
+[DEBUG] - 03:53:39 - src/service/redis.rs - 577:13 - Command GET Received - key: number
+[DEBUG] - 03:54:05 - src/service/redis.rs - 764:13 - Command GETDEL Received - keys: number
+[DEBUG] - 03:54:05 - src/service/redis.rs - 577:13 - Command GET Received - key: number
+[DEBUG] - 03:54:21 - src/service/redis.rs - 632:13 - Command GETSET Received - key: key
+[DEBUG] - 03:54:21 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:54:21 - src/service/redis.rs - 660:13 - Command SET Received - key: key
+[DEBUG] - 03:54:25 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[DEBUG] - 03:54:40 - src/service/redis.rs - 632:13 - Command GETSET Received - key: k
+[DEBUG] - 03:54:40 - src/service/redis.rs - 577:13 - Command GET Received - key: k
+[DEBUG] - 03:54:40 - src/service/redis.rs - 660:13 - Command SET Received - key: k
+[DEBUG] - 03:55:18 - src/service/redis.rs - 675:13 - Command INCRBY Received - key: key
+[DEBUG] - 03:55:18 - src/service/redis.rs - 577:13 - Command GET Received - key: key
+[ERROR] - 03:55:18 - src/service/redis.rs - 688:29 - ERR value is not an integer or out of range
+[DEBUG] - 03:55:26 - src/service/redis.rs - 660:13 - Command SET Received - key: number
+[DEBUG] - 03:55:31 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:55:34 - src/service/redis.rs - 675:13 - Command INCRBY Received - key: lala
+[DEBUG] - 03:55:34 - src/service/redis.rs - 577:13 - Command GET Received - key: lala
+[DEBUG] - 03:55:34 - src/service/redis.rs - 660:13 - Command SET Received - key: lala
+[DEBUG] - 03:55:44 - src/service/redis.rs - 577:13 - Command GET Received - key: lala
+[DEBUG] - 03:55:52 - src/service/redis.rs - 675:13 - Command INCRBY Received - key: number
+[DEBUG] - 03:55:52 - src/service/redis.rs - 577:13 - Command GET Received - key: number
+[DEBUG] - 03:55:52 - src/service/redis.rs - 660:13 - Command SET Received - key: number
+[DEBUG] - 03:55:56 - src/service/redis.rs - 577:13 - Command GET Received - key: number
+[DEBUG] - 03:56:25 - src/service/redis.rs - 747:13 - Command MSET Received
+[DEBUG] - 03:56:25 - src/service/redis.rs - 660:13 - Command SET Received - key: number
+[DEBUG] - 03:56:33 - src/service/redis.rs - 577:13 - Command GET Received - key: number
+[DEBUG] - 03:56:54 - src/service/redis.rs - 604:13 - Command STRLEN Received - key: lalaalala
+[DEBUG] - 03:57:11 - src/service/redis.rs - 604:13 - Command STRLEN Received - key: key
+[DEBUG] - 03:57:30 - src/service/redis.rs - 1078:13 - Command LINDEX Received - key: key
+[ERROR] - 03:57:30 - src/service/redis.rs - 1104:25 - WRONGTYPE Operation against a key holding the wrong kind of value
+[DEBUG] - 03:57:31 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 03:57:56 - src/service/redis.rs - 1078:13 - Command LINDEX Received - key: una
+[DEBUG] - 03:58:01 - src/service/redis.rs - 1078:13 - Command LINDEX Received - key: lista
+[DEBUG] - 03:58:47 - src/service/redis.rs - 1119:13 - Command LLEN Received - key: key
+[ERROR] - 03:58:47 - src/service/redis.rs - 1131:25 - WRONGTYPE Operation against a key holding the wrong kind of value
+[DEBUG] - 03:59:05 - src/service/redis.rs - 1119:13 - Command LLEN Received - key: list
+[DEBUG] - 03:59:11 - src/service/redis.rs - 1119:13 - Command LLEN Received - key: lista
+[DEBUG] - 03:59:31 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb

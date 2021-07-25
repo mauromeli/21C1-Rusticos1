@@ -773,7 +773,7 @@ impl Redis {
                     self.db.remove(&key);
                     Ok(return_value)
                 }
-                Re::Nil => Ok(return_value),
+                Re::Nil => Err("ERR no such key".to_string()),
                 _ => {
                     let _ = self.log_sender.send(Log::new(
                         LogLevel::Error,
@@ -972,7 +972,7 @@ impl Redis {
                 }
             },
             None => {
-                return Ok(Response::Normal(Re::Nil));
+                return Ok(Response::Normal(Re::List(vec![])));
             }
         };
         let transformed_collection: Result<Vec<f64>, String> = collection
@@ -1748,7 +1748,7 @@ impl Redis {
                     file!().to_string(),
                     "The key doesn't exist".to_string(),
                 ));
-                Err("The key doesn't exist".to_string())
+                Ok(Response::Normal(Re::Set(HashSet::new())))
             }
         }
     }
