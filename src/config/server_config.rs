@@ -8,9 +8,16 @@ use std::path::Path;
 /// Struct usado para representar la configuración posible de nuestra base de datos Redis.
 #[derive(Debug)]
 pub struct Config {
+    /// verbose: Representa si el server debe imprimir sus transacciones por consola en tiempo de
+    /// ejecución.
     verbose: u8,
+    /// port: Indica el puerto en el cual el servidor estará escuchando peticiones.
     port: u16,
+    /// timeout: un valor entero indicando cu ́antos segundos esperar a que un cliente envíe un
+    /// comando antes de cerrar la conexión. Si el valor es 0 se deshabilita el timeout.
     timeout: u64,
+    /// dbfilename: un string indicando el nombre del archivo en el cual se persistirán los datos
+    /// almacenados.
     dbfilename: String,
     logfile: String,
     loglevel: LogLevel,
@@ -22,7 +29,7 @@ impl Config {
     pub fn new() -> Config {
         Config {
             verbose: 0,
-            port: 6379,
+            port: 8080,
             timeout: 0,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
@@ -170,7 +177,7 @@ mod test {
     fn check_default_config_values() {
         let config = Config::new();
         assert_eq!("0", config.get_verbose());
-        assert_eq!("6379", config.get_port());
+        assert_eq!("8080", config.get_port());
         assert_eq!(0, config.get_timeout());
         assert_eq!("dump.rdb".to_string(), config.get_dbfilename());
         assert_eq!("log.log".to_string(), config.get_logfile());
