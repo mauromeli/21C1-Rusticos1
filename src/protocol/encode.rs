@@ -1,5 +1,12 @@
-use crate::protocol::decode::TypeData;
+use crate::protocol::type_data::TypeData;
+
+/// Codifica la respuesta del comando para enviárselo a redis-cli, utilizando el protocolo RESP.
 ///
+/// Se transforma el contenido del `TypeData` recibido, usando el protocolo RESP, y convirtiéndolo en un byte slice.
+///
+/// # Arguments
+///
+/// * `data` - Respuesta, representada como `TypeData`, a codificar.
 pub fn encode(data: TypeData) -> Vec<u8> {
     match data {
         TypeData::String(string) => {
@@ -64,37 +71,42 @@ pub fn encode(data: TypeData) -> Vec<u8> {
         }
     }
 }
+#[cfg(test)]
+mod test {
+    use crate::protocol::encode::encode;
+    use crate::protocol::type_data::TypeData;
 
-#[test]
-fn test_encode_string() {
-    let bytes = "+OK\r\n".as_bytes();
-    assert_eq!(encode(TypeData::String("OK".to_string())), bytes)
-}
+    #[test]
+    fn test_encode_string() {
+        let bytes = "+OK\r\n".as_bytes();
+        assert_eq!(encode(TypeData::String("OK".to_string())), bytes)
+    }
 
-#[test]
-fn test_encode_error() {
-    let bytes = "-Error message\r\n".as_bytes();
-    assert_eq!(encode(TypeData::Error("Error message".to_string())), bytes)
-}
+    #[test]
+    fn test_encode_error() {
+        let bytes = "-Error message\r\n".as_bytes();
+        assert_eq!(encode(TypeData::Error("Error message".to_string())), bytes)
+    }
 
-#[test]
-fn test_encode_integer() {
-    let bytes = ":1000\r\n".as_bytes();
-    assert_eq!(encode(TypeData::Integer(1000)), bytes)
-}
+    #[test]
+    fn test_encode_integer() {
+        let bytes = ":1000\r\n".as_bytes();
+        assert_eq!(encode(TypeData::Integer(1000)), bytes)
+    }
 
-#[test]
-fn test_encode_bulk() {
-    let bytes = "$6\r\nfoobar\r\n".as_bytes();
-    assert_eq!(encode(TypeData::BulkString("foobar".to_string())), bytes)
-}
+    #[test]
+    fn test_encode_bulk() {
+        let bytes = "$6\r\nfoobar\r\n".as_bytes();
+        assert_eq!(encode(TypeData::BulkString("foobar".to_string())), bytes)
+    }
 
-#[test]
-fn test_encode_array() {
-    let bytes = "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".as_bytes();
-    let array = vec![
-        TypeData::BulkString("foo".to_string()),
-        TypeData::BulkString("bar".to_string()),
-    ];
-    assert_eq!(encode(TypeData::Array(array)), bytes)
+    #[test]
+    fn test_encode_array() {
+        let bytes = "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".as_bytes();
+        let array = vec![
+            TypeData::BulkString("foo".to_string()),
+            TypeData::BulkString("bar".to_string()),
+        ];
+        assert_eq!(encode(TypeData::Array(array)), bytes)
+    }
 }

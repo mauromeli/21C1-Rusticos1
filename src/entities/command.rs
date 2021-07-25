@@ -206,11 +206,11 @@ impl Command {
             Command::Monitor => "monitor",
             Command::Info { .. } => "info",
             Command::ConfigGet => "config get",
-            Command::ConfigSet {.. } => "config set",
+            Command::ConfigSet { .. } => "config set",
 
             // Strings
             Command::Append { .. } => "append",
-            Command::Decrby {.. } => "decrby",
+            Command::Decrby { .. } => "decrby",
             Command::Get { .. } => "get",
             Command::Getdel { .. } => "getdel",
             Command::Getset { .. } => "getset",

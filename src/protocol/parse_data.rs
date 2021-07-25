@@ -1,8 +1,13 @@
 use crate::entities::redis_element::RedisElement;
-use crate::protocol::decode::TypeData;
 use crate::protocol::encode::encode;
+use crate::protocol::type_data::TypeData;
 use std::iter::FromIterator;
 
+/// Parsea el comando recibido (`TypeData`) a un `Vec<String>`.
+///
+/// # Arguments
+///
+/// * `data` - Comando, representado como `TypeData`.
 pub fn parse_command(data: TypeData) -> Vec<String> {
     let empty_vector = Vec::new();
     if let Ok(vector) = parse_array(data) {
@@ -11,14 +16,29 @@ pub fn parse_command(data: TypeData) -> Vec<String> {
     empty_vector
 }
 
+/// Parsea la respuesta de un comando, en caso de éxito, a bytes (`Vec<u8>`).
+///
+/// # Arguments
+///
+/// * `redis_element` - Respuesta de un comando, representado como `RedisElement`.
 pub fn parse_response_ok(redis_element: RedisElement) -> Vec<u8> {
     encode(parse_response(redis_element))
 }
 
+/// Parsea la respuesta de un comando, en caso de error, a bytes (`Vec<u8>`).
+///
+/// # Arguments
+///
+/// * `error` - Respuesta de error un comando, representado como `String`.
 pub fn parse_response_error(error: String) -> Vec<u8> {
     encode(TypeData::Error(error))
 }
 
+/// Parsea un `RedisElement` a un `TypeData`.
+///
+/// # Arguments
+///
+/// * `redis_element` - Redis element.
 fn parse_response(redis_element: RedisElement) -> TypeData {
     match redis_element {
         RedisElement::String(string) => {
@@ -35,6 +55,11 @@ fn parse_response(redis_element: RedisElement) -> TypeData {
     }
 }
 
+/// Parsea un `Vec<String>` a un `TypeData::Array`.
+///
+/// # Arguments
+///
+/// * `vector_re` - Vector a parsear.
 fn parse_list_and_set(vector_re: Vec<String>) -> TypeData {
     let mut vector = Vec::new();
     for element in vector_re {
@@ -44,13 +69,21 @@ fn parse_list_and_set(vector_re: Vec<String>) -> TypeData {
     TypeData::Array(vector)
 }
 
+/// Intenta parsear un `TypeData` a un `Vec<String>`.
+///
+/// En caso de que falle, devuelve un error de tipo `String`. Sino, devuelve un `Vec<String>`.
+///
+/// # Arguments
+///
+/// * `type_data` - Type data.
 fn parse_array(type_data: TypeData) -> Result<Vec<String>, String> {
     match type_data {
         TypeData::Array(vec) => {
             let mut vector = Vec::new();
             for element in vec {
-                let result = parse_type_data(element).unwrap();
-                vector.push(result);
+                if let Ok(result) = parse_type_data(element.clone()) {
+                    vector.push(result);
+                }
             }
             Ok(vector)
         }
@@ -58,6 +91,13 @@ fn parse_array(type_data: TypeData) -> Result<Vec<String>, String> {
     }
 }
 
+/// Intenta parsear un `TypeData` a un `String`.
+///
+/// En caso de el `TypeData` no exista, devuelve un error de tipo `String`.
+///
+/// # Arguments
+///
+/// * `type_data` - Type data.
 fn parse_type_data(type_data: TypeData) -> Result<String, String> {
     match type_data {
         TypeData::String(string) => Ok(string),
