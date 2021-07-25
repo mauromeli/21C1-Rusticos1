@@ -649,7 +649,6 @@ fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
         return Err("ERR wrong number of arguments for 'pubsub' command".to_string());
     }
 
-    println!("{:?}", params.get(1..));
     match params[0].clone().to_lowercase().as_str() {
         "channels" => match params.len() {
             1 => Ok(Command::Pubsub {
