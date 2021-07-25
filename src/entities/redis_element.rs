@@ -7,6 +7,7 @@ use std::fmt;
 /// datos redis.
 pub enum RedisElement {
     String(String),
+    SpecialString(String),
     Set(HashSet<String>),
     List(Vec<String>),
     Nil,
@@ -43,6 +44,7 @@ impl fmt::Display for RedisElement {
             RedisElement::Nil => {
                 write!(fmt, "(nil)")?;
             }
+            RedisElement::SpecialString(s) => write!(fmt, "{}", s.replace(" - ", "-"))?,
         }
         Ok(())
     }

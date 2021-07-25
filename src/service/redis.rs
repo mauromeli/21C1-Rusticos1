@@ -480,7 +480,7 @@ impl Redis {
             "Command PING Received".to_string(),
         ));
 
-        Response::Normal(Re::String("PONG".to_string()))
+        Response::Normal(Re::SpecialString("PONG".to_string()))
     }
 
     fn notify_monitor(&mut self, command: &Command) {
@@ -1067,6 +1067,7 @@ impl Redis {
                 Re::List(_) => "list".to_string(),
                 Re::Set(_) => "set".to_string(),
                 Re::Nil => "none".to_string(),
+                Re::SpecialString(_) => "string".to_string(),
             },
             None => "none".to_string(),
         }

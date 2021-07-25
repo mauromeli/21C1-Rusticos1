@@ -183,3 +183,29 @@
 [DEBUG] - 03:50:38 - src/service/redis.rs - 228:13 - Command Pubsub Numsub Received
 [DEBUG] - 03:51:33 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
 [DEBUG] - 03:53:33 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] -[DEBUG] - 18:57:36 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 18:57:36 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 18:57:36 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 18:58:10 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 18:59:36 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 19:01:36 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 19:03:36 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 19:05:42 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 19:05:42 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 19:05:42 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 19:05:46 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 19:07:42 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 19:09:01 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 19:09:01 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 19:09:01 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 19:09:12 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 19:09:19 - src/service/redis.rs - 477:13 - Command PING Received
+[DEBUG] - 19:10:26 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 19:10:26 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 19:10:26 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 19:17:36 - src/service/redis.rs - 1854:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 19:17:36 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 19:17:36 - src/service/redis.rs - 1816:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 19:17:44 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 19:17:46 - src/service/redis.rs - 477:13 - Command PING Received
+[DEBUG] - 19:19:36 - src/service/redis.rs - 1816:13 - Command STORE Received - path: dump.rdb

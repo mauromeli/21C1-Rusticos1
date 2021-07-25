@@ -14,7 +14,6 @@ pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, Strin
 
     let command = params.first().unwrap();
     let params = Vec::from(params.get(1..).unwrap());
-
     match command.to_lowercase().as_str() {
         // Server
         "ping" => generate_ping(params),
