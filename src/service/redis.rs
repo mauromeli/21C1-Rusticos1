@@ -27,18 +27,29 @@ const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 #[derive(Debug)]
 /// Entidad que represeenta la Base de Datos Redis dentro de nuestro modelado.
 pub struct Redis {
+    /// Atributo en el cual se guardarán los datos de la DB
     db: TtlHashMap<String, RedisElement>,
+    /// Canal para enviar eventos de loggeo al Logger
     log_sender: Sender<Log>,
-    vec_senders: Vec<Sender<Re>>,
+    /// Mapa en donde se guardan los Senders de los clientes subscriptos al Command::Monitor
+    monitor_subs_vec: Vec<Sender<Re>>,
+    /// Mapa en donde se guarda {id_canal, Vec<Senders de los Usuarios subscriptos a esos canales>}.
     subscribers: HashMap<String, Vec<(String, Sender<Re>)>>,
+    /// Mapa en donde se guarda {Id_cliente, Vec<Canales a los que esta subscripto>}.
     client_channel: HashMap<String, Vec<String>>,
+    /// Cantidad de usuarios conectados
     users_connected: u64,
+    /// Hora en cuando comenzó el servicio.
     server_time: SystemTime,
+    /// Configuración del servidor compartida.
     config: Arc<Mutex<Config>>,
 }
 
 impl Redis {
     #[allow(dead_code)]
+    /// Constructor de la entidad Redis, para su construcción es necesario:
+    /// - un Canal de tipo Sender en el cual se envíen mensajes al Logger.
+    /// - una configuración compartida
     pub fn new(log_sender: Sender<Log>, config: Arc<Mutex<Config>>) -> Self {
         let db = TtlHashMap::new();
         let vec_senders: Vec<Sender<Re>> = Vec::new();
@@ -46,7 +57,7 @@ impl Redis {
         Self {
             db,
             log_sender,
-            vec_senders,
+            monitor_subs_vec: vec_senders,
             users_connected: 0,
             subscribers: HashMap::new(),
             client_channel: HashMap::new(),
@@ -56,6 +67,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Constructor de la entidad Redis exclusiva para TEST.
     fn new_for_test() -> Self {
         let db = TtlHashMap::new();
         let (log_sender, _): (Sender<Log>, _) = mpsc::channel();
@@ -65,7 +77,7 @@ impl Redis {
         Self {
             db,
             log_sender,
-            vec_senders,
+            monitor_subs_vec: vec_senders,
             users_connected: 0,
             subscribers: HashMap::new(),
             client_channel: HashMap::new(),
@@ -75,6 +87,10 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Metodo utilizado para ejecutar un comando dentro de la Base de datos Redis.
+    /// Los comandos tienen que estár definidos en el enum `Command`.
+    /// En caso de error en la ejecución se retornará Err(msg) con el mensaje de error.
+    /// En caso de ejecución efectiva del comando se retornará un Response.
     pub fn execute(&mut self, command: Command) -> Result<Response, String> {
         self.notify_monitor(&command);
 
@@ -423,6 +439,16 @@ impl Redis {
         Response::Normal(RedisElement::String("OK".to_string()))
     }
 
+    /// El comando INFO retorna información y estadísticas sobre el servidor en un formato facil de
+    /// parsear por computadores y facil de leer por humanos.
+    /// Los parametros que este puede recibir están definidos en el enum `InfoParam`, los cuales
+    /// pueden ser:
+    /// - ConnectedClients: Indica la cantidad de Clientes connectados en nuestro servidor.
+    /// - Port: Indica el Puerto en el cual está levantado el servidor.
+    /// - ConfigFile: Indica el nombre del archivo de Configuración del servidor.
+    /// - Uptime: Indica el tiempo en el que el servidor está en funcionamiento.
+    /// - ServerTime: Indica la hora del servidor. (UTC-0).
+    /// - ProcessID: Indica el processID del proceso en el SO.
     fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
         //TODO: agregar test
         let _ = self.log_sender.send(Log::new(
@@ -486,20 +512,24 @@ impl Redis {
         Response::Normal(Re::SimpleString("PONG".to_string()))
     }
 
+    /// Metodo utilizado para notificar a los subscriptores de Monitor los nuevos comandos que van a
+    /// ser ejecutados.
     fn notify_monitor(&mut self, command: &Command) {
         let command_str = command.as_str().to_string();
         if !command_str.is_empty() {
             let mut empty_vec: Vec<Sender<Re>> = Vec::new();
-            for sender in &self.vec_senders {
+            for sender in &self.monitor_subs_vec {
                 if sender.send(Re::String(command_str.to_string())).is_ok() {
                     empty_vec.push(sender.clone());
                 }
             }
 
-            self.vec_senders = empty_vec;
+            self.monitor_subs_vec = empty_vec;
         }
     }
 
+    /// Es un comando de depuración que envía al cliente cada comando procesado por el servidor.
+    /// Puede ayudar entender qúe está sucediendo en la base de datos.
     fn monitor_method(&mut self) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -516,7 +546,7 @@ impl Redis {
         let result = sen_clone.send(Re::SimpleString("OK".to_string()));
         match result {
             Ok(_) => {
-                self.vec_senders.push(sen);
+                self.monitor_subs_vec.push(sen);
                 Ok(Response::Stream(rec))
             }
             Err(e) => {
@@ -2118,7 +2148,7 @@ mod test {
         assert!(ping.is_ok());
         assert!(eq_response(
             Re::SimpleString("PONG".to_string()),
-            ping.unwrap()
+            ping.unwrap(),
         ));
     }
 
@@ -3102,7 +3132,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -3146,7 +3176,7 @@ mod test {
         assert!(lset.is_ok());
         assert!(eq_response(
             Re::SimpleString("OK".to_string()),
-            lset.unwrap()
+            lset.unwrap(),
         ));
 
         let key = "key".to_string();
@@ -3158,7 +3188,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -3275,7 +3305,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(),]),
+            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
             rpop.unwrap(),
         ));
 

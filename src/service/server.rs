@@ -3,18 +3,18 @@ use crate::entities::command::Command;
 use crate::entities::log::Log;
 use crate::entities::log_level::LogLevel;
 use crate::entities::response::Response;
-use crate::protocol::decode::{decode, TypeData};
 use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io;
-use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
+use std::io::{BufReader, Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
+use crate::protocol::lines_iterator::LinesIterator;
 use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -325,31 +325,5 @@ impl Server {
                 .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "DB sender error"))?;
             thread::sleep(Duration::from_secs(STORE_TIME_SEC));
         }
-    }
-}
-
-pub struct LinesIterator<'a> {
-    input: &'a mut BufReader<TcpStream>,
-}
-
-impl<'a> LinesIterator<'a> {
-    pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
-        let input = input;
-        Self { input }
-    }
-}
-
-impl Iterator for LinesIterator<'_> {
-    type Item = TypeData;
-
-    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-        let mut buf = String::new();
-        while self.input.read_line(&mut buf).ok()? != 0 {
-            if let Ok(result) = decode(buf.as_bytes(), 0) {
-                let (data, _) = result;
-                return Some(data);
-            }
-        }
-        Some(TypeData::Error("Se ha producido un error".to_string()))
     }
 }

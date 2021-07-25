@@ -27,7 +27,6 @@ pub struct Config {
     configfile: String,
 }
 
-
 #[allow(dead_code)]
 impl Config {
     /// Este metodo permite generar una configuración con valores por defecto.
