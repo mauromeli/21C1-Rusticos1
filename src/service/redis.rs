@@ -156,7 +156,7 @@ impl Redis {
             Command::Rpush { key, value } => self.rpush_method(key, value),
             Command::Rpushx { key, value } => self.rpushx_method(key, value),
 
-            //Sets
+            // Sets
             Command::Sadd { key, values } => self.sadd_method(key, values),
             Command::Scard { key } => self.scard_method(key),
             Command::Sismember { key, value } => self.sismember_method(key, value),
