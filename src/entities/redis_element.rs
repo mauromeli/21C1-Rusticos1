@@ -6,10 +6,15 @@ use std::fmt;
 /// RedisElement: Enum usado para representar los tipos posibles a ser almacenados en nuestra base de
 /// datos redis.
 pub enum RedisElement {
+    /// Representa los tipos de dato String de Redis
     String(String),
+    /// Representa los tipos de dato String especiales de Redis
     SimpleString(String),
+    /// Representa los tipos de dato Set de Redis
     Set(HashSet<String>),
+    /// Representa los tipos de dato List de Redis
     List(Vec<String>),
+    /// Representa los tipos de dato Nil de Redis
     Nil,
 }
 
