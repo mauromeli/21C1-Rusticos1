@@ -19,10 +19,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{fs, process};
 
+/// Mensaje de error usado para el tipo de dato Erroneo
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
+/// Mensaje de error usado cuando el valor no es entero o está fuera de rango permitido.
 const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 
 #[derive(Debug)]
+/// Entidad que represeenta la Base de Datos Redis dentro de nuestro modelado.
 pub struct Redis {
     db: TtlHashMap<String, RedisElement>,
     log_sender: Sender<Log>,
