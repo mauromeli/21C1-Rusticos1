@@ -269,7 +269,6 @@ fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     }
 
     let key = params[0].clone();
-    //TODO: deberian poder ser segundos negativos, corregir
     let seconds: Result<u32, _> = params[1].to_string().parse();
 
     if seconds.is_err() {

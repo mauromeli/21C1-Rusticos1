@@ -280,12 +280,24 @@ impl Redis {
 
             self.subscribers
                 .insert(channel.clone(), vector_sender.to_vec());
-            // TODO: Revisar que hacer con este
-            let _result = sen.clone().send(Re::List(vec![
-                "subscribe".to_string(),
-                channel.clone(),
-                "1".to_string(),
-            ]));
+
+            if sen
+                .clone()
+                .send(Re::List(vec![
+                    "subscribe".to_string(),
+                    channel.clone(),
+                    "1".to_string(),
+                ]))
+                .is_err()
+            {
+                let _ = self.log_sender.send(Log::new(
+                    LogLevel::Error,
+                    line!(),
+                    column!(),
+                    file!().to_string(),
+                    "Error Subscribing".to_string(),
+                ));
+            }
 
             self.set_client_channels(client_id.clone(), channel);
         }
@@ -472,16 +484,17 @@ impl Redis {
     }
 
     fn notify_monitor(&mut self, command: &Command) {
-        let mut empty_vec: Vec<Sender<Re>> = Vec::new();
-
-        for sender in &self.vec_senders {
-            let command_str = command.as_str().to_string();
-            if !command_str.is_empty() && sender.send(Re::String(command_str)).is_ok() {
-                empty_vec.push(sender.clone());
+        let command_str = command.as_str().to_string();
+        if !command_str.is_empty() {
+            let mut empty_vec: Vec<Sender<Re>> = Vec::new();
+            for sender in &self.vec_senders {
+                if sender.send(Re::String(command_str.to_string())).is_ok() {
+                    empty_vec.push(sender.clone());
+                }
             }
-        }
 
-        self.vec_senders = empty_vec;
+            self.vec_senders = empty_vec;
+        }
     }
 
     fn monitor_method(&mut self) -> Result<Response, String> {
@@ -496,7 +509,7 @@ impl Redis {
         let (sen, rec): (Sender<Re>, Receiver<Re>) = mpsc::channel();
 
         let sen_clone = sen.clone();
-        // TODO: Revisar que hacer con este
+
         let result = sen_clone.send(Re::String("OK".to_string()));
         match result {
             Ok(_) => {
@@ -2669,7 +2682,7 @@ mod test {
 
         let key = "key".to_string();
         let sort = redis.execute(Command::Sort { key });
-        assert!(eq_response(Re::Nil, sort.unwrap(),));
+        assert!(eq_response(Re::Nil, sort.unwrap()));
     }
 
     #[test]
