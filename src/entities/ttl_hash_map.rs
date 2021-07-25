@@ -165,7 +165,6 @@ impl TtlHashMap<String, RedisElement> {
             s.append(&mut TtlHashMap::string_encode(key.to_string()));
             s.append(&mut TtlHashMap::value_encode(value.clone()));
         }
-
         s.push(OP_EOF);
         s
     }
@@ -186,9 +185,9 @@ impl TtlHashMap<String, RedisElement> {
             }
             OP_EOF => Ok(map),
             _ => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "OP code unknown.",
-            ))?, //buscar algun error mas descriptivo
+                std::io::ErrorKind::InvalidData,
+                "Found unknown OP code.",
+            ))?,
         }
     }
 
@@ -574,35 +573,13 @@ mod test {
         map.insert(key.clone(), RedisElement::String("value".to_string()));
         map.set_ttl_absolute(key.clone(), ttl);
 
-        let serialization = map.serialize();
+        let bytes = map.serialize();
 
-        let mut new_map = TtlHashMap::deserialize(serialization).unwrap();
+        let mut new_map = TtlHashMap::deserialize(bytes).unwrap();
         assert_eq!(new_map.get(&key).unwrap().to_string(), "value");
         assert_eq!(
             new_map.get_ttl(&key).unwrap().as_secs(),
             ttl.duration_since(SystemTime::now()).unwrap().as_secs()
-        );
-    }
-
-    #[test]
-    fn test_serialize_and_deserialize_with_ttl_relative() {
-        let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
-        let key = "key".to_string();
-        let ttl = Duration::from_secs(2);
-
-        map.insert(key.clone(), RedisElement::String("value".to_string()));
-        map.set_ttl_relative(key.clone(), ttl);
-
-        let serialization = map.serialize();
-
-        let mut new_map = TtlHashMap::deserialize(serialization).unwrap();
-        assert_eq!(new_map.get(&key).unwrap().to_string(), "value");
-        assert_eq!(
-            new_map.get_ttl(&key).unwrap().as_secs(),
-            (SystemTime::now() + ttl)
-                .duration_since(SystemTime::now())
-                .unwrap()
-                .as_secs()
         );
     }
 }
