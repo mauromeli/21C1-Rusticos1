@@ -196,6 +196,14 @@ impl Redis {
         }
     }
 
+    /// El comando PUBSUB Es un comando de análisis que permite inspeccionar el estado del sistema Pub/Sub.
+    /// La forma de este comando es.
+    /// Los parametros que este puede recibir están definidos en el enum `PubSubParams`, los cuales
+    /// pueden ser:
+    /// - Channels: Indica los canales existentes en PubSub.
+    /// - ChannelsWithChannel: Indica si ese canal existe o no.
+    /// - Numsub: retorna una lista vacía
+    /// - NumsubWithChannel: Indica la cantidad de usuarios subscriptos a ese canal.
     fn pubsub_method(&mut self, param: PubSubParam) -> Response {
         Response::Normal(match param {
             PubSubParam::Channels => self.channels_method(),
@@ -205,6 +213,7 @@ impl Redis {
         })
     }
 
+    /// Indica los canales existentes en PubSub.
     fn channels_method(&mut self) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -222,6 +231,7 @@ impl Redis {
         Re::List(vec_response)
     }
 
+    /// Indica si ese canal existe o no en PubSub
     fn channels_with_channel_method(&mut self, channel: String) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -241,6 +251,7 @@ impl Redis {
         Re::List(vec_response)
     }
 
+    /// Retorna una lista vacía
     fn numsub_method(&mut self) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -253,6 +264,7 @@ impl Redis {
         Re::List(vec![])
     }
 
+    /// Indica la cantidad de usuarios subscriptos a ese canal.
     fn numsub_with_channels_method(&mut self, channels: Vec<String>) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -277,6 +289,7 @@ impl Redis {
         Re::List(vec_response)
     }
 
+    /// Permite suscribirse a uno o mas canales
     fn subscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -337,6 +350,7 @@ impl Redis {
             .insert(client_id, vector_channels.to_vec());
     }
 
+    /// Permite Publicar un mensaje en un canal específico.
     fn publish_method(&mut self, channel: String, msg: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -380,6 +394,7 @@ impl Redis {
         Response::Normal(Re::SimpleString("OK".to_string()))
     }
 
+    /// Permite desuscribirse a uno o mas canales
     fn unsubscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -429,11 +444,13 @@ impl Redis {
         ]))
     }
 
+    /// Comando interno que es ejecutado cuando un cliente nuevo se conecta.
     fn addclient_method(&mut self) -> Response {
         self.users_connected += 1;
         Response::Normal(RedisElement::String("OK".to_string()))
     }
 
+    /// Comando interno que es ejecutado cuando un cliente nuevo se desconecta.
     fn removeclient_method(&mut self) -> Response {
         self.users_connected -= 1;
         Response::Normal(RedisElement::String("OK".to_string()))
@@ -477,6 +494,7 @@ impl Redis {
         }
     }
 
+    /// Indica el tiempo en el que el servidor está en funcionamiento.
     fn get_server_uptime(&mut self) -> Result<Response, String> {
         let result_time = SystemTime::now().duration_since(self.server_time);
         match result_time {
@@ -496,10 +514,12 @@ impl Redis {
         }
     }
 
+    /// Indica cuantos datos están guardados en la DB.
     fn dbsize_method(&mut self) -> Response {
         Response::Normal(Re::String(self.db.len().to_string()))
     }
 
+    /// Methodo para chequear si la DB responde. En caso que responda se retorna PONG.
     fn ping_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -562,6 +582,7 @@ impl Redis {
         }
     }
 
+    /// Borra todas las claves de la base de datos. Este comando nunca falla.
     fn flushdb_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -576,6 +597,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Copia el valor almacenado en una clave origen a una clave destino.
     fn copy_method(&mut self, key_origin: String, key_destination: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -604,6 +626,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Devuelve el valor de una clave, si la clave no existe, se retorna el valor especial nil. Se
+    /// retorna un error si el valor almacenado en esa clave no es un string, porque GET maneja
+    /// solamente strings.
     fn get_method(&mut self, key: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -631,6 +656,8 @@ impl Redis {
         }
     }
 
+    /// Retorna el largo del valor de tipo string almacenado en una clave. Retorna error si la clave
+    /// no almacena un string.
     fn strlen_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -659,6 +686,8 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Atómicamente setea el valor a la clave deseada, y retorna el valor anterior almacenado en la
+    /// clave.
     fn getset_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -687,6 +716,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Setea que la clave especificada almacene el valor especificado de tipo string. Si la clave
+    /// contiene un valor previo, la clave es sobreescrita, independientemente del tipo de dato
+    /// contenido (descartando también el valor previo de TTL).
     fn set_method(&mut self, key: String, value: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -702,6 +734,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Incrementa el número almacenado en la clave en un incremento. Si la clave no existe, es
+    /// seteado a 0 antes de realizar la operación. Devuelve error si la clave contiene un valor de
+    /// tipo erróneo o un string que no puede ser representado como entero.
     fn incrby_method(&mut self, key: String, increment: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -753,6 +788,8 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Retorna el valor de todas las claves especificadas. Para las claves que no contienen valor o
+    /// el valor no es un string, se retorna el tipo especial nil.
     fn mget_method(&mut self, keys: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -774,6 +811,10 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Setea las claves data a sus respectivos valores, reemplazando los valores existentes con los
+    /// nuevos valores como SET.
+    /// MSET es atómica, de modo que todas las claves son actualizadas a la vez. No es posible para
+    /// los clientes ver que algunas claves del conjunto fueron modificadas, mientras otras no.
     fn mset_method(&mut self, key_values: Vec<(String, String)>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -791,6 +832,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// obtiene el valor y elimina la clave. Es similar a GET, pero adicionalmente elimina la clave.
     fn getdel_method(&mut self, key: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -823,6 +865,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Elimina una clave específica. La clave es ignorada si no existe.
     fn del_method(&mut self, keys: Vec<String>) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -843,6 +886,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Si la clave ya existe y es un string, este comando agrega el valor al final del string. Si
+    /// no existe, es creada con el string vacío y luego le agrega el valor deseado. En este caso es
+    /// similar al comando SET.
     fn append_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -883,6 +929,7 @@ impl Redis {
         }
     }
 
+    /// Retorna si la/s clave/s existe/n.
     fn exists_method(&mut self, keys: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -902,6 +949,8 @@ impl Redis {
         Response::Normal(Re::String(count.to_string()))
     }
 
+    /// Configura un tiempo de expiración sobre una clave (la clave se dice que es volátil). Luego
+    /// de ese tiempo de expiración, la clave es automáticamente eliminada.
     fn expire_method(&mut self, key: String, ttl: Duration) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -917,6 +966,9 @@ impl Redis {
         }
     }
 
+    /// Tiene el mismo efecto que EXPIRE, pero en lugar de indicar el número de segundos que
+    /// representa el TTL (time to live), toma el tiempo absoluto en el timestamp de Unix (segundos
+    /// desde el 1ro de enero de 1970).
     fn expireat_method(&mut self, key: String, ttl: SystemTime) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -932,6 +984,8 @@ impl Redis {
         }
     }
 
+    /// Elimina el tiempo de expiración existente en una clave, tornando una clave volátil en
+    /// persistente (una clave que no expira, dado que no tiene timeout asociado)
     fn persist_method(&mut self, key: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -947,6 +1001,7 @@ impl Redis {
         }
     }
 
+    /// Renombra una clave a un nuevo nombre de clave.
     fn rename_method(
         &mut self,
         key_origin: String,
@@ -980,6 +1035,7 @@ impl Redis {
         }
     }
 
+    /// Retorna ordenados los elementos de una clave
     fn sort_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1035,6 +1091,7 @@ impl Redis {
         Ok(Response::Normal(Re::List(sorted)))
     }
 
+    /// Actualiza el valor de último acceso a la clave.
     fn touch_method(&mut self, keys: Vec<String>) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1065,6 +1122,8 @@ impl Redis {
         count.to_string()
     }
 
+    /// Retorna el tiempo que le queda a una clave para que se cumpla su timeout. Permite a un
+    /// cliente Redis conocer cuántos segundos le quedan a una clave como parte del dataset.
     fn ttl_method(&mut self, key: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1085,6 +1144,9 @@ impl Redis {
         }
     }
 
+    /// Retorna un string que representa el tipo de valor almacenado en una clave. Los tipos que
+    /// puede retornar son: string, list, set (no consideramos los tipos de datos que no se
+    /// implementan en el proyecto).
     fn type_method(&mut self, key: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1106,6 +1168,10 @@ impl Redis {
         }
     }
 
+    /// Retorna el elemento de la posición index en la lista almacenada en la clave indicada. El
+    /// índice comienza en 0. Los valores negativos se pueden usar para determinar elementos desde
+    /// el final de la lista: -1 es el último elemento, -2 es el anteúlitmo, y así.
+    /// Retorna error si el valor de esa clave no es una lista.
     fn lindex_method(&mut self, key: String, index: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1147,6 +1213,9 @@ impl Redis {
         }
     }
 
+    /// Retorna el largo dela lista almacenada en la clave. Si la clave no existe, se interpreta
+    /// como lista vacía, retornando 0. Se retorna error si el valor almacenado en la clave no es
+    /// una lista.
     fn llen_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1174,6 +1243,8 @@ impl Redis {
         }
     }
 
+    /// Elimina y retorna el primer elemento de la lista almacenada en la clave. Se puede indicar un
+    /// parámetro adicional count para indicar obtener esa cantidad de elementos.
     fn lpop_method(&mut self, key: String, count: usize) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1227,6 +1298,9 @@ impl Redis {
         }
     }
 
+    /// Inserta todos los valores especificados en el inicio de la lista de la clave especificada.
+    /// Si no existe la clave, se crea inicialmente como una lista vacía para luego aplicar las
+    /// operaciones. Se retorna error si la clave almacena un elemento que no es una lista.
     fn lpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1271,6 +1345,8 @@ impl Redis {
         }
     }
 
+    /// Inserta los valores especificados al inicio de lalista, solamente si la clave existe y
+    /// almacena una lista. A diferencia de LPUSH, no se realiza operación si la clave no existe.
     fn lpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1313,6 +1389,9 @@ impl Redis {
         }
     }
 
+    /// Retorna los elementos especificados de la lista almacenada en la clave indicada. Los inicios
+    /// y fin de rango se consideran con el 0 como primer elemento de la lista. Estos valores pueden
+    /// ser negativos, indicando que corresponde al final de la lista: -1 es el último elemento.
     fn lrange_method(&mut self, key: String, begin: i32, end: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1362,6 +1441,11 @@ impl Redis {
         }
     }
 
+    /// Elimina la primer cantidad count de ocurrencias de elementos de la lista almacenada en la
+    /// clave, igual al elemento indicado por parámetro. El parámetro cantidad influye de esta manera:
+    /// - count > 0: Elimina elementos iguales al indicado comenzando desde el inicio de la lista.
+    /// - count < 0: Elimina elementos iguales al indicado comenzando desde el final de la lista.
+    /// - count = 0: Elimina todos los elementos iguales al indicado.
     fn lrem_method(
         &mut self,
         key: String,
@@ -1441,6 +1525,8 @@ impl Redis {
         (vector, n)
     }
 
+    /// Setea el elemento de la posición index de la lista con el elemento suministrado. Se retorna
+    /// error si se indica un rango inválido.
     fn lset_method(
         &mut self,
         key: String,
@@ -1506,6 +1592,8 @@ impl Redis {
         }
     }
 
+    /// Elimina y obtiene el/los último/s elemento/s de la lista almacenada en la clave indicada.
+    /// Por defecto, es un solo elemento, se puede indicar una cantidad.
     fn rpop_method(&mut self, key: String, count: usize) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1562,6 +1650,9 @@ impl Redis {
         }
     }
 
+    /// Inserta todos los valores especificados al final de la lista indicada en la clave. Si la
+    /// clave no existe, se crear como una lista vacía antes de realizar la operación. Se retorna
+    /// error si el elemento contenido no es una lista.
     fn rpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1599,6 +1690,8 @@ impl Redis {
         }
     }
 
+    /// Inserta los valores especificados al final de la lista almacenada en la clave indicada,
+    /// solamente si la clave contiene una lista. En caso contrario, no se realiza ninguna operación.
     fn rpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1633,6 +1726,9 @@ impl Redis {
         }
     }
 
+    /// Agrega el elemento indicado al set de la clave especificada. Si la clave no existe, crea un
+    /// set vacío para agregar el valor. Si el valor ya existía en el set, no se realiza agregado.
+    /// Retorna error si el valor almacenado en la clave no es un set.
     fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1673,6 +1769,7 @@ impl Redis {
         }
     }
 
+    /// Retorna la cantidad de elementos del set almacenado en la clave indicada.
     fn scard_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1704,6 +1801,7 @@ impl Redis {
         }
     }
 
+    /// Retorna si el elemento indicado es miembro del set indicado en la clave.
     fn sismember_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1748,6 +1846,7 @@ impl Redis {
         }
     }
 
+    /// Retorna todos los miembros del set almacenado en la clave indicada.
     fn smembers_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1787,6 +1886,9 @@ impl Redis {
         }
     }
 
+    /// Elimina los miembros especificados del set almacenado en la clave indicada. Si la clave no
+    /// existe, se considera como un set vacío, retornando 0. Retorna error si el valor almacenado
+    /// en esa clave no es un set.
     fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1824,6 +1926,7 @@ impl Redis {
         }
     }
 
+    /// Retorna todas las claves que hacen match con un patrón.
     fn keys_method(&mut self, pattern: String) -> Vec<String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1843,6 +1946,7 @@ impl Redis {
         vector
     }
 
+    /// Comando interno para Persistir los elementos de la Base de datos en un archivo
     fn store_method(&self, path: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1881,6 +1985,7 @@ impl Redis {
         }
     }
 
+    /// Comando interno para Cargar los elementos de la Base de datos desde un archivo
     fn load_method(&mut self, path: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1922,6 +2027,8 @@ impl Redis {
         }
     }
 
+    /// El comando CONFIG GET se utiliza para leer los parámetros de configuración de un servidor en
+    /// ejecución.
     fn config_get_method(&mut self) -> Vec<String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1941,6 +2048,8 @@ impl Redis {
         ]
     }
 
+    /// El comando CONFIG SET se utiliza para reconfigurar un servidor en tiempo de ejecución sin
+    /// necesidad de reiniciarlo.
     fn config_set_method(&mut self, parameter: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
