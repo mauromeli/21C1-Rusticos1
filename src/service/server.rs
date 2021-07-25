@@ -3,37 +3,50 @@ use crate::entities::command::Command;
 use crate::entities::log::Log;
 use crate::entities::log_level::LogLevel;
 use crate::entities::response::Response;
-use crate::protocol::decode::{decode, TypeData};
 use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io;
-use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
+use std::io::{BufReader, Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
+use crate::protocol::lines_iterator::LinesIterator;
 use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+/// Tiempo de ejecución entre un ciclo y el siguiente, en el hilo de Mantenimiento.
+/// Este valor está representado en Segundos.
 static STORE_TIME_SEC: u64 = 120;
 
+/// Tipo de dato definido para guardar las conecciones de los usuarios y su estado en uso.
 type VecHandler = Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)>;
+/// Tipo de dato definido para el canal de envío de mensajes al hilo ejecutor de comandos en DB
 type DbSender = Sender<(Command, Sender<Response>)>;
+/// Tipo de dato definido para el canal de envío de mensajes al hilo ejecutor de comandos en DB
 type DbReceiver = Receiver<(Command, Sender<Response>)>;
 
 #[derive(Debug)]
+/// Struct utilizado para representar la entidad Server dentro del Modelo.
+/// Este server atenderá:
+/// - Las solicitudes de los clientes paa conectarse.
+/// - Se comunicará con la Base de datos Redis
 pub struct Server {
+    /// Instancia de la Base de Datos
     redis: Redis,
+    /// Canal para enviar eventos de loggeo al Logger
     log_sender: Sender<Log>,
+    /// Configuración del servidor compartida.
     config: Arc<Mutex<Config>>,
 }
 
 impl Server {
     #[allow(dead_code)]
+    /// Constructor del Servidor. Para Construir el mismo se necesita una instancia de tipo Config.
     pub fn new(config: Config) -> io::Result<Self> {
         let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
@@ -50,12 +63,13 @@ impl Server {
         })
     }
 
+    /// Methodo del Server para ponerlo operativo.
     pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
         // load db
         let command = Command::Load {
             path: self.config.lock().unwrap().get_dbfilename(),
         };
-        self.redis.execute(command)?;
+        let _ = self.redis.execute(command);
 
         // endload db
 
@@ -164,6 +178,7 @@ impl Server {
     }
 
     #[allow(clippy::while_let_on_iterator)]
+    /// Metodo encargado de capturar los eventos de cada cliente.
     fn client_handler(
         client: TcpStream,
         db_sender_clone: Sender<(Command, Sender<Response>)>,
@@ -230,18 +245,23 @@ impl Server {
         Ok(())
     }
 
+    /// Metodo encargado de Enviarle una señal a la DB indicando que se ha conectado otro usuario.
     fn connected_user(db_sender_clone: &Sender<(Command, Sender<Response>)>) {
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
         let _ = db_sender_clone.send((Command::AddClient, client_sndr));
         let _ = client_rcvr.recv();
     }
 
+    /// Metodo encargado de Enviarle una señal a la DB indicando que se ha desconectado un usuario.
     fn disconnected_user(db_sender_clone: &Sender<(Command, Sender<Response>)>) {
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
         let _ = db_sender_clone.send((Command::RemoveClient, client_sndr));
         let _ = client_rcvr.recv();
     }
 
+    /// Metodo encargado de centralizar las ejecuciones de los comandos que se ejecutan en la DB.
+    /// El servidor le envía un canal de Recepción de Comandos y Senders donde debe enviar la
+    /// respuesta al cliente.
     fn db_thread(mut self, db_receiver: Receiver<(Command, Sender<Response>)>) {
         let log_sender = self.log_sender.clone();
         let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
@@ -284,6 +304,9 @@ impl Server {
         });
     }
 
+    /// Metodo ejecutado en el hilo de mantenimiento el cual se encarga de ejecutar acciones dentro
+    /// del server que sean de Mantenimiento. Como por ejemplo persistir la base de datos en caso de
+    /// fallas.
     fn maintenance_thread(
         file: String,
         db_receiver: Sender<(Command, Sender<Response>)>,
@@ -303,31 +326,5 @@ impl Server {
                 .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "DB sender error"))?;
             thread::sleep(Duration::from_secs(STORE_TIME_SEC));
         }
-    }
-}
-
-pub struct LinesIterator<'a> {
-    input: &'a mut BufReader<TcpStream>,
-}
-
-impl<'a> LinesIterator<'a> {
-    pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
-        let input = input;
-        Self { input }
-    }
-}
-
-impl Iterator for LinesIterator<'_> {
-    type Item = TypeData;
-
-    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-        let mut buf = String::new();
-        while self.input.read_line(&mut buf).ok()? != 0 {
-            if let Ok(result) = decode(buf.as_bytes(), 0) {
-                let (data, _) = result;
-                return Some(data);
-            }
-        }
-        Some(TypeData::Error("Se ha producido un error".to_string()))
     }
 }

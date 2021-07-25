@@ -19,23 +19,38 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{fs, process};
 
+/// Mensaje de error usado para el tipo de dato Erroneo
 const WRONGTYPE_MSG: &str = "WRONGTYPE Operation against a key holding the wrong kind of value";
+/// Mensaje de error usado cuando el valor no es entero o está fuera de rango permitido.
 const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
+const VERSION_NUMBER: &str = "0001";
 
 #[derive(Debug)]
+/// Entidad que represeenta la Base de Datos Redis dentro de nuestro modelado.
 pub struct Redis {
+    /// Atributo en el cual se guardarán los datos de la DB
     db: TtlHashMap<String, RedisElement>,
+    /// Canal para enviar eventos de loggeo al Logger
     log_sender: Sender<Log>,
-    vec_senders: Vec<Sender<Re>>,
+    /// Mapa en donde se guardan los Senders de los clientes subscriptos al Command::Monitor
+    monitor_subs_vec: Vec<Sender<Re>>,
+    /// Mapa en donde se guarda {id_canal, Vec<Senders de los Usuarios subscriptos a esos canales>}.
     subscribers: HashMap<String, Vec<(String, Sender<Re>)>>,
+    /// Mapa en donde se guarda {Id_cliente, Vec<Canales a los que esta subscripto>}.
     client_channel: HashMap<String, Vec<String>>,
+    /// Cantidad de usuarios conectados
     users_connected: u64,
+    /// Hora en cuando comenzó el servicio.
     server_time: SystemTime,
+    /// Configuración del servidor compartida.
     config: Arc<Mutex<Config>>,
 }
 
 impl Redis {
     #[allow(dead_code)]
+    /// Constructor de la entidad Redis, para su construcción es necesario:
+    /// - un Canal de tipo Sender en el cual se envíen mensajes al Logger.
+    /// - una configuración compartida
     pub fn new(log_sender: Sender<Log>, config: Arc<Mutex<Config>>) -> Self {
         let db = TtlHashMap::new();
         let vec_senders: Vec<Sender<Re>> = Vec::new();
@@ -43,7 +58,7 @@ impl Redis {
         Self {
             db,
             log_sender,
-            vec_senders,
+            monitor_subs_vec: vec_senders,
             users_connected: 0,
             subscribers: HashMap::new(),
             client_channel: HashMap::new(),
@@ -53,6 +68,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Constructor de la entidad Redis exclusiva para TEST.
     fn new_for_test() -> Self {
         let db = TtlHashMap::new();
         let (log_sender, _): (Sender<Log>, _) = mpsc::channel();
@@ -62,7 +78,7 @@ impl Redis {
         Self {
             db,
             log_sender,
-            vec_senders,
+            monitor_subs_vec: vec_senders,
             users_connected: 0,
             subscribers: HashMap::new(),
             client_channel: HashMap::new(),
@@ -72,6 +88,10 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Metodo utilizado para ejecutar un comando dentro de la Base de datos Redis.
+    /// Los comandos tienen que estár definidos en el enum `Command`.
+    /// En caso de error en la ejecución se retornará Err(msg) con el mensaje de error.
+    /// En caso de ejecución efectiva del comando se retornará un Response.
     pub fn execute(&mut self, command: Command) -> Result<Response, String> {
         self.notify_monitor(&command);
 
@@ -177,6 +197,14 @@ impl Redis {
         }
     }
 
+    /// El comando PUBSUB Es un comando de análisis que permite inspeccionar el estado del sistema Pub/Sub.
+    /// La forma de este comando es.
+    /// Los parametros que este puede recibir están definidos en el enum `PubSubParams`, los cuales
+    /// pueden ser:
+    /// - Channels: Indica los canales existentes en PubSub.
+    /// - ChannelsWithChannel: Indica si ese canal existe o no.
+    /// - Numsub: retorna una lista vacía
+    /// - NumsubWithChannel: Indica la cantidad de usuarios subscriptos a ese canal.
     fn pubsub_method(&mut self, param: PubSubParam) -> Response {
         Response::Normal(match param {
             PubSubParam::Channels => self.channels_method(),
@@ -186,6 +214,7 @@ impl Redis {
         })
     }
 
+    /// Indica los canales existentes en PubSub.
     fn channels_method(&mut self) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -203,6 +232,7 @@ impl Redis {
         Re::List(vec_response)
     }
 
+    /// Indica si ese canal existe o no en PubSub
     fn channels_with_channel_method(&mut self, channel: String) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -222,6 +252,7 @@ impl Redis {
         Re::List(vec_response)
     }
 
+    /// Retorna una lista vacía
     fn numsub_method(&mut self) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -234,6 +265,7 @@ impl Redis {
         Re::List(vec![])
     }
 
+    /// Indica la cantidad de usuarios subscriptos a ese canal.
     fn numsub_with_channels_method(&mut self, channels: Vec<String>) -> Re {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -258,6 +290,7 @@ impl Redis {
         Re::List(vec_response)
     }
 
+    /// Permite suscribirse a uno o mas canales
     fn subscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -318,6 +351,7 @@ impl Redis {
             .insert(client_id, vector_channels.to_vec());
     }
 
+    /// Permite Publicar un mensaje en un canal específico.
     fn publish_method(&mut self, channel: String, msg: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -361,6 +395,7 @@ impl Redis {
         Response::Normal(Re::SimpleString("OK".to_string()))
     }
 
+    /// Permite desuscribirse a uno o mas canales
     fn unsubscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -410,16 +445,28 @@ impl Redis {
         ]))
     }
 
+    /// Comando interno que es ejecutado cuando un cliente nuevo se conecta.
     fn addclient_method(&mut self) -> Response {
         self.users_connected += 1;
         Response::Normal(RedisElement::String("OK".to_string()))
     }
 
+    /// Comando interno que es ejecutado cuando un cliente nuevo se desconecta.
     fn removeclient_method(&mut self) -> Response {
         self.users_connected -= 1;
         Response::Normal(RedisElement::String("OK".to_string()))
     }
 
+    /// El comando INFO retorna información y estadísticas sobre el servidor en un formato facil de
+    /// parsear por computadores y facil de leer por humanos.
+    /// Los parametros que este puede recibir están definidos en el enum `InfoParam`, los cuales
+    /// pueden ser:
+    /// - ConnectedClients: Indica la cantidad de Clientes connectados en nuestro servidor.
+    /// - Port: Indica el Puerto en el cual está levantado el servidor.
+    /// - ConfigFile: Indica el nombre del archivo de Configuración del servidor.
+    /// - Uptime: Indica el tiempo en el que el servidor está en funcionamiento.
+    /// - ServerTime: Indica la hora del servidor. (UTC-0).
+    /// - ProcessID: Indica el processID del proceso en el SO.
     fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
         //TODO: agregar test
         let _ = self.log_sender.send(Log::new(
@@ -448,6 +495,7 @@ impl Redis {
         }
     }
 
+    /// Indica el tiempo en el que el servidor está en funcionamiento.
     fn get_server_uptime(&mut self) -> Result<Response, String> {
         let result_time = SystemTime::now().duration_since(self.server_time);
         match result_time {
@@ -467,10 +515,12 @@ impl Redis {
         }
     }
 
+    /// Indica cuantos datos están guardados en la DB.
     fn dbsize_method(&mut self) -> Response {
         Response::Normal(Re::String(self.db.len().to_string()))
     }
 
+    /// Methodo para chequear si la DB responde. En caso que responda se retorna PONG.
     fn ping_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -483,20 +533,24 @@ impl Redis {
         Response::Normal(Re::SimpleString("PONG".to_string()))
     }
 
+    /// Metodo utilizado para notificar a los subscriptores de Monitor los nuevos comandos que van a
+    /// ser ejecutados.
     fn notify_monitor(&mut self, command: &Command) {
         let command_str = command.as_str().to_string();
         if !command_str.is_empty() {
             let mut empty_vec: Vec<Sender<Re>> = Vec::new();
-            for sender in &self.vec_senders {
+            for sender in &self.monitor_subs_vec {
                 if sender.send(Re::String(command_str.to_string())).is_ok() {
                     empty_vec.push(sender.clone());
                 }
             }
 
-            self.vec_senders = empty_vec;
+            self.monitor_subs_vec = empty_vec;
         }
     }
 
+    /// Es un comando de depuración que envía al cliente cada comando procesado por el servidor.
+    /// Puede ayudar entender qúe está sucediendo en la base de datos.
     fn monitor_method(&mut self) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -513,7 +567,7 @@ impl Redis {
         let result = sen_clone.send(Re::SimpleString("OK".to_string()));
         match result {
             Ok(_) => {
-                self.vec_senders.push(sen);
+                self.monitor_subs_vec.push(sen);
                 Ok(Response::Stream(rec))
             }
             Err(e) => {
@@ -529,6 +583,7 @@ impl Redis {
         }
     }
 
+    /// Borra todas las claves de la base de datos. Este comando nunca falla.
     fn flushdb_method(&mut self) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -543,6 +598,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Copia el valor almacenado en una clave origen a una clave destino.
     fn copy_method(&mut self, key_origin: String, key_destination: String) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -571,6 +627,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Devuelve el valor de una clave, si la clave no existe, se retorna el valor especial nil. Se
+    /// retorna un error si el valor almacenado en esa clave no es un string, porque GET maneja
+    /// solamente strings.
     fn get_method(&mut self, key: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -598,6 +657,8 @@ impl Redis {
         }
     }
 
+    /// Retorna el largo del valor de tipo string almacenado en una clave. Retorna error si la clave
+    /// no almacena un string.
     fn strlen_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -626,6 +687,8 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Atómicamente setea el valor a la clave deseada, y retorna el valor anterior almacenado en la
+    /// clave.
     fn getset_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -654,6 +717,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Setea que la clave especificada almacene el valor especificado de tipo string. Si la clave
+    /// contiene un valor previo, la clave es sobreescrita, independientemente del tipo de dato
+    /// contenido (descartando también el valor previo de TTL).
     fn set_method(&mut self, key: String, value: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -669,6 +735,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Incrementa el número almacenado en la clave en un incremento. Si la clave no existe, es
+    /// seteado a 0 antes de realizar la operación. Devuelve error si la clave contiene un valor de
+    /// tipo erróneo o un string que no puede ser representado como entero.
     fn incrby_method(&mut self, key: String, increment: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -720,6 +789,8 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Retorna el valor de todas las claves especificadas. Para las claves que no contienen valor o
+    /// el valor no es un string, se retorna el tipo especial nil.
     fn mget_method(&mut self, keys: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -741,6 +812,10 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Setea las claves data a sus respectivos valores, reemplazando los valores existentes con los
+    /// nuevos valores como SET.
+    /// MSET es atómica, de modo que todas las claves son actualizadas a la vez. No es posible para
+    /// los clientes ver que algunas claves del conjunto fueron modificadas, mientras otras no.
     fn mset_method(&mut self, key_values: Vec<(String, String)>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -758,6 +833,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// obtiene el valor y elimina la clave. Es similar a GET, pero adicionalmente elimina la clave.
     fn getdel_method(&mut self, key: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -790,6 +866,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Elimina una clave específica. La clave es ignorada si no existe.
     fn del_method(&mut self, keys: Vec<String>) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -810,6 +887,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
+    /// Si la clave ya existe y es un string, este comando agrega el valor al final del string. Si
+    /// no existe, es creada con el string vacío y luego le agrega el valor deseado. En este caso es
+    /// similar al comando SET.
     fn append_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -850,6 +930,7 @@ impl Redis {
         }
     }
 
+    /// Retorna si la/s clave/s existe/n.
     fn exists_method(&mut self, keys: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -869,6 +950,8 @@ impl Redis {
         Response::Normal(Re::String(count.to_string()))
     }
 
+    /// Configura un tiempo de expiración sobre una clave (la clave se dice que es volátil). Luego
+    /// de ese tiempo de expiración, la clave es automáticamente eliminada.
     fn expire_method(&mut self, key: String, ttl: Duration) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -884,6 +967,9 @@ impl Redis {
         }
     }
 
+    /// Tiene el mismo efecto que EXPIRE, pero en lugar de indicar el número de segundos que
+    /// representa el TTL (time to live), toma el tiempo absoluto en el timestamp de Unix (segundos
+    /// desde el 1ro de enero de 1970).
     fn expireat_method(&mut self, key: String, ttl: SystemTime) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -899,6 +985,8 @@ impl Redis {
         }
     }
 
+    /// Elimina el tiempo de expiración existente en una clave, tornando una clave volátil en
+    /// persistente (una clave que no expira, dado que no tiene timeout asociado)
     fn persist_method(&mut self, key: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -914,6 +1002,7 @@ impl Redis {
         }
     }
 
+    /// Renombra una clave a un nuevo nombre de clave.
     fn rename_method(
         &mut self,
         key_origin: String,
@@ -947,6 +1036,7 @@ impl Redis {
         }
     }
 
+    /// Retorna ordenados los elementos de una clave
     fn sort_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1002,6 +1092,7 @@ impl Redis {
         Ok(Response::Normal(Re::List(sorted)))
     }
 
+    /// Actualiza el valor de último acceso a la clave.
     fn touch_method(&mut self, keys: Vec<String>) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1032,6 +1123,8 @@ impl Redis {
         count.to_string()
     }
 
+    /// Retorna el tiempo que le queda a una clave para que se cumpla su timeout. Permite a un
+    /// cliente Redis conocer cuántos segundos le quedan a una clave como parte del dataset.
     fn ttl_method(&mut self, key: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1052,6 +1145,9 @@ impl Redis {
         }
     }
 
+    /// Retorna un string que representa el tipo de valor almacenado en una clave. Los tipos que
+    /// puede retornar son: string, list, set (no consideramos los tipos de datos que no se
+    /// implementan en el proyecto).
     fn type_method(&mut self, key: String) -> String {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1073,6 +1169,10 @@ impl Redis {
         }
     }
 
+    /// Retorna el elemento de la posición index en la lista almacenada en la clave indicada. El
+    /// índice comienza en 0. Los valores negativos se pueden usar para determinar elementos desde
+    /// el final de la lista: -1 es el último elemento, -2 es el anteúlitmo, y así.
+    /// Retorna error si el valor de esa clave no es una lista.
     fn lindex_method(&mut self, key: String, index: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1114,6 +1214,9 @@ impl Redis {
         }
     }
 
+    /// Retorna el largo dela lista almacenada en la clave. Si la clave no existe, se interpreta
+    /// como lista vacía, retornando 0. Se retorna error si el valor almacenado en la clave no es
+    /// una lista.
     fn llen_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1141,6 +1244,8 @@ impl Redis {
         }
     }
 
+    /// Elimina y retorna el primer elemento de la lista almacenada en la clave. Se puede indicar un
+    /// parámetro adicional count para indicar obtener esa cantidad de elementos.
     fn lpop_method(&mut self, key: String, count: usize) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1194,6 +1299,9 @@ impl Redis {
         }
     }
 
+    /// Inserta todos los valores especificados en el inicio de la lista de la clave especificada.
+    /// Si no existe la clave, se crea inicialmente como una lista vacía para luego aplicar las
+    /// operaciones. Se retorna error si la clave almacena un elemento que no es una lista.
     fn lpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1238,6 +1346,8 @@ impl Redis {
         }
     }
 
+    /// Inserta los valores especificados al inicio de lalista, solamente si la clave existe y
+    /// almacena una lista. A diferencia de LPUSH, no se realiza operación si la clave no existe.
     fn lpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1280,6 +1390,9 @@ impl Redis {
         }
     }
 
+    /// Retorna los elementos especificados de la lista almacenada en la clave indicada. Los inicios
+    /// y fin de rango se consideran con el 0 como primer elemento de la lista. Estos valores pueden
+    /// ser negativos, indicando que corresponde al final de la lista: -1 es el último elemento.
     fn lrange_method(&mut self, key: String, begin: i32, end: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1329,6 +1442,11 @@ impl Redis {
         }
     }
 
+    /// Elimina la primer cantidad count de ocurrencias de elementos de la lista almacenada en la
+    /// clave, igual al elemento indicado por parámetro. El parámetro cantidad influye de esta manera:
+    /// - count > 0: Elimina elementos iguales al indicado comenzando desde el inicio de la lista.
+    /// - count < 0: Elimina elementos iguales al indicado comenzando desde el final de la lista.
+    /// - count = 0: Elimina todos los elementos iguales al indicado.
     fn lrem_method(
         &mut self,
         key: String,
@@ -1408,6 +1526,8 @@ impl Redis {
         (vector, n)
     }
 
+    /// Setea el elemento de la posición index de la lista con el elemento suministrado. Se retorna
+    /// error si se indica un rango inválido.
     fn lset_method(
         &mut self,
         key: String,
@@ -1473,6 +1593,8 @@ impl Redis {
         }
     }
 
+    /// Elimina y obtiene el/los último/s elemento/s de la lista almacenada en la clave indicada.
+    /// Por defecto, es un solo elemento, se puede indicar una cantidad.
     fn rpop_method(&mut self, key: String, count: usize) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1529,6 +1651,9 @@ impl Redis {
         }
     }
 
+    /// Inserta todos los valores especificados al final de la lista indicada en la clave. Si la
+    /// clave no existe, se crear como una lista vacía antes de realizar la operación. Se retorna
+    /// error si el elemento contenido no es una lista.
     fn rpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1566,6 +1691,8 @@ impl Redis {
         }
     }
 
+    /// Inserta los valores especificados al final de la lista almacenada en la clave indicada,
+    /// solamente si la clave contiene una lista. En caso contrario, no se realiza ninguna operación.
     fn rpushx_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1600,6 +1727,9 @@ impl Redis {
         }
     }
 
+    /// Agrega el elemento indicado al set de la clave especificada. Si la clave no existe, crea un
+    /// set vacío para agregar el valor. Si el valor ya existía en el set, no se realiza agregado.
+    /// Retorna error si el valor almacenado en la clave no es un set.
     fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1640,6 +1770,7 @@ impl Redis {
         }
     }
 
+    /// Retorna la cantidad de elementos del set almacenado en la clave indicada.
     fn scard_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1671,6 +1802,7 @@ impl Redis {
         }
     }
 
+    /// Retorna si el elemento indicado es miembro del set indicado en la clave.
     fn sismember_method(&mut self, key: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1715,6 +1847,7 @@ impl Redis {
         }
     }
 
+    /// Retorna todos los miembros del set almacenado en la clave indicada.
     fn smembers_method(&mut self, key: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1754,6 +1887,9 @@ impl Redis {
         }
     }
 
+    /// Elimina los miembros especificados del set almacenado en la clave indicada. Si la clave no
+    /// existe, se considera como un set vacío, retornando 0. Retorna error si el valor almacenado
+    /// en esa clave no es un set.
     fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1791,6 +1927,7 @@ impl Redis {
         }
     }
 
+    /// Retorna todas las claves que hacen match con un patrón.
     fn keys_method(&mut self, pattern: String) -> Vec<String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1810,6 +1947,7 @@ impl Redis {
         vector
     }
 
+    /// Comando interno para Persistir los elementos de la Base de datos en un archivo
     fn store_method(&self, path: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1833,8 +1971,15 @@ impl Redis {
             }
         };
 
-        match file.write_all(self.db.serialize().as_bytes()) {
-            Ok(_) => Ok(Response::Normal(RedisElement::String("OK".to_string()))),
+        let rdb_file = [
+            "REDIS".as_bytes(),
+            VERSION_NUMBER.as_bytes(),
+            &self.db.serialize(),
+        ]
+        .concat();
+
+        match file.write_all(&rdb_file) {
+            Ok(_) => Ok(Response::Normal(RedisElement::String("Ok".to_string()))),
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
@@ -1848,6 +1993,7 @@ impl Redis {
         }
     }
 
+    /// Comando interno para Cargar los elementos de la Base de datos desde un archivo
     fn load_method(&mut self, path: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1857,21 +2003,32 @@ impl Redis {
             "Command LOAD Received - path: ".to_string() + &*path,
         ));
 
-        let text = match fs::read_to_string(path) {
-            Ok(text) => text,
+        let stream = match fs::read(path) {
+            Ok(stream) => stream,
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
                     line!(),
                     column!(),
                     file!().to_string(),
-                    e.to_string(),
+                    format!("{:?}", e),
                 ));
-                return Err(e.to_string());
+                return Err(format!("{:?}", e));
             }
         };
 
-        match TtlHashMap::deserialize(text) {
+        let mut stream = stream.to_vec();
+
+        if stream.len() < 5 || stream.drain(0..5).collect::<Vec<u8>>() != "REDIS".as_bytes() {
+            return Err("Error: file is not RDB type".to_string());
+        }
+
+        if stream.len() < 4
+            || String::from_utf8_lossy(&stream.drain(0..4).collect::<Vec<u8>>()) != VERSION_NUMBER
+        {
+            return Err("Error: file is not same redis version.".to_string());
+        }
+        match TtlHashMap::deserialize(stream) {
             Ok(map) => {
                 self.db = map;
                 Ok(Response::Normal(RedisElement::String("OK".to_string())))
@@ -1882,13 +2039,15 @@ impl Redis {
                     line!(),
                     column!(),
                     file!().to_string(),
-                    e.clone(),
+                    format!("{:?}", e),
                 ));
-                Err(e)
+                Err(format!("{:?}", e))
             }
         }
     }
 
+    /// El comando CONFIG GET se utiliza para leer los parámetros de configuración de un servidor en
+    /// ejecución.
     fn config_get_method(&mut self) -> Vec<String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1908,6 +2067,8 @@ impl Redis {
         ]
     }
 
+    /// El comando CONFIG SET se utiliza para reconfigurar un servidor en tiempo de ejecución sin
+    /// necesidad de reiniciarlo.
     fn config_set_method(&mut self, parameter: String, value: String) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1940,6 +2101,7 @@ impl Redis {
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
+    use crate::service::redis::TtlHashMap;
     use crate::service::redis::{Re, Redis, Response};
     use std::collections::HashSet;
     use std::fs;
@@ -2115,7 +2277,7 @@ mod test {
         assert!(ping.is_ok());
         assert!(eq_response(
             Re::SimpleString("PONG".to_string()),
-            ping.unwrap()
+            ping.unwrap(),
         ));
     }
 
@@ -3099,7 +3261,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -3143,7 +3305,7 @@ mod test {
         assert!(lset.is_ok());
         assert!(eq_response(
             Re::SimpleString("OK".to_string()),
-            lset.unwrap()
+            lset.unwrap(),
         ));
 
         let key = "key".to_string();
@@ -3155,7 +3317,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
             lrange.unwrap(),
         ));
     }
@@ -3272,7 +3434,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(),]),
+            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
             rpop.unwrap(),
         ));
 
@@ -4128,268 +4290,78 @@ mod test {
     }
 
     #[test]
-    fn test_store_strings() {
+    fn test_store_then_load() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let value = "value1".to_string();
-        let key = "key1".to_string();
-        let _set = redis.execute(Command::Set { key, value });
-        let value = "value2".to_string();
-        let key = "key2".to_string();
-        let _set = redis.execute(Command::Set { key, value });
+        let key1 = "key1".to_string();
+        let value1 = "value1".to_string();
+        let _set = redis.execute(Command::Set {
+            key: key1.clone(),
+            value: value1.clone(),
+        });
+        let key2 = "key2".to_string();
+        let value2 = "value2".to_string();
+        let _set = redis.execute(Command::Set {
+            key: key2.clone(),
+            value: value2.clone(),
+        });
+        let expire = Duration::from_secs(2);
+        let _ttl = redis.execute(Command::Expire {
+            key: key2.clone(),
+            ttl: expire.clone(),
+        });
 
-        let path = "test_store_string.rdb".to_string();
-        let _store = redis.execute(Command::Store { path });
+        let path = "test_store_then_load.rdb".to_string();
+        let _store = redis.execute(Command::Store { path: path.clone() });
 
-        let path = "test_store_string.rdb".to_string();
-        let content = fs::read_to_string(path).unwrap();
-        assert!(
-            content == "key1,value1,0\nkey2,value2,0\n"
-                || content == "key2,value2,0\nkey1,value1,0\n"
-        );
+        let _content = fs::read(path.clone()).unwrap();
+        let mut redis_new: Redis = Redis::new_for_test();
+        let _load = redis_new.execute(Command::Load { path: path });
 
-        fs::remove_file("test_store_string.rdb").unwrap();
-    }
+        let get = redis_new.execute(Command::Get { key: key1 });
+        assert!(eq_response(Re::String(value1), get.unwrap()));
 
-    #[test]
-    fn test_store_list() {
-        let mut redis: Redis = Redis::new_for_test();
+        let get = redis_new.execute(Command::Get { key: key2.clone() });
+        assert!(eq_response(Re::String(value2), get.unwrap()));
 
-        let key = "key".to_string();
-        let value = vec!["value2".to_string(), "value1".to_string()];
-        let _lpush = redis.execute(Command::Lpush { key, value });
-
-        let path = "test_store_list.rdb".to_string();
-        let _store = redis.execute(Command::Store { path });
-
-        let path = "test_store_list.rdb".to_string();
-        let content = fs::read_to_string(path).unwrap();
-        assert_eq!(content, "key,[value1 - value2],0\n");
-
-        fs::remove_file("test_store_list.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_store_set() {
-        let mut redis: Redis = Redis::new_for_test();
-
-        let key = "key".to_string();
-        let mut values = HashSet::new();
-        values.insert("value1".to_string());
-        values.insert("value2".to_string());
-        let _sadd = redis.execute(Command::Sadd { key, values });
-
-        let path = "test_store_set.rdb".to_string();
-        let _store = redis.execute(Command::Store { path });
-
-        let path = "test_store_set.rdb".to_string();
-        let content = fs::read_to_string(path).unwrap();
-        assert!(content == "key,{value1 - value2},0\n" || content == "key,{value2 - value1},0\n");
-
-        fs::remove_file("test_store_set.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_store_string_with_ttl() {
-        let mut redis: Redis = Redis::new_for_test();
-
-        let value = "value".to_string();
-        let key = "key".to_string();
-        let _set = redis.execute(Command::Set { key, value });
-
-        let key = "key".to_string();
-        let ttl = Duration::from_secs(2);
-        let _expire = redis.execute(Command::Expire { key, ttl });
-
-        let path = "test_store_string_with_ttl.rdb".to_string();
-        let _store = redis.execute(Command::Store { path });
-        let ttl = (SystemTime::now() + Duration::from_secs(2))
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let path = "test_store_string_with_ttl.rdb".to_string();
-        let content = fs::read_to_string(path).unwrap();
-        assert_eq!(content, format!("key,value,{}\n", ttl));
-
-        fs::remove_file("test_store_string_with_ttl.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_store_value_with_dash() {
-        let mut redis: Redis = Redis::new_for_test();
-
-        let key = "key".to_string();
-        let mut values = HashSet::new();
-        values.insert("value - 1".to_string());
-        values.insert("value2".to_string());
-        let _sadd = redis.execute(Command::Sadd { key, values });
-
-        let path = "test_store_value_with_dash.rdb".to_string();
-        let _store = redis.execute(Command::Store { path });
-
-        let path = "test_store_value_with_dash.rdb".to_string();
-        let content = fs::read_to_string(path).unwrap();
-        assert!(content == "key,{value2 - value-1},0\n" || content == "key,{value-1 - value2},0\n");
-
-        fs::remove_file("test_store_value_with_dash.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_store_values_with_separated_words() {
-        let mut redis: Redis = Redis::new_for_test();
-
-        let key = "key".to_string();
-        let mut values = HashSet::new();
-        values.insert("value 1".to_string());
-        values.insert("value2".to_string());
-        let _sadd = redis.execute(Command::Sadd { key, values });
-
-        let path = "test_store_values_with_separated_words.rdb".to_string();
-        let _store = redis.execute(Command::Store { path });
-
-        let path = "test_store_values_with_separated_words.rdb".to_string();
-        let content = fs::read_to_string(path).unwrap();
-        assert!(content == "key,{value2 - value 1},0\n" || content == "key,{value 1 - value2},0\n");
-
-        fs::remove_file("test_store_values_with_separated_words.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_load_string() {
-        let mut file = fs::File::create("test_load_string.rdb").unwrap();
-        file.write_all("key,value,0\n".as_bytes()).unwrap();
-
-        let mut redis: Redis = Redis::new_for_test();
-        let path = "test_load_string.rdb".to_string();
-        let _load = redis.execute(Command::Load { path });
-
-        let key = "key".to_string();
-        let get = redis.execute(Command::Get { key });
-
-        assert!(eq_response(Re::String("value".to_string()), get.unwrap()));
-
-        fs::remove_file("test_load_string.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_load_list() {
-        let mut file = fs::File::create("test_load_list.rdb").unwrap();
-        file.write_all("key,[value1 - value2],0\n".as_bytes())
-            .unwrap();
-
-        let mut redis: Redis = Redis::new_for_test();
-        let path = "test_load_list.rdb".to_string();
-        let _load = redis.execute(Command::Load { path });
-
-        let key = "key".to_string();
-        let index = 0;
-        let lindex_0 = redis.execute(Command::Lindex { key, index });
+        let ttl = redis_new.execute(Command::Ttl { key: key2 });
         assert!(eq_response(
-            Re::String("value1".to_string()),
-            lindex_0.unwrap(),
+            Re::String((expire.as_secs() - 1).to_string()),
+            ttl.unwrap()
         ));
 
-        let key = "key".to_string();
-        let index = 1;
-        let lindex_1 = redis.execute(Command::Lindex { key, index });
-        assert!(eq_response(
-            Re::String("value2".to_string()),
-            lindex_1.unwrap(),
-        ));
-
-        fs::remove_file("test_load_list.rdb").unwrap();
+        fs::remove_file("test_store_then_load.rdb").unwrap();
     }
 
     #[test]
-    fn test_load_set() {
-        let mut file = fs::File::create("test_load_set.rdb").unwrap();
-        file.write_all("key,{value1 - value2},0\n".as_bytes())
-            .unwrap();
-
-        let mut redis: Redis = Redis::new_for_test();
-        let path = "test_load_set.rdb".to_string();
-        let _load = redis.execute(Command::Load { path });
-
-        let key = "key".to_string();
-        let smembers = redis.execute(Command::Smembers { key });
-
-        let mut values = HashSet::new();
-        values.insert("value1".to_string());
-        values.insert("value2".to_string());
-
-        assert!(eq_response(Re::Set(values), smembers.unwrap()));
-
-        fs::remove_file("test_load_set.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_load_string_with_ttl() {
-        let mut file = fs::File::create("test_load_string_with_ttl.rdb").unwrap();
-        let ttl = (SystemTime::now() + Duration::from_secs(2))
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let serialized = format!("key,value,{}\n", ttl);
-        file.write_all(serialized.as_bytes()).unwrap();
-
-        let mut redis: Redis = Redis::new_for_test();
-        let path = "test_load_string_with_ttl.rdb".to_string();
-        let _load = redis.execute(Command::Load { path });
-
-        let key = "key".to_string();
-        let get_ttl = redis.execute(Command::Ttl { key });
-
-        assert!(eq_response(Re::String("1".to_string()), get_ttl.unwrap()));
-
-        fs::remove_file("test_load_string_with_ttl.rdb").unwrap();
-    }
-
-    #[test]
-    fn test_load_values_with_dash() {
+    fn test_load_corrupt_file_returns_err() {
         let mut redis: Redis = Redis::new_for_test();
 
-        let mut file = fs::File::create("test_load_values_with_dash.rdb").unwrap();
-        file.write_all("key,{value-1 - value2},0\n".as_bytes())
-            .unwrap();
+        let path = "test_load_empy_file_returns_err.rdb".to_string();
+        let mut file = fs::File::create(path.clone()).unwrap();
 
-        let path = "test_load_values_with_dash.rdb".to_string();
-        let _load = redis.execute(Command::Load { path });
-
+        let op_resizedb = 0xfb;
+        let mut store_len = TtlHashMap::length_encode(1);
+        let mut ttl_len = TtlHashMap::length_encode(0);
+        let byte_value_type = TtlHashMap::value_type_encode(&Re::String("value".to_string()));
         let key = "key".to_string();
-        let smembers = redis.execute(Command::Smembers { key });
+        let mut key_encoded = TtlHashMap::string_encode(key.clone());
+        let op_eof = 0xff;
 
-        let mut values = HashSet::new();
-        values.insert("value-1".to_string());
-        values.insert("value2".to_string());
+        let mut bytes = ["REDIS".as_bytes(), "0001".as_bytes()].concat();
+        bytes.push(op_resizedb);
+        bytes.append(&mut store_len);
+        bytes.append(&mut ttl_len);
+        bytes.push(byte_value_type);
+        bytes.append(&mut key_encoded);
+        bytes.push(op_eof);
 
-        assert!(eq_response(Re::Set(values), smembers.unwrap()));
+        let _ = file.write_all(&bytes);
 
-        fs::remove_file("test_load_values_with_dash.rdb").unwrap();
-    }
+        let load = redis.execute(Command::Load { path });
 
-    #[test]
-    fn test_load_values_with_separated_words() {
-        let mut redis: Redis = Redis::new_for_test();
-
-        let mut file = fs::File::create("test_load_values_with_separated_words.rdb").unwrap();
-        file.write_all("key,{value 1 - value2},0\n".as_bytes())
-            .unwrap();
-
-        let path = "test_load_values_with_separated_words.rdb".to_string();
-        let _load = redis.execute(Command::Load { path });
-
-        let key = "key".to_string();
-        let smembers = redis.execute(Command::Smembers { key });
-
-        let mut values = HashSet::new();
-        values.insert("value 1".to_string());
-        values.insert("value2".to_string());
-
-        assert!(eq_response(Re::Set(values), smembers.unwrap()));
-
-        fs::remove_file("test_load_values_with_separated_words.rdb").unwrap();
+        assert!(load.is_err());
+        fs::remove_file("test_load_empy_file_returns_err.rdb").unwrap();
     }
 
     #[test]

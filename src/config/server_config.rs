@@ -19,13 +19,17 @@ pub struct Config {
     /// dbfilename: un string indicando el nombre del archivo en el cual se persistirán los datos
     /// almacenados.
     dbfilename: String,
+    /// logfile: un string indicando el nombre del archivo en el cual se grabara el log
     logfile: String,
+    /// loglevel: indica el nivel de log a implementar en el server [error, info, debug]
     loglevel: LogLevel,
+    /// configfile: guarda en la configuración la ruta del archivo de configuración usado.
     configfile: String,
 }
 
 #[allow(dead_code)]
 impl Config {
+    /// Este metodo permite generar una configuración con valores por defecto.
     pub fn new() -> Config {
         Config {
             verbose: 0,
@@ -38,6 +42,7 @@ impl Config {
         }
     }
 
+    /// Este metodo permite generar una configuración con valores definidos en un archivo de conf.
     pub fn new_from_file(path: String) -> Result<Config, io::Error> {
         let mut config = Config::new();
         config.set_configfile(path.clone());

@@ -7,6 +7,7 @@ use std::iter::FromIterator;
 use std::time::SystemTime;
 
 #[allow(dead_code)]
+/// Generador de comandos validos a partir de listado de strings provenientes del Cliente.
 pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, String> {
     if params.is_empty() {
         return Err("Params can't be empty".to_string());
@@ -82,6 +83,7 @@ pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, Strin
     }
 }
 
+/// Generador de comando Command::Ping.
 fn generate_ping(params: Vec<String>) -> Result<Command, String> {
     if params.len() > 1 {
         return Err("ERR wrong number of arguments for 'ping' command".to_string());
@@ -90,6 +92,7 @@ fn generate_ping(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Ping)
 }
 
+/// Generador de comando Command::Monitor.
 fn generate_monitor(params: Vec<String>) -> Result<Command, String> {
     if params.len() > 1 {
         return Err("ERR wrong number of arguments for 'monitor' command".to_string());
@@ -98,6 +101,7 @@ fn generate_monitor(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Monitor)
 }
 
+/// Generador de comando Command::Info
 fn generate_info(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'info' command".to_string());
@@ -126,6 +130,7 @@ fn generate_info(params: Vec<String>) -> Result<Command, String> {
     }
 }
 
+/// Generador de comando Command::Config
 fn generate_config(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'config' command".to_string());
@@ -145,6 +150,7 @@ fn generate_config(params: Vec<String>) -> Result<Command, String> {
     }
 }
 
+/// Generador de comando Command::Flushdb
 fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
     if params.len() > 1 {
         return Err("ERR wrong number of arguments for 'flushdb' command".to_string());
@@ -152,7 +158,7 @@ fn generate_flushdb(params: Vec<String>) -> Result<Command, String> {
 
     Ok(Command::Flushdb)
 }
-
+/// Generador de comando Command::Copy
 fn generate_copy(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'copy' command".to_string());
@@ -166,6 +172,7 @@ fn generate_copy(params: Vec<String>) -> Result<Command, String> {
     })
 }
 
+/// Generador de comando Command::Get
 fn generate_get(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'get' command".to_string());
@@ -175,6 +182,7 @@ fn generate_get(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Get { key })
 }
 
+/// Generador de comando Command::GetSet
 fn generate_getset(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'getset' command".to_string());
@@ -185,6 +193,7 @@ fn generate_getset(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Getset { key, value })
 }
 
+/// Generador de comando Command::Set
 fn generate_set(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR syntax error".to_string());
@@ -195,6 +204,7 @@ fn generate_set(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Set { key, value })
 }
 
+/// Generador de comando Command::Incrby
 fn generate_incrby(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR syntax error".to_string());
@@ -211,6 +221,7 @@ fn generate_incrby(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Incrby { key, increment })
 }
 
+/// Generador de comando Command::Decrby
 fn generate_decrby(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR syntax error".to_string());
@@ -227,6 +238,7 @@ fn generate_decrby(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Decrby { key, decrement })
 }
 
+/// Generador de comando Command::GetDel
 fn generate_getdel(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'getdel' command".to_string());
@@ -236,6 +248,7 @@ fn generate_getdel(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Getdel { key })
 }
 
+/// Generador de comando Command::Del
 fn generate_del(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'del' command".to_string());
@@ -244,6 +257,7 @@ fn generate_del(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Del { keys: params })
 }
 
+/// Generador de comando Command::Append
 fn generate_append(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'append' command".to_string());
@@ -254,6 +268,7 @@ fn generate_append(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Append { key, value })
 }
 
+/// Generador de comando Command::Exists
 fn generate_exists(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'exists' command".to_string());
@@ -262,6 +277,7 @@ fn generate_exists(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Exists { keys: params })
 }
 
+/// Generador de comando Command::Expire
 fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'expire' command".to_string());
@@ -279,6 +295,7 @@ fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Expire { key, ttl })
 }
 
+/// Generador de comando Command::ExpireAt
 fn generate_expireat(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'expireat' command".to_string());
@@ -296,6 +313,7 @@ fn generate_expireat(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Expireat { key, ttl })
 }
 
+/// Generador de comando Command::Persist
 fn generate_persist(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'persist' command".to_string());
@@ -305,6 +323,7 @@ fn generate_persist(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Persist { key })
 }
 
+/// Generador de comando Command::Rename
 fn generate_rename(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'rename' command".to_string());
@@ -318,6 +337,7 @@ fn generate_rename(params: Vec<String>) -> Result<Command, String> {
     })
 }
 
+/// Generador de comando Command::Sort
 fn generate_sort(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'sort' command".to_string());
@@ -327,6 +347,7 @@ fn generate_sort(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Sort { key })
 }
 
+/// Generador de comando Command::Touch
 fn generate_touch(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'touch' command".to_string());
@@ -335,6 +356,7 @@ fn generate_touch(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Touch { keys: params })
 }
 
+/// Generador de comando Command::Ttl
 fn generate_ttl(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'ttl' command".to_string());
@@ -344,6 +366,7 @@ fn generate_ttl(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Ttl { key })
 }
 
+/// Generador de comando Command::Type
 fn generate_type(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'type' command".to_string());
@@ -353,6 +376,7 @@ fn generate_type(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Type { key })
 }
 
+/// Generador de comando Command::Mget
 fn generate_mget(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'mget' command".to_string());
@@ -361,6 +385,7 @@ fn generate_mget(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Mget { keys: params })
 }
 
+/// Generador de comando Command::Mset
 fn generate_mset(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() || params.len() % 2 != 0 {
         return Err("ERR wrong number of arguments for 'mset' command".to_string());
@@ -374,6 +399,7 @@ fn generate_mset(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Mset { key_values })
 }
 
+/// Generador de comando Command::Strlen
 fn generate_strlen(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 1 {
         return Err("ERR wrong number of arguments for 'strlen' command".to_string());
@@ -383,6 +409,7 @@ fn generate_strlen(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Strlen { key })
 }
 
+/// Generador de comando Command::Dbsize
 fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
     if !params.is_empty() {
         return Err("ERR wrong number of arguments for 'dbsize' command".to_string());
@@ -391,6 +418,7 @@ fn generate_dbsize(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Dbsize)
 }
 
+/// Generador de comando Command::Lindex
 fn generate_lindex(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'lindex' command".to_string());
@@ -407,6 +435,7 @@ fn generate_lindex(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Lindex { key, index })
 }
 
+/// Generador de comando Command::Llen
 fn generate_llen(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'llen' command".to_string());
@@ -416,6 +445,7 @@ fn generate_llen(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Llen { key })
 }
 
+/// Generador de comando Command::Lpop
 fn generate_lpop(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() || params.len() > 2 {
         return Err("ERR wrong number of arguments for 'lpop' command".to_string());
@@ -436,6 +466,7 @@ fn generate_lpop(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Lpop { key, count })
 }
 
+/// Generador de comando Command::Lrange
 fn generate_lrange(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 3 {
         return Err("ERR wrong number of arguments for 'lrange' command".to_string());
@@ -459,6 +490,7 @@ fn generate_lrange(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Lrange { key, begin, end })
 }
 
+/// Generador de comando Command::Lrem
 fn generate_lrem(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 3 {
         return Err("ERR wrong number of arguments for 'lrem' command".to_string());
@@ -481,6 +513,7 @@ fn generate_lrem(params: Vec<String>) -> Result<Command, String> {
     })
 }
 
+/// Generador de comando Command::Lset
 fn generate_lset(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 3 {
         return Err("ERR wrong number of arguments for 'lset' command".to_string());
@@ -503,6 +536,7 @@ fn generate_lset(params: Vec<String>) -> Result<Command, String> {
     })
 }
 
+/// Generador de comando Command::Rpop
 fn generate_rpop(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() || params.len() > 2 {
         return Err("ERR wrong number of arguments for 'rpop' command".to_string());
@@ -523,6 +557,7 @@ fn generate_rpop(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Rpop { key, count })
 }
 
+/// Generador de comando Command::Lpush
 fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
         return Err("ERR wrong number of arguments for 'lpush' command".to_string());
@@ -534,6 +569,7 @@ fn generate_lpush(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Lpush { key, value: values })
 }
 
+/// Generador de comando Command::Lpushx
 fn generate_lpushx(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
         return Err("ERR wrong number of arguments for 'lpushx' command".to_string());
@@ -545,6 +581,7 @@ fn generate_lpushx(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Lpushx { key, value: values })
 }
 
+/// Generador de comando Command::Rpush
 fn generate_rpush(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
         return Err("ERR wrong number of arguments for 'rpush' command".to_string());
@@ -556,6 +593,7 @@ fn generate_rpush(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Rpush { key, value: values })
 }
 
+/// Generador de comando Command::Rpushx
 fn generate_rpushx(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
         return Err("ERR wrong number of arguments for 'rpushx' command".to_string());
@@ -567,6 +605,7 @@ fn generate_rpushx(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Rpushx { key, value: values })
 }
 
+/// Generador de comando Command::Sadd
 fn generate_sadd(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
         return Err("ERR wrong number of arguments for 'sadd' command".to_string());
@@ -579,6 +618,7 @@ fn generate_sadd(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Sadd { key, values })
 }
 
+/// Generador de comando Command::Scard
 fn generate_scard(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'scard' command".to_string());
@@ -587,6 +627,7 @@ fn generate_scard(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Scard { key })
 }
 
+/// Generador de comando Command::Sismember
 fn generate_sismember(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'sismember' command".to_string());
@@ -597,6 +638,7 @@ fn generate_sismember(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Sismember { key, value })
 }
 
+/// Generador de comando Command::Srem
 fn generate_srem(params: Vec<String>) -> Result<Command, String> {
     if params.len() <= 1 {
         return Err("ERR wrong number of arguments for 'srem' command".to_string());
@@ -609,6 +651,7 @@ fn generate_srem(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Srem { key, values })
 }
 
+/// Generador de comando Command::Smembers
 fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'smembers' command".to_string());
@@ -618,6 +661,7 @@ fn generate_smembers(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Smembers { key })
 }
 
+/// Generador de comando Command::Keys
 fn generate_keys(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'keys' command".to_string());
@@ -626,6 +670,7 @@ fn generate_keys(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Keys { pattern })
 }
 
+/// Generador de comando Command::Store
 fn generate_store(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'store' command".to_string());
@@ -635,6 +680,7 @@ fn generate_store(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Store { path })
 }
 
+/// Generador de comando Command::Load
 fn generate_load(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'load' command".to_string());
@@ -644,6 +690,7 @@ fn generate_load(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Load { path })
 }
 
+/// Generador de comando Command::Pubsub
 fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'pubsub' command".to_string());
@@ -677,6 +724,7 @@ fn generate_pubsub(params: Vec<String>) -> Result<Command, String> {
     }
 }
 
+/// Generador de comando Command::Subscribe
 fn generate_subscribe(params: Vec<String>, client_id: String) -> Result<Command, String> {
     if params.is_empty() {
         return Err("ERR wrong number of arguments for 'subscribe' command".to_string());
@@ -688,6 +736,7 @@ fn generate_subscribe(params: Vec<String>, client_id: String) -> Result<Command,
     })
 }
 
+/// Generador de comando Command::Publish
 fn generate_publish(params: Vec<String>) -> Result<Command, String> {
     if params.len() != 2 {
         return Err("ERR wrong number of arguments for 'publish' command".to_string());
@@ -697,6 +746,7 @@ fn generate_publish(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Publish { channel, message })
 }
 
+/// Generador de comando Command::Unsubscribe
 fn generate_unsubscribe(params: Vec<String>, client_id: String) -> Command {
     Command::Unsubscribe {
         channels: params,
