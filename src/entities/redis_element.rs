@@ -3,8 +3,11 @@ use std::fmt;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
+/// RedisElement: Enum usado para representar los tipos posibles a ser almacenados en nuestra base de
+/// datos redis.
 pub enum RedisElement {
     String(String),
+    SimpleString(String),
     Set(HashSet<String>),
     List(Vec<String>),
     Nil,
@@ -41,6 +44,7 @@ impl fmt::Display for RedisElement {
             RedisElement::Nil => {
                 write!(fmt, "(nil)")?;
             }
+            RedisElement::SimpleString(s) => write!(fmt, "{}", s.replace(" - ", "-"))?,
         }
         Ok(())
     }

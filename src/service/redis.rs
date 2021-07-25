@@ -106,9 +106,9 @@ impl Redis {
             Command::Incrby { key, increment } => self.incrby_method(key, increment as i32),
             Command::Mget { keys } => Ok(self.mget_method(keys)),
             Command::Mset { key_values } => Ok(self.mset_method(key_values)),
-            Command::Set { key, value } => {
-                Ok(Response::Normal(Re::String(self.set_method(key, value))))
-            }
+            Command::Set { key, value } => Ok(Response::Normal(Re::SimpleString(
+                self.set_method(key, value),
+            ))),
             Command::Strlen { key } => self.strlen_method(key),
 
             // Keys
@@ -156,7 +156,7 @@ impl Redis {
             Command::Rpush { key, value } => self.rpush_method(key, value),
             Command::Rpushx { key, value } => self.rpushx_method(key, value),
 
-            //Sets
+            // Sets
             Command::Sadd { key, values } => self.sadd_method(key, values),
             Command::Scard { key } => self.scard_method(key),
             Command::Sismember { key, value } => self.sismember_method(key, value),
@@ -358,7 +358,7 @@ impl Redis {
             self.subscribers.insert(channel, empty_vec);
         }
 
-        Response::Normal(Re::String("Ok".to_string()))
+        Response::Normal(Re::SimpleString("OK".to_string()))
     }
 
     fn unsubscribe_method(&mut self, channels: Vec<String>, client_id: String) -> Response {
@@ -412,12 +412,12 @@ impl Redis {
 
     fn addclient_method(&mut self) -> Response {
         self.users_connected += 1;
-        Response::Normal(RedisElement::String("Ok".to_string()))
+        Response::Normal(RedisElement::String("OK".to_string()))
     }
 
     fn removeclient_method(&mut self) -> Response {
         self.users_connected -= 1;
-        Response::Normal(RedisElement::String("Ok".to_string()))
+        Response::Normal(RedisElement::String("OK".to_string()))
     }
 
     fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
@@ -480,7 +480,7 @@ impl Redis {
             "Command PING Received".to_string(),
         ));
 
-        Response::Normal(Re::String("PONG".to_string()))
+        Response::Normal(Re::SimpleString("PONG".to_string()))
     }
 
     fn notify_monitor(&mut self, command: &Command) {
@@ -510,7 +510,7 @@ impl Redis {
 
         let sen_clone = sen.clone();
 
-        let result = sen_clone.send(Re::String("OK".to_string()));
+        let result = sen_clone.send(Re::SimpleString("OK".to_string()));
         match result {
             Ok(_) => {
                 self.vec_senders.push(sen);
@@ -539,7 +539,7 @@ impl Redis {
         ));
 
         self.db = TtlHashMap::new();
-        Response::Normal(Re::String("OK".to_string()))
+        Response::Normal(Re::SimpleString("OK".to_string()))
     }
 
     #[allow(dead_code)]
@@ -665,7 +665,7 @@ impl Redis {
 
         self.db.insert(key, Re::String(value));
 
-        "Ok".to_string()
+        "OK".to_string()
     }
 
     #[allow(dead_code)]
@@ -754,7 +754,7 @@ impl Redis {
             self.set_method(key.to_string(), value.to_string());
         }
 
-        Response::Normal(Re::String("Ok".to_string()))
+        Response::Normal(Re::SimpleString("OK".to_string()))
     }
 
     #[allow(dead_code)]
@@ -773,7 +773,7 @@ impl Redis {
                     self.db.remove(&key);
                     Ok(return_value)
                 }
-                Re::Nil => Ok(return_value),
+                Re::Nil => Err("ERR no such key".to_string()),
                 _ => {
                     let _ = self.log_sender.send(Log::new(
                         LogLevel::Error,
@@ -972,7 +972,7 @@ impl Redis {
                 }
             },
             None => {
-                return Ok(Response::Normal(Re::Nil));
+                return Ok(Response::Normal(Re::List(vec![])));
             }
         };
         let transformed_collection: Result<Vec<f64>, String> = collection
@@ -1067,6 +1067,7 @@ impl Redis {
                 Re::List(_) => "list".to_string(),
                 Re::Set(_) => "set".to_string(),
                 Re::Nil => "none".to_string(),
+                Re::SimpleString(_) => "string".to_string(),
             },
             None => "none".to_string(),
         }
@@ -1446,7 +1447,7 @@ impl Redis {
 
                     saved_value[position as usize] = element;
 
-                    Ok(Response::Normal(Re::String("Ok".to_string())))
+                    Ok(Response::Normal(Re::SimpleString("OK".to_string())))
                 }
                 _ => {
                     let _ = self.log_sender.send(Log::new(
@@ -1748,7 +1749,7 @@ impl Redis {
                     file!().to_string(),
                     "The key doesn't exist".to_string(),
                 ));
-                Err("The key doesn't exist".to_string())
+                Ok(Response::Normal(Re::Set(HashSet::new())))
             }
         }
     }
@@ -1833,7 +1834,7 @@ impl Redis {
         };
 
         match file.write_all(self.db.serialize().as_bytes()) {
-            Ok(_) => Ok(Response::Normal(RedisElement::String("Ok".to_string()))),
+            Ok(_) => Ok(Response::Normal(RedisElement::String("OK".to_string()))),
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,
@@ -1873,7 +1874,7 @@ impl Redis {
         match TtlHashMap::deserialize(text) {
             Ok(map) => {
                 self.db = map;
-                Ok(Response::Normal(RedisElement::String("Ok".to_string())))
+                Ok(Response::Normal(RedisElement::String("OK".to_string())))
             }
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
@@ -1932,7 +1933,7 @@ impl Redis {
                 return Err("Parameter does not exist".to_string());
             }
         }
-        Ok(Response::Normal(Re::String("Ok".to_string())))
+        Ok(Response::Normal(Re::SimpleString("OK".to_string())))
     }
 }
 
@@ -2112,7 +2113,10 @@ mod test {
         let ping = redis.execute(Command::Ping);
 
         assert!(ping.is_ok());
-        assert!(eq_response(Re::String("PONG".to_string()), ping.unwrap()));
+        assert!(eq_response(
+            Re::SimpleString("PONG".to_string()),
+            ping.unwrap()
+        ));
     }
 
     #[test]
@@ -2327,7 +2331,7 @@ mod test {
         let key = "key".to_string();
         let getdel = redis.execute(Command::Getdel { key });
 
-        assert!(eq_response(Re::Nil, getdel.unwrap()));
+        assert_eq!(true, getdel.is_err());
     }
 
     #[test]
@@ -2677,12 +2681,12 @@ mod test {
     }
 
     #[test]
-    fn test_sort_empty_key_returns_nil() {
+    fn test_sort_empty_key() {
         let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let sort = redis.execute(Command::Sort { key });
-        assert!(eq_response(Re::Nil, sort.unwrap()));
+        assert!(eq_response(Re::List(vec![]), sort.unwrap()));
     }
 
     #[test]
@@ -3137,7 +3141,10 @@ mod test {
         });
 
         assert!(lset.is_ok());
-        assert!(eq_response(Re::String("Ok".to_string()), lset.unwrap()));
+        assert!(eq_response(
+            Re::SimpleString("OK".to_string()),
+            lset.unwrap()
+        ));
 
         let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {
@@ -4393,7 +4400,7 @@ mod test {
         let conf = vec![
             "dump.rdb".to_string(),
             "log.log".to_string(),
-            "6379".to_string(),
+            "8080".to_string(),
             "0".to_string(),
             "0".to_string(),
         ];
