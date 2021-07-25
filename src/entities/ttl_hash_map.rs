@@ -1,9 +1,10 @@
 use crate::entities::redis_element::RedisElement;
 use std::collections::hash_map::Keys;
 use std::collections::HashMap;
-use std::fmt;
 use std::hash::Hash;
+use std::str::from_utf8;
 use std::time::{Duration, SystemTime};
+use std::vec::Drain;
 
 #[derive(Debug)]
 pub struct TtlHashMap<K: Eq + Hash, V> {
@@ -133,53 +134,202 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
     pub fn keys(&self) -> Keys<K, V> {
         self.store.keys()
     }
-}
 
-impl<K: Eq + Hash + fmt::Display, V: fmt::Display> TtlHashMap<K, V> {
-    /// Devuelve un string con todos los elementos serializados. Los ttl se guardan como segundos desde UNIX_EPOCH.
-    pub fn serialize(&self) -> String {
-        let mut s = "".to_string();
-        for (key, value) in self.store.iter() {
-            let ttl = match self.ttls.get(key) {
-                Some(t) => t
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap_or_else(|_| Duration::from_secs(0))
-                    .as_secs(),
-                None => 0,
-            };
-            s.push_str(format!("{},{},{}\n", key.to_string(), value.to_string(), ttl).as_str());
-        }
-        s
+    fn set_size(&mut self, store_size: usize, ttl_size: usize) {
+        self.store.reserve(store_size);
+        self.ttls.reserve(ttl_size);
     }
 }
 
+const OP_EOF: u8 = 0xff;
+const OP_EXPIRETIME: u8 = 0xfd;
+const OP_RESIZEDB: u8 = 0xfb;
+const WRONG_ELEMENT_TYPE: u8 = 3;
+
 impl TtlHashMap<String, RedisElement> {
-    // Deserializa un string para devolver un TtlHashMap cargado con todos los elementos. Solo está implementado para cargar RedisElements.
-    pub fn deserialize(s: String) -> Result<Self, String> {
-        let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
+    /// Devuelve un vector de bytes con el TtlHashMap serializado. Se guardan todos los key-value con su ttl (como Unix Timestamp en segundos).
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut s: Vec<u8> = vec![OP_RESIZEDB];
+        s.append(&mut TtlHashMap::length_encode(self.store.len()));
+        s.append(&mut TtlHashMap::length_encode(self.ttls.len()));
 
-        for element in s.lines() {
-            let mut element = element.split(',');
-
-            let key = element.next().ok_or("ERR syntax error")?;
-            let value = element
-                .next()
-                .ok_or_else(|| format!("ERR missing value at key: {}", key))?;
-            let ttl = element
-                .next()
-                .ok_or_else(|| format!("ERR missing ttl at key: {}", key))?
-                .parse()
-                .map_err(|_| format!("ERR ttl syntax error at key: {}", key))?;
-
-            map.insert(key.to_string(), RedisElement::from(value));
-            if ttl != 0 {
-                map.set_ttl_absolute(
-                    key.to_string(),
-                    SystemTime::UNIX_EPOCH + Duration::from_secs(ttl),
-                );
+        for (key, value) in self.store.iter() {
+            if let Some(ttl) = self.ttls.get(key) {
+                let secs = ttl
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_else(|_| Duration::from_secs(0))
+                    .as_secs();
+                s.push(OP_EXPIRETIME);
+                s.append(&mut (secs as u32).to_be_bytes().to_vec());
+            }
+            let value_type = TtlHashMap::value_type_encode(value);
+            if value_type != WRONG_ELEMENT_TYPE {
+                s.push(value_type);
+                s.append(&mut TtlHashMap::string_encode(key.to_string()));
+                s.append(&mut TtlHashMap::value_encode(value.clone()));
             }
         }
-        Ok(map)
+        s.push(OP_EOF);
+        s
+    }
+
+    // Deserializa un vector de bytes para devolver un TtlHashMap cargado con todos los RedisElements.
+    pub fn deserialize(mut s: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
+        let mut s = s.drain(..);
+
+        match s.next().unwrap_or(0) {
+            OP_RESIZEDB => {
+                map.set_size(
+                    TtlHashMap::length_decode(&mut s).ok_or("Corrupt store size")? as usize,
+                    TtlHashMap::length_decode(&mut s).ok_or("Corrupt ttl size")? as usize,
+                );
+                map.load(&mut s)?;
+                Ok(map)
+            }
+            OP_EOF => Ok(map),
+            _ => Err("Found unknown OP code.".into()),
+        }
+    }
+
+    fn load(&mut self, s: &mut Drain<'_, u8>) -> Result<(), Box<dyn std::error::Error>> {
+        while let Some(op_code) = s.next() {
+            match op_code {
+                OP_EXPIRETIME => {
+                    let secs = TtlHashMap::read_int(s).ok_or("Corrupt expiry time")?;
+                    let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(secs as u64);
+
+                    if SystemTime::now().duration_since(ttl).is_err() {
+                        let value_type = s.next().ok_or("Corrupt value type")?;
+                        let key = TtlHashMap::string_decode(s).ok_or("Corrupt key")?;
+                        let value =
+                            TtlHashMap::value_decode(s, value_type).ok_or("Corrupt value")?;
+                        self.insert(key.clone(), value);
+                        self.set_ttl_absolute(key, ttl);
+                    }
+                }
+                OP_EOF => (),
+                _ => {
+                    let value_type = op_code;
+                    let key = TtlHashMap::string_decode(s).ok_or("Corrupt key")?;
+                    let value = TtlHashMap::value_decode(s, value_type).ok_or("Corrupt value")?;
+                    self.insert(key, value);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn bytes_as_u32_be(bytes: &[u8]) -> u32 {
+        ((bytes[0] as u32) << 24)
+            | ((bytes[1] as u32) << 16)
+            | ((bytes[2] as u32) << 8)
+            | (bytes[3] as u32)
+    }
+
+    fn read_int(s: &mut Drain<'_, u8>) -> Option<u32> {
+        Some(TtlHashMap::bytes_as_u32_be(&[
+            s.next()?,
+            s.next()?,
+            s.next()?,
+            s.next()?,
+        ]))
+    }
+
+    fn string_decode(s: &mut Drain<'_, u8>) -> Option<String> {
+        let mut bytes: Vec<u8> = Vec::new();
+        let len = TtlHashMap::length_decode(s)?;
+        for _ in 0..len {
+            bytes.push(s.next()?);
+        }
+        Some(from_utf8(&bytes).ok()?.to_string())
+    }
+
+    pub fn string_encode(string: String) -> Vec<u8> {
+        let mut bytes: Vec<u8> = vec![];
+        bytes.append(&mut TtlHashMap::length_encode(string.len()));
+        bytes.append(&mut string.as_bytes().to_vec());
+        bytes
+    }
+
+    pub fn list_encode(list: Vec<String>) -> Vec<u8> {
+        let mut bytes = TtlHashMap::length_encode(list.len());
+        for value in list {
+            bytes.append(&mut TtlHashMap::string_encode(value));
+        }
+        bytes
+    }
+
+    fn list_decode(s: &mut Drain<'_, u8>) -> Option<Vec<String>> {
+        let len = TtlHashMap::length_decode(s)?;
+        let mut vec: Vec<String> = vec![];
+        for _ in 0..len {
+            vec.push(TtlHashMap::string_decode(s)?);
+        }
+        Some(vec)
+    }
+
+    pub fn length_encode(length: usize) -> Vec<u8> {
+        if length < 64 {
+            // 00 + length in 6 bits
+            vec![length as u8]
+        } else if length < 16384 {
+            // 01 + length in 14 bits
+            vec![0x40 | (length >> 8) as u8, length as u8]
+        } else {
+            // 1000 0000 + length in 32 bits
+            vec![
+                0x80,
+                (length >> 24) as u8,
+                (length >> 16) as u8,
+                (length >> 8) as u8,
+                length as u8,
+            ]
+        }
+    }
+
+    fn length_decode(s: &mut Drain<'_, u8>) -> Option<u32> {
+        let first_byte = s.next().unwrap_or(5);
+        match first_byte >> 6 {
+            0b00 => Some(first_byte as u32),
+            0b01 => Some(TtlHashMap::bytes_as_u32_be(&[
+                0,
+                0,
+                first_byte & 0b00111111,
+                s.next()?,
+            ])),
+            0b10 => Some(TtlHashMap::read_int(s)?),
+            _ => None,
+        }
+    }
+
+    pub fn value_encode(value: RedisElement) -> Vec<u8> {
+        match value {
+            RedisElement::String(string) => TtlHashMap::string_encode(string),
+            RedisElement::List(list) => TtlHashMap::list_encode(list),
+            RedisElement::Set(set) => TtlHashMap::list_encode(set.into_iter().collect()),
+            _ => vec![],
+        }
+    }
+
+    fn value_decode(s: &mut Drain<'_, u8>, value_type: u8) -> Option<RedisElement> {
+        match value_type {
+            0 => Some(RedisElement::String(TtlHashMap::string_decode(s)?)),
+            1 => Some(RedisElement::List(TtlHashMap::list_decode(s)?)),
+            2 => Some(RedisElement::Set(
+                TtlHashMap::list_decode(s)?.into_iter().collect(),
+            )),
+            _ => None,
+        }
+    }
+
+    pub fn value_type_encode(value: &RedisElement) -> u8 {
+        match value {
+            RedisElement::String(_) => 0,
+            RedisElement::List(_) => 1,
+            RedisElement::Set(_) => 2,
+            _ => WRONG_ELEMENT_TYPE,
+        }
     }
 }
 
@@ -317,22 +467,128 @@ mod test {
     }
 
     #[test]
-    fn test_serialize_and_deserialize() {
+    fn test_length_encode_decode() {
+        let number: u32 = 15;
+        let mut encoded: Vec<u8> = TtlHashMap::length_encode(number as usize);
+        let decoded: u32 = TtlHashMap::length_decode(&mut encoded.drain(..)).unwrap();
+        assert_eq!(number, decoded);
+    }
+
+    #[test]
+    fn test_value_encode_decode() {
+        let value = RedisElement::String("value".to_string());
+        let mut encoded = TtlHashMap::value_encode(value.clone());
+        let decoded = TtlHashMap::value_decode(
+            &mut encoded.drain(..),
+            TtlHashMap::value_type_encode(&value),
+        );
+        assert_eq!(value, decoded.unwrap());
+    }
+
+    #[test]
+    fn test_serialize() {
         let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
         let key = "key".to_string();
+        let value = RedisElement::String("value".to_string());
+        map.insert(key.clone(), value.clone());
+        map.set_ttl_relative(key.clone(), Duration::from_secs(2));
+        let bytes = map.serialize();
 
-        map.insert(key.clone(), RedisElement::String("value".to_string()));
-        map.set_ttl_relative(key.clone(), Duration::from_secs(1));
-
-        let ttl = (SystemTime::now() + Duration::from_secs(1))
+        let op_resizedb = 0xfb;
+        let mut store_len = TtlHashMap::length_encode(1);
+        let mut ttl_len = TtlHashMap::length_encode(1);
+        let op_expiretime = 0xfd;
+        let secs = (SystemTime::now() + Duration::from_secs(2))
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs()
-            .to_string();
-        let serialization = map.serialize();
-        assert_eq!(serialization, "key,value,".to_owned() + &ttl + "\n");
+            .as_secs();
+        let mut ttl = (secs as u32).to_be_bytes().to_vec();
+        let byte_value_type = TtlHashMap::value_type_encode(&RedisElement::String("".to_string()));
+        let mut key_encoded = TtlHashMap::string_encode(key);
+        let mut value_encoded = TtlHashMap::string_encode("value".to_string());
+        let op_eof = 0xff;
 
-        let mut new_map = TtlHashMap::deserialize(serialization).unwrap();
+        let mut vec = vec![op_resizedb];
+        vec.append(&mut store_len);
+        vec.append(&mut ttl_len);
+        vec.push(op_expiretime);
+        vec.append(&mut ttl);
+        vec.push(byte_value_type);
+        vec.append(&mut key_encoded);
+        vec.append(&mut value_encoded);
+        vec.push(op_eof);
+        assert_eq!(bytes, vec);
+    }
+
+    #[test]
+    fn test_deserialize() {
+        let op_resizedb = 0xfb;
+        let mut store_len = TtlHashMap::length_encode(1);
+        let mut ttl_len = TtlHashMap::length_encode(0);
+        let byte_value_type = TtlHashMap::value_type_encode(&RedisElement::String("".to_string()));
+        let key = "key".to_string();
+        let mut key_encoded = TtlHashMap::string_encode(key.clone());
+        let mut value_encoded = TtlHashMap::string_encode("value".to_string());
+        let op_eof = 0xff;
+
+        let mut bytes = vec![op_resizedb];
+        bytes.append(&mut store_len);
+        bytes.append(&mut ttl_len);
+        bytes.push(byte_value_type);
+        bytes.append(&mut key_encoded);
+        bytes.append(&mut value_encoded);
+        bytes.push(op_eof);
+
+        let mut map = TtlHashMap::deserialize(bytes).unwrap();
+
+        assert_eq!(
+            *map.get(&key).unwrap(),
+            RedisElement::String("value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_serialize_and_deserialize_key_value_string() {
+        let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
+        let key = "key".to_string();
+        let value = RedisElement::String("value".to_string());
+        map.insert(key.clone(), value.clone());
+
+        let bytes = map.serialize();
+        let mut new_map = TtlHashMap::deserialize(bytes).unwrap();
+
+        assert_eq!(*new_map.get(&key).unwrap(), value);
+    }
+
+    #[test]
+    fn test_serialize_and_deserialize_key_value_list() {
+        let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
+        let key = "key".to_string();
+        let value = RedisElement::List(vec!["1".to_string(), "2".to_string()]);
+        map.insert(key.clone(), value.clone());
+
+        let bytes = map.serialize();
+        let mut new_map = TtlHashMap::deserialize(bytes).unwrap();
+
+        assert_eq!(*new_map.get(&key).unwrap(), value);
+    }
+
+    #[test]
+    fn test_serialize_and_deserialize_with_ttl() {
+        let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
+        let key = "key".to_string();
+        let ttl = SystemTime::now() + Duration::from_secs(2);
+
+        map.insert(key.clone(), RedisElement::String("value".to_string()));
+        map.set_ttl_absolute(key.clone(), ttl);
+
+        let bytes = map.serialize();
+
+        let mut new_map = TtlHashMap::deserialize(bytes).unwrap();
         assert_eq!(new_map.get(&key).unwrap().to_string(), "value");
+        assert_eq!(
+            new_map.get_ttl(&key).unwrap().as_secs(),
+            ttl.duration_since(SystemTime::now()).unwrap().as_secs()
+        );
     }
 }
