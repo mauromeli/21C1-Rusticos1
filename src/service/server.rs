@@ -55,7 +55,7 @@ impl Server {
         let command = Command::Load {
             path: self.config.lock().unwrap().get_dbfilename(),
         };
-        self.redis.execute(command)?;
+        let _ = self.redis.execute(command);
 
         // endload db
 
