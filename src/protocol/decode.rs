@@ -1,4 +1,4 @@
-#[warn(dead_code)]
+/// Longitud del `\r\n`.
 const CRLF: usize = 2;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -11,7 +11,15 @@ pub enum TypeData {
     Nil,
 }
 
-#[allow(dead_code)]
+///Decodifica el comando recibido desde redis-cli.
+///
+/// En caso de que el comando esté incompleto, devuelve un error de tipo `String`.
+///
+/// De otro modo, retorna un `TypeData` que representa a los bytes decodificados y un `usize`, que indica la posición del último byte que se decodificó.
+/// # Arguments
+///
+/// * `bytes` - Comando representado en bytes
+/// * `start` - Posición desde donde se debe comenzar a decodificar los bytes
 pub fn decode(bytes: &[u8], start: usize) -> std::result::Result<(TypeData, usize), String> {
     if !size_ok(bytes, start) {
         return Err("Error comando incompleto".to_string());
@@ -83,7 +91,15 @@ pub fn decode(bytes: &[u8], start: usize) -> std::result::Result<(TypeData, usiz
     }
 }
 
-#[allow(dead_code)]
+///Parsea los bytes desde la posición indicada hasta encontrar el primer `/r/n`.
+///
+/// En caso de que el comando (representado en bytes) esté mal formado, devuelve un error de tipo `String`.
+///
+/// De otro modo, retorna un `String` que representa a los bytes decodificados y un `usize`, que indica la posición del último byte que se decodificó.
+/// # Arguments
+///
+/// * `bytes` - Comando representado en bytes
+/// * `pos` - Posición desde donde se debe comenzar a decodificar los bytes
 pub fn parse(bytes: &[u8], pos: usize) -> std::result::Result<(String, usize), String> {
     let vector = Vec::from(&bytes[pos..]);
     if let Ok(string) = String::from_utf8(vector) {
@@ -96,6 +112,15 @@ pub fn parse(bytes: &[u8], pos: usize) -> std::result::Result<(String, usize), S
     Err("Error parseando el comando recibido".to_string())
 }
 
+/// Pregunta si la longitud de los bytes a codificar está bien.
+///
+/// En caso de que `pos` sea mayor o igual a la longitud de `bytes` (convertidos en `String`), devuelve `false`.
+///
+/// De otro modo, retorna `true`.
+/// # Arguments
+///
+/// * `bytes` - Comando representado en bytes
+/// * `pos` - Posición desde donde se debe comenzar a decodificar los bytes
 pub fn size_ok(bytes: &[u8], pos: usize) -> bool {
     let vector = Vec::from(bytes);
     if let Ok(string) = String::from_utf8(vector) {

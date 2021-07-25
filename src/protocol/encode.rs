@@ -1,5 +1,12 @@
 use crate::protocol::decode::TypeData;
+
+/// Codifica la respuesta del comando para enviárselo a redis-cli, utilizando el protocolo RESP.
 ///
+/// Se transforma el contenido del `TypeData` recibido, usando el protocolo RESP, y convirtiéndolo en un byte slice.
+///
+/// # Arguments
+///
+/// * `data` - Respuesta, representada como `TypeData`, a codificar.
 pub fn encode(data: TypeData) -> Vec<u8> {
     match data {
         TypeData::String(string) => {
