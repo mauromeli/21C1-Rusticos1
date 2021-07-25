@@ -110,7 +110,6 @@ pub fn size_ok(bytes: &[u8], pos: usize) -> bool {
 mod test {
     use crate::protocol::decode::{decode, TypeData};
 
-
     #[test]
     fn test_decode_string() {
         let bytes = "+OK\r\n";
@@ -175,6 +174,9 @@ mod test {
         vector.push(TypeData::BulkString("set".to_string()));
         vector.push(TypeData::BulkString("mykey".to_string()));
         vector.push(TypeData::BulkString("1".to_string()));
-        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0, TypeData::Array(vector))
+        assert_eq!(
+            decode(bytes.as_bytes(), 0).ok().unwrap().0,
+            TypeData::Array(vector)
+        )
     }
 }

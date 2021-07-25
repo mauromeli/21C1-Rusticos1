@@ -31,9 +31,7 @@ fn parse_response(redis_element: RedisElement) -> TypeData {
         RedisElement::List(list) => parse_list_and_set(list),
         RedisElement::Set(set) => parse_list_and_set(Vec::from_iter(set)),
         RedisElement::Nil => TypeData::Nil,
-        RedisElement::SimpleString(string) => {
-            return TypeData::String(string);
-        }
+        RedisElement::SimpleString(string) => TypeData::String(string),
     }
 }
 

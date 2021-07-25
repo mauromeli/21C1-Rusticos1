@@ -58,7 +58,8 @@ pub fn encode(data: TypeData) -> Vec<u8> {
                 "$".to_string().as_bytes(),
                 "-1".to_string().as_bytes(),
                 "\r\n".as_bytes(),
-            ].concat();
+            ]
+            .concat();
             bytes
         }
     }

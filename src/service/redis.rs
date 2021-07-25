@@ -106,9 +106,9 @@ impl Redis {
             Command::Incrby { key, increment } => self.incrby_method(key, increment as i32),
             Command::Mget { keys } => Ok(self.mget_method(keys)),
             Command::Mset { key_values } => Ok(self.mset_method(key_values)),
-            Command::Set { key, value } => {
-                Ok(Response::Normal(Re::SimpleString(self.set_method(key, value))))
-            }
+            Command::Set { key, value } => Ok(Response::Normal(Re::SimpleString(
+                self.set_method(key, value),
+            ))),
             Command::Strlen { key } => self.strlen_method(key),
 
             // Keys
@@ -2113,7 +2113,10 @@ mod test {
         let ping = redis.execute(Command::Ping);
 
         assert!(ping.is_ok());
-        assert!(eq_response(Re::SimpleString("PONG".to_string()), ping.unwrap()));
+        assert!(eq_response(
+            Re::SimpleString("PONG".to_string()),
+            ping.unwrap()
+        ));
     }
 
     #[test]
@@ -3138,7 +3141,10 @@ mod test {
         });
 
         assert!(lset.is_ok());
-        assert!(eq_response(Re::SimpleString("OK".to_string()), lset.unwrap()));
+        assert!(eq_response(
+            Re::SimpleString("OK".to_string()),
+            lset.unwrap()
+        ));
 
         let key = "key".to_string();
         let lrange = redis.execute(Command::Lrange {
