@@ -773,7 +773,7 @@ impl Redis {
                     self.db.remove(&key);
                     Ok(return_value)
                 }
-                Re::Nil => Ok(return_value),
+                Re::Nil => Err("ERR no such key".to_string()),
                 _ => {
                     let _ = self.log_sender.send(Log::new(
                         LogLevel::Error,
@@ -972,7 +972,7 @@ impl Redis {
                 }
             },
             None => {
-                return Ok(Response::Normal(Re::Nil));
+                return Ok(Response::Normal(Re::List(vec![])));
             }
         };
         let transformed_collection: Result<Vec<f64>, String> = collection
@@ -1748,7 +1748,7 @@ impl Redis {
                     file!().to_string(),
                     "The key doesn't exist".to_string(),
                 ));
-                Err("The key doesn't exist".to_string())
+                Ok(Response::Normal(Re::Set(HashSet::new())))
             }
         }
     }
@@ -2327,7 +2327,7 @@ mod test {
         let key = "key".to_string();
         let getdel = redis.execute(Command::Getdel { key });
 
-        assert!(eq_response(Re::Nil, getdel.unwrap()));
+        assert_eq!(true, getdel.is_err());
     }
 
     #[test]
@@ -2677,12 +2677,12 @@ mod test {
     }
 
     #[test]
-    fn test_sort_empty_key_returns_nil() {
+    fn test_sort_empty_key() {
         let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let sort = redis.execute(Command::Sort { key });
-        assert!(eq_response(Re::Nil, sort.unwrap()));
+        assert!(eq_response(Re::List(vec![]), sort.unwrap()));
     }
 
     #[test]
