@@ -206,7 +206,7 @@ impl Command {
             Command::Monitor => "monitor",
             Command::Info { .. } => "info",
             Command::ConfigGet => "config get",
-            Command::ConfigSet {..} => "config set",
+            Command::ConfigSet { .. } => "config set",
 
             // Strings
             Command::Append { .. } => "append",

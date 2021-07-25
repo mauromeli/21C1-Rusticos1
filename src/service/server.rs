@@ -138,8 +138,19 @@ impl Server {
             }
 
             for (handler, _) in handlers_inactives {
-                // TODO: revisar salida
-                let _ = handler.join();
+                if handler.join().is_err() {
+                    log_sender
+                        .send(Log::new(
+                            LogLevel::Error,
+                            line!(),
+                            column!(),
+                            file!().to_string(),
+                            "Error joining handler".to_string(),
+                        ))
+                        .map_err(|_| {
+                            Error::new(ErrorKind::ConnectionAborted, "Error joining handler")
+                        })?;
+                }
             }
 
             handlers = handlers_actives;
@@ -162,12 +173,10 @@ impl Server {
 
         let client_id = output.try_clone()?.local_addr()?.to_string();
 
-        //TODO: ver error
         Server::connected_user(&db_sender_clone);
 
         // iteramos las lineas que recibimos de nuestro cliente
         'principal: while let Some(request) = lines.next() {
-            //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
 
@@ -180,7 +189,6 @@ impl Server {
 
             let command = generate(vector, client_id.clone());
 
-            // TODO: Agregar forma de escritura por cada tipo.
             match command {
                 Ok(command) => {
                     db_sender_clone
@@ -212,7 +220,7 @@ impl Server {
                             output.write_all((msg + "\n").as_ref())?;
                         }
                     }
-                },
+                }
                 _ => {
                     output.write_all((command.err().unwrap() + "\n").as_ref())?;
                 }
