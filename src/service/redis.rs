@@ -1834,7 +1834,6 @@ impl Redis {
             }
         };
 
-<<<<<<< HEAD
         let rdb_file = [
             "REDIS".as_bytes(),
             VERSION_NUMBER.as_bytes(),
@@ -1844,10 +1843,6 @@ impl Redis {
 
         match file.write_all(&rdb_file) {
             Ok(_) => Ok(Response::Normal(RedisElement::String("Ok".to_string()))),
-=======
-        match file.write_all(self.db.serialize().as_bytes()) {
-            Ok(_) => Ok(Response::Normal(RedisElement::String("OK".to_string()))),
->>>>>>> af839a7f4acc28c851907ad6b2c0e2f7a7a0eec3
             Err(e) => {
                 let _ = self.log_sender.send(Log::new(
                     LogLevel::Error,

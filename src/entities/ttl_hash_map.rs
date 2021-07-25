@@ -144,6 +144,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
 const OP_EOF: u8 = 0xff;
 const OP_EXPIRETIME: u8 = 0xfd;
 const OP_RESIZEDB: u8 = 0xfb;
+const WRONG_ELEMENT_TYPE: u8 = 3;
 
 impl TtlHashMap<String, RedisElement> {
     /// Devuelve un vector de bytes con el TtlHashMap serializado. Se guardan todos los key-value con su ttl (como Unix Timestamp en segundos).
@@ -161,9 +162,12 @@ impl TtlHashMap<String, RedisElement> {
                 s.push(OP_EXPIRETIME);
                 s.append(&mut (secs as u32).to_be_bytes().to_vec());
             }
-            s.push(TtlHashMap::value_type_encode(value));
-            s.append(&mut TtlHashMap::string_encode(key.to_string()));
-            s.append(&mut TtlHashMap::value_encode(value.clone()));
+            let value_type = TtlHashMap::value_type_encode(value);
+            if value_type != WRONG_ELEMENT_TYPE {
+                s.push(value_type);
+                s.append(&mut TtlHashMap::string_encode(key.to_string()));
+                s.append(&mut TtlHashMap::value_encode(value.clone()));
+            }
         }
         s.push(OP_EOF);
         s
@@ -184,10 +188,7 @@ impl TtlHashMap<String, RedisElement> {
                 Ok(map)
             }
             OP_EOF => Ok(map),
-            _ => Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Found unknown OP code.",
-            ))?,
+            _ => Err("Found unknown OP code.".into()),
         }
     }
 
@@ -219,15 +220,15 @@ impl TtlHashMap<String, RedisElement> {
         Ok(())
     }
 
-    fn as_u32_be(array: &[u8]) -> u32 {
-        ((array[0] as u32) << 24)
-            | ((array[1] as u32) << 16)
-            | ((array[2] as u32) << 8)
-            | ((array[3] as u32) << 0)
+    fn bytes_as_u32_be(bytes: &[u8]) -> u32 {
+        ((bytes[0] as u32) << 24)
+            | ((bytes[1] as u32) << 16)
+            | ((bytes[2] as u32) << 8)
+            | (bytes[3] as u32)
     }
 
     fn read_int(s: &mut Drain<'_, u8>) -> Option<u32> {
-        Some(TtlHashMap::as_u32_be(&[
+        Some(TtlHashMap::bytes_as_u32_be(&[
             s.next()?,
             s.next()?,
             s.next()?,
@@ -291,7 +292,7 @@ impl TtlHashMap<String, RedisElement> {
         let first_byte = s.next().unwrap_or(5);
         match first_byte >> 6 {
             0b00 => Some(first_byte as u32),
-            0b01 => Some(TtlHashMap::as_u32_be(&[
+            0b01 => Some(TtlHashMap::bytes_as_u32_be(&[
                 0,
                 0,
                 first_byte & 0b00111111,
@@ -327,7 +328,7 @@ impl TtlHashMap<String, RedisElement> {
             RedisElement::String(_) => 0,
             RedisElement::List(_) => 1,
             RedisElement::Set(_) => 2,
-            RedisElement::Nil => 3,
+            _ => WRONG_ELEMENT_TYPE,
         }
     }
 }
