@@ -125,7 +125,7 @@ pub fn size_ok(bytes: &[u8], pos: usize) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::protocol::decode::{decode};
+    use crate::protocol::decode::decode;
     use crate::protocol::type_data::TypeData;
 
     #[test]

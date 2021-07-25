@@ -3261,7 +3261,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "value1".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "value1".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -3317,7 +3317,7 @@ mod test {
 
         assert!(lrange.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value2".to_string(), "Nuevos".to_string(), ]),
+            Re::List(vec!["value2".to_string(), "Nuevos".to_string(),]),
             lrange.unwrap(),
         ));
     }
@@ -3434,7 +3434,7 @@ mod test {
         let rpop = redis.execute(Command::Rpop { key, count: 2 });
         assert!(rpop.is_ok());
         assert!(eq_response(
-            Re::List(vec!["value".to_string(), "value2".to_string(), ]),
+            Re::List(vec!["value".to_string(), "value2".to_string(),]),
             rpop.unwrap(),
         ));
 

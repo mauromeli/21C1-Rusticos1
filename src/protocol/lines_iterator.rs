@@ -1,7 +1,7 @@
 use crate::protocol::decode::decode;
+use crate::protocol::type_data::TypeData;
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
-use crate::protocol::type_data::TypeData;
 
 /// Iterador de líneas, enviadas por Redis, que el servidor lee.
 pub struct LinesIterator<'a> {

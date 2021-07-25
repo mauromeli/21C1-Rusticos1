@@ -73,8 +73,8 @@ pub fn encode(data: TypeData) -> Vec<u8> {
 }
 #[cfg(test)]
 mod test {
-    use crate::protocol::type_data::TypeData;
     use crate::protocol::encode::encode;
+    use crate::protocol::type_data::TypeData;
 
     #[test]
     fn test_encode_string() {
@@ -109,5 +109,4 @@ mod test {
         ];
         assert_eq!(encode(TypeData::Array(array)), bytes)
     }
-
 }

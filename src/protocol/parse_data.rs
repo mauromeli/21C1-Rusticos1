@@ -1,7 +1,7 @@
 use crate::entities::redis_element::RedisElement;
 use crate::protocol::encode::encode;
-use std::iter::FromIterator;
 use crate::protocol::type_data::TypeData;
+use std::iter::FromIterator;
 
 /// Parsea el comando recibido (`TypeData`) a un `Vec<String>`.
 ///
@@ -68,7 +68,6 @@ fn parse_list_and_set(vector_re: Vec<String>) -> TypeData {
     }
     TypeData::Array(vector)
 }
-
 
 /// Intenta parsear un `TypeData` a un `Vec<String>`.
 ///
