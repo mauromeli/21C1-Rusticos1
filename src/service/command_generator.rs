@@ -77,7 +77,7 @@ pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, Strin
         "pubsub" => generate_pubsub(params),
         "subscribe" => generate_subscribe(params, client_id),
         "publish" => generate_publish(params),
-        "unsubscribe" => generate_unsubscribe(params, client_id),
+        "unsubscribe" => Ok(generate_unsubscribe(params, client_id)),
 
         _ => Err("Command not valid".to_string()),
     }
@@ -269,7 +269,6 @@ fn generate_expire(params: Vec<String>) -> Result<Command, String> {
     }
 
     let key = params[0].clone();
-    //TODO: deberian poder ser segundos negativos, corregir
     let seconds: Result<u32, _> = params[1].to_string().parse();
 
     if seconds.is_err() {
@@ -700,14 +699,11 @@ fn generate_publish(params: Vec<String>) -> Result<Command, String> {
     Ok(Command::Publish { channel, message })
 }
 
-fn generate_unsubscribe(params: Vec<String>, client_id: String) -> Result<Command, String> {
-    if params.is_empty() {
-        return Err("ERR wrong number of arguments for 'unsubscribe' command".to_string());
-    }
-    Ok(Command::Unsubscribe {
+fn generate_unsubscribe(params: Vec<String>, client_id: String) -> Command {
+    Command::Unsubscribe {
         channels: params,
         client_id,
-    })
+    }
 }
 
 #[allow(unused_imports)]
