@@ -170,17 +170,17 @@ impl TtlHashMap<String, RedisElement> {
     }
 
     // Deserializa un vector de bytes para devolver un TtlHashMap cargado con todos los RedisElements.
-    pub fn deserialize(mut s: Vec<u8>) -> std::io::Result<Self> {
+    pub fn deserialize(mut s: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
         let mut map: TtlHashMap<String, RedisElement> = TtlHashMap::new();
         let mut s = s.drain(..);
 
         match s.next().unwrap_or(0) {
             OP_RESIZEDB => {
                 map.set_size(
-                    TtlHashMap::length_decode(&mut s) as usize,
-                    TtlHashMap::length_decode(&mut s) as usize,
+                    TtlHashMap::length_decode(&mut s).ok_or("Corrupt store size")? as usize,
+                    TtlHashMap::length_decode(&mut s).ok_or("Corrupt ttl size")? as usize,
                 );
-                map.load(&mut s);
+                map.load(&mut s)?;
                 Ok(map)
             }
             OP_EOF => Ok(map),
@@ -191,17 +191,18 @@ impl TtlHashMap<String, RedisElement> {
         }
     }
 
-    fn load(&mut self, s: &mut Drain<'_, u8>) {
+    fn load(&mut self, s: &mut Drain<'_, u8>) -> Result<(), Box<dyn std::error::Error>> {
         while let Some(op_code) = s.next() {
             match op_code {
                 OP_EXPIRETIME => {
-                    let secs = TtlHashMap::read_int(s);
+                    let secs = TtlHashMap::read_int(s).ok_or("Corrupt expiry time")?;
                     let ttl = SystemTime::UNIX_EPOCH + Duration::from_secs(secs as u64);
 
                     if SystemTime::now().duration_since(ttl).is_err() {
-                        let value_type = s.next().unwrap();
-                        let key = TtlHashMap::string_decode(s);
-                        let value = TtlHashMap::value_decode(s, value_type);
+                        let value_type = s.next().ok_or("Corrupt value type")?;
+                        let key = TtlHashMap::string_decode(s).ok_or("Corrupt key")?;
+                        let value =
+                            TtlHashMap::value_decode(s, value_type).ok_or("Corrupt value")?;
                         self.insert(key.clone(), value);
                         self.set_ttl_absolute(key, ttl);
                     }
@@ -209,12 +210,13 @@ impl TtlHashMap<String, RedisElement> {
                 OP_EOF => (),
                 _ => {
                     let value_type = op_code;
-                    let key = TtlHashMap::string_decode(s);
-                    let value = TtlHashMap::value_decode(s, value_type);
+                    let key = TtlHashMap::string_decode(s).ok_or("Corrupt key")?;
+                    let value = TtlHashMap::value_decode(s, value_type).ok_or("Corrupt value")?;
                     self.insert(key, value);
                 }
             }
         }
+        Ok(())
     }
 
     fn as_u32_be(array: &[u8]) -> u32 {
@@ -224,32 +226,32 @@ impl TtlHashMap<String, RedisElement> {
             | ((array[3] as u32) << 0)
     }
 
-    fn read_int(s: &mut Drain<'_, u8>) -> u32 {
-        TtlHashMap::as_u32_be(&[
-            s.next().unwrap(),
-            s.next().unwrap(),
-            s.next().unwrap(),
-            s.next().unwrap(),
-        ])
+    fn read_int(s: &mut Drain<'_, u8>) -> Option<u32> {
+        Some(TtlHashMap::as_u32_be(&[
+            s.next()?,
+            s.next()?,
+            s.next()?,
+            s.next()?,
+        ]))
     }
 
-    fn string_decode(s: &mut Drain<'_, u8>) -> String {
+    fn string_decode(s: &mut Drain<'_, u8>) -> Option<String> {
         let mut bytes: Vec<u8> = Vec::new();
-        let len = TtlHashMap::length_decode(s);
+        let len = TtlHashMap::length_decode(s)?;
         for _ in 0..len {
-            bytes.push(s.next().unwrap());
+            bytes.push(s.next()?);
         }
-        from_utf8(&bytes).unwrap().to_string()
+        Some(from_utf8(&bytes).ok()?.to_string())
     }
 
-    fn string_encode(string: String) -> Vec<u8> {
+    pub fn string_encode(string: String) -> Vec<u8> {
         let mut bytes: Vec<u8> = vec![];
         bytes.append(&mut TtlHashMap::length_encode(string.len()));
         bytes.append(&mut string.as_bytes().to_vec());
         bytes
     }
 
-    fn list_encode(list: Vec<String>) -> Vec<u8> {
+    pub fn list_encode(list: Vec<String>) -> Vec<u8> {
         let mut bytes = TtlHashMap::length_encode(list.len());
         for value in list {
             bytes.append(&mut TtlHashMap::string_encode(value));
@@ -257,16 +259,16 @@ impl TtlHashMap<String, RedisElement> {
         bytes
     }
 
-    fn list_decode(s: &mut Drain<'_, u8>) -> Vec<String> {
-        let len = TtlHashMap::length_decode(s);
+    fn list_decode(s: &mut Drain<'_, u8>) -> Option<Vec<String>> {
+        let len = TtlHashMap::length_decode(s)?;
         let mut vec: Vec<String> = vec![];
         for _ in 0..len {
-            vec.push(TtlHashMap::string_decode(s));
+            vec.push(TtlHashMap::string_decode(s)?);
         }
-        vec
+        Some(vec)
     }
 
-    fn length_encode(length: usize) -> Vec<u8> {
+    pub fn length_encode(length: usize) -> Vec<u8> {
         if length < 64 {
             // 00 + length in 6 bits
             vec![length as u8]
@@ -283,20 +285,24 @@ impl TtlHashMap<String, RedisElement> {
                 length as u8,
             ]
         }
-        //if length > 0xffffffff ?
     }
 
-    fn length_decode(s: &mut Drain<'_, u8>) -> u32 {
-        let first_byte = s.next().unwrap_or(5); //unwrap! puede fallar? no deberia
+    fn length_decode(s: &mut Drain<'_, u8>) -> Option<u32> {
+        let first_byte = s.next().unwrap_or(5);
         match first_byte >> 6 {
-            0b00 => first_byte as u32,
-            0b01 => TtlHashMap::as_u32_be(&[0, 0, first_byte & 0b00111111, s.next().unwrap()]),
-            0b10 => TtlHashMap::read_int(s),
-            _ => 0, //11 caso no implementado en encode! agregarlo?
+            0b00 => Some(first_byte as u32),
+            0b01 => Some(TtlHashMap::as_u32_be(&[
+                0,
+                0,
+                first_byte & 0b00111111,
+                s.next()?,
+            ])),
+            0b10 => Some(TtlHashMap::read_int(s)?),
+            _ => None,
         }
     }
 
-    fn value_encode(value: RedisElement) -> Vec<u8> {
+    pub fn value_encode(value: RedisElement) -> Vec<u8> {
         match value {
             RedisElement::String(string) => TtlHashMap::string_encode(string),
             RedisElement::List(list) => TtlHashMap::list_encode(list),
@@ -305,16 +311,18 @@ impl TtlHashMap<String, RedisElement> {
         }
     }
 
-    fn value_decode(s: &mut Drain<'_, u8>, value_type: u8) -> RedisElement {
+    fn value_decode(s: &mut Drain<'_, u8>, value_type: u8) -> Option<RedisElement> {
         match value_type {
-            0 => RedisElement::String(TtlHashMap::string_decode(s)),
-            1 => RedisElement::List(TtlHashMap::list_decode(s)),
-            2 => RedisElement::Set(TtlHashMap::list_decode(s).into_iter().collect()),
-            _ => RedisElement::Nil,
+            0 => Some(RedisElement::String(TtlHashMap::string_decode(s)?)),
+            1 => Some(RedisElement::List(TtlHashMap::list_decode(s)?)),
+            2 => Some(RedisElement::Set(
+                TtlHashMap::list_decode(s)?.into_iter().collect(),
+            )),
+            _ => None,
         }
     }
 
-    fn value_type_encode(value: &RedisElement) -> u8 {
+    pub fn value_type_encode(value: &RedisElement) -> u8 {
         match value {
             RedisElement::String(_) => 0,
             RedisElement::List(_) => 1,
@@ -461,7 +469,7 @@ mod test {
     fn test_length_encode_decode() {
         let number: u32 = 15;
         let mut encoded: Vec<u8> = TtlHashMap::length_encode(number as usize);
-        let decoded: u32 = TtlHashMap::length_decode(&mut encoded.drain(..));
+        let decoded: u32 = TtlHashMap::length_decode(&mut encoded.drain(..)).unwrap();
         assert_eq!(number, decoded);
     }
 
@@ -473,7 +481,7 @@ mod test {
             &mut encoded.drain(..),
             TtlHashMap::value_type_encode(&value),
         );
-        assert_eq!(value, decoded);
+        assert_eq!(value, decoded.unwrap());
     }
 
     #[test]

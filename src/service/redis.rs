@@ -1866,13 +1866,13 @@ impl Redis {
 
         let mut stream = stream.to_vec();
 
-        let redis: Vec<u8> = stream.drain(0..5).collect();
-        if !redis.starts_with("REDIS".as_bytes()) {
+        if stream.len() < 5 || stream.drain(0..5).collect::<Vec<u8>>() != "REDIS".as_bytes() {
             return Err("Error: file is not RDB type".to_string());
         }
 
-        let version: Vec<u8> = stream.drain(0..4).collect();
-        if String::from_utf8_lossy(&version) != VERSION_NUMBER {
+        if stream.len() < 4
+            || String::from_utf8_lossy(&stream.drain(0..4).collect::<Vec<u8>>()) != VERSION_NUMBER
+        {
             return Err("Error: file is not same redis version.".to_string());
         }
         match TtlHashMap::deserialize(stream) {
@@ -1944,6 +1944,7 @@ impl Redis {
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
+    use crate::service::redis::TtlHashMap;
     use crate::service::redis::{Re, Redis, Response};
     use std::collections::HashSet;
     use std::fs;
@@ -4167,6 +4168,37 @@ mod test {
         ));
 
         fs::remove_file("test_store_then_load.rdb").unwrap();
+    }
+
+    #[test]
+    fn test_load_corrupt_file_returns_err() {
+        let mut redis: Redis = Redis::new_for_test();
+
+        let path = "test_load_empy_file_returns_err.rdb".to_string();
+        let mut file = fs::File::create(path.clone()).unwrap();
+
+        let op_resizedb = 0xfb;
+        let mut store_len = TtlHashMap::length_encode(1);
+        let mut ttl_len = TtlHashMap::length_encode(0);
+        let byte_value_type = TtlHashMap::value_type_encode(&Re::String("value".to_string()));
+        let key = "key".to_string();
+        let mut key_encoded = TtlHashMap::string_encode(key.clone());
+        let op_eof = 0xff;
+
+        let mut bytes = ["REDIS".as_bytes(), "0001".as_bytes()].concat();
+        bytes.push(op_resizedb);
+        bytes.append(&mut store_len);
+        bytes.append(&mut ttl_len);
+        bytes.push(byte_value_type);
+        bytes.append(&mut key_encoded);
+        bytes.push(op_eof);
+
+        let _ = file.write_all(&bytes);
+
+        let load = redis.execute(Command::Load { path });
+
+        assert!(load.is_err());
+        fs::remove_file("test_load_empy_file_returns_err.rdb").unwrap();
     }
 
     #[test]
