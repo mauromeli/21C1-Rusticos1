@@ -276,3 +276,61 @@
 [DEBUG] - 02:44:06 - src/service/redis.rs - 564:13 - Command GET Received - key: key
 [DEBUG] - 02:44:32 - src/service/redis.rs - 564:13 - Command GET Received - key: uma
 [DEBUG] - 02:44:36 - src/service/redis.rs - 564:13 - Command GET Received - key: status
+[DEBUG] - 01:54:42 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 01:54:42 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 01:54:42 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 01:56:42 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 01:57:21 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 01:57:23 - src/service/redis.rs - 477:13 - Command PING Received
+[DEBUG] - 01:57:29 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[INFO]  - 01:57:35 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 01:57:40 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[INFO]  - 01:57:43 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 01:57:48 - src/service/redis.rs - 660:13 - Command SET Received - key: mauro
+[DEBUG] - 01:57:52 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[DEBUG] - 01:57:56 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[DEBUG] - 01:57:59 - src/service/redis.rs - 577:13 - Command GET Received - key: asdas
+[DEBUG] - 01:59:05 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 01:59:05 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 01:59:05 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 01:59:08 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 01:59:10 - src/service/redis.rs - 477:13 - Command PING Received
+[DEBUG] - 01:59:16 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[INFO]  - 01:59:21 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 01:59:32 - src/service/redis.rs - 503:13 - Command MONITOR Received
+[INFO]  - 01:59:39 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 01:59:46 - src/service/redis.rs - 264:13 - Command Subscribe Received
+[INFO]  - 01:59:54 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 02:00:00 - src/service/redis.rs - 324:13 - Command Publish Received
+[DEBUG] - 02:00:11 - src/service/redis.rs - 1796:13 - Command KEYS Received
+[DEBUG] - 02:01:05 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 02:01:54 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[DEBUG] - 02:03:05 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 02:05:05 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 02:07:25 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 02:07:25 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 02:07:25 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 02:07:37 - src/service/server.rs - 113:21 - =======New Client Connected======
+[INFO]  - 02:07:39 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 02:07:41 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[DEBUG] - 02:08:32 - src/service/redis.rs - 577:13 - Command GET Received - key: clone
+[DEBUG] - 02:08:34 - src/service/redis.rs - 577:13 - Command GET Received - key: sofi
+[DEBUG] - 02:08:36 - src/service/redis.rs - 577:13 - Command GET Received - key: hola
+[DEBUG] - 02:08:42 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[INFO]  - 02:08:57 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 02:09:02 - src/service/redis.rs - 477:13 - Command PING Received
+[DEBUG] - 02:09:05 - src/service/redis.rs - 477:13 - Command PING Received
+[DEBUG] - 02:09:25 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 02:09:52 - src/service/redis.rs - 660:13 - Command SET Received - key: mauro
+[DEBUG] - 02:09:55 - src/service/redis.rs - 577:13 - Command GET Received - key: mauro
+[DEBUG] - 02:11:25 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 02:13:25 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[DEBUG] - 02:18:24 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 02:18:24 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 02:18:24 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb
+[INFO]  - 02:18:46 - src/service/server.rs - 113:21 - =======New Client Connected======
+[DEBUG] - 02:18:51 - src/service/redis.rs - 577:13 - Command GET Received - key: mama
+[DEBUG] - 02:51:21 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 02:53:24 - src/service/redis.rs - 1853:13 - Command LOAD Received - path: dump.rdb
+[DEBUG] - 02:53:24 - src/service/server.rs - 67:17 - =======Server Start Running======
+[DEBUG] - 02:53:24 - src/service/redis.rs - 1815:13 - Command STORE Received - path: dump.rdb

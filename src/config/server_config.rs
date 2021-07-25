@@ -8,9 +8,16 @@ use std::path::Path;
 /// Struct usado para representar la configuración posible de nuestra base de datos Redis.
 #[derive(Debug)]
 pub struct Config {
+    /// verbose: Representa si el server debe imprimir sus transacciones por consola en tiempo de
+    /// ejecución.
     verbose: u8,
+    /// port: Indica el puerto en el cual el servidor estará escuchando peticiones.
     port: u16,
+    /// timeout: un valor entero indicando cu ́antos segundos esperar a que un cliente envíe un
+    /// comando antes de cerrar la conexión. Si el valor es 0 se deshabilita el timeout.
     timeout: u64,
+    /// dbfilename: un string indicando el nombre del archivo en el cual se persistirán los datos
+    /// almacenados.
     dbfilename: String,
     logfile: String,
     loglevel: LogLevel,
