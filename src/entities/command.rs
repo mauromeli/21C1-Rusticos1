@@ -15,6 +15,11 @@ pub enum Command {
     Info {
         param: InfoParam,
     },
+    ConfigGet,
+    ConfigSet {
+        parameter: String,
+        value: String,
+    },
 
     // System
     Store {
@@ -25,11 +30,6 @@ pub enum Command {
     },
     AddClient,
     RemoveClient,
-    ConfigGet,
-    ConfigSet {
-        parameter: String,
-        value: String,
-    },
 
     // Strings
     Get {

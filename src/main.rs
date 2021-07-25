@@ -4,6 +4,7 @@ use std::env;
 
 mod config;
 mod entities;
+mod protocol;
 mod service;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

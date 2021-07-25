@@ -3,6 +3,7 @@ use crate::entities::command::Command;
 use crate::entities::log::Log;
 use crate::entities::log_level::LogLevel;
 use crate::entities::response::Response;
+use crate::protocol::decode::{decode, TypeData};
 use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
@@ -13,6 +14,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
+
+use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -66,7 +69,8 @@ impl Server {
         let command = Command::Load {
             path: self.config.lock().unwrap().get_dbfilename(),
         };
-        let _ = self.redis.execute(command);
+        self.redis.execute(command)?;
+
         // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();
@@ -182,25 +186,20 @@ impl Server {
     ) -> io::Result<()> {
         let client_input: TcpStream = client.try_clone()?;
         let client_output: TcpStream = client;
-        let input = BufReader::new(client_input);
+        let mut input = BufReader::new(client_input);
         let mut output = client_output;
-        let mut lines = input.lines();
 
         let client_id = output.try_clone()?.local_addr()?.to_string();
 
         Server::connected_user(&db_sender_clone);
 
         // iteramos las lineas que recibimos de nuestro cliente
-        'principal: while let Some(request) = lines.next() {
+        'principal: while let Some(line) = LinesIterator::new(&mut input).next() {
+            //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
 
-            //TODO: Agregar decode
-            let mut vector: Vec<String> = vec![];
-            for string in request?.split_whitespace() {
-                vector.push(string.to_string())
-            }
-            //TODO: FIN Agregar decode
+            let vector = parse_command(line);
 
             let command = generate(vector, client_id.clone());
 
@@ -216,14 +215,11 @@ impl Server {
 
                     match response {
                         Response::Normal(redis_string) => {
-                            output.write_all((redis_string.to_string() + "\n").as_ref())?;
+                            output.write_all(&parse_response_ok(redis_string))?;
                         }
                         Response::Stream(rec) => {
                             'inner: while let Ok(redis_element) = rec.recv() {
-                                if output
-                                    .write_all((redis_element.to_string() + "\n").as_ref())
-                                    .is_err()
-                                {
+                                if output.write_all(&parse_response_ok(redis_element)).is_err() {
                                     break 'inner;
                                 }
                             }
@@ -232,12 +228,12 @@ impl Server {
                             break 'principal;
                         }
                         Response::Error(msg) => {
-                            output.write_all((msg + "\n").as_ref())?;
+                            output.write_all(&parse_response_error(msg))?;
                         }
                     }
                 }
-                _ => {
-                    output.write_all((command.err().unwrap() + "\n").as_ref())?;
+                Err(err) => {
+                    output.write_all(&parse_response_error(err))?;
                 }
             };
         }
@@ -327,8 +323,33 @@ impl Server {
             client_rcvr
                 .recv()
                 .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "DB sender error"))?;
-
             thread::sleep(Duration::from_secs(STORE_TIME_SEC));
         }
+    }
+}
+
+pub struct LinesIterator<'a> {
+    input: &'a mut BufReader<TcpStream>,
+}
+
+impl<'a> LinesIterator<'a> {
+    pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
+        let input = input;
+        Self { input }
+    }
+}
+
+impl Iterator for LinesIterator<'_> {
+    type Item = TypeData;
+
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        let mut buf = String::new();
+        while self.input.read_line(&mut buf).ok()? != 0 {
+            if let Ok(result) = decode(buf.as_bytes(), 0) {
+                let (data, _) = result;
+                return Some(data);
+            }
+        }
+        Some(TypeData::Error("Se ha producido un error".to_string()))
     }
 }

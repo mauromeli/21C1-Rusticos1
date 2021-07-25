@@ -1,5 +1,5 @@
 #[derive(Debug)]
-/// Parametros utilizados para el Command::Info
+/// Infoparam: Enum usado para representar los parametros permitidos para el Command::Info.
 pub enum InfoParam {
     /// Utilizado para el parametro ProcessID del Comando Info
     ProcessId,
