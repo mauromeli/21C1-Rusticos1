@@ -1,15 +1,7 @@
+use crate::protocol::type_data::TypeData;
+
 /// Longitud del `\r\n`.
 const CRLF: usize = 2;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TypeData {
-    String(String),
-    Error(String),
-    Integer(i64),
-    BulkString(String),
-    Array(Vec<TypeData>),
-    Nil,
-}
 
 ///Decodifica el comando recibido desde redis-cli.
 ///
@@ -133,7 +125,8 @@ pub fn size_ok(bytes: &[u8], pos: usize) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::protocol::decode::{decode, TypeData};
+    use crate::protocol::decode::{decode};
+    use crate::protocol::type_data::TypeData;
 
     #[test]
     fn test_decode_string() {

@@ -1,7 +1,7 @@
 use crate::entities::redis_element::RedisElement;
-use crate::protocol::decode::TypeData;
 use crate::protocol::encode::encode;
 use std::iter::FromIterator;
+use crate::protocol::type_data::TypeData;
 
 /// Parsea el comando recibido (`TypeData`) a un `Vec<String>`.
 ///
