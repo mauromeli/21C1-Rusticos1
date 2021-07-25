@@ -14,6 +14,7 @@ pub struct Config {
     dbfilename: String,
     logfile: String,
     loglevel: LogLevel,
+    configfile: String,
 }
 
 #[allow(dead_code)]
@@ -26,14 +27,16 @@ impl Config {
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
             loglevel: LogLevel::Debug,
+            configfile: "file.conf".to_string(),
         }
     }
 
     pub fn new_from_file(path: String) -> Result<Config, io::Error> {
+        let mut config = Config::new();
+        config.set_configfile(path.clone());
         let path = Path::new(&path);
         let file = File::open(path)?;
         let content = BufReader::new(&file);
-        let mut config = Config::new();
 
         for line in content.lines() {
             // Remuevo espacios al principio y al final de la línea.
@@ -87,7 +90,7 @@ impl Config {
         parameters
     }
 
-    fn set_verbose(&mut self, verbose: String) {
+    pub fn set_verbose(&mut self, verbose: String) {
         let val = verbose.parse::<u8>();
         if let Ok(value) = val {
             self.verbose = value
@@ -108,12 +111,16 @@ impl Config {
         }
     }
 
-    fn set_dbfilename(&mut self, dbfilename: String) {
+    pub fn set_dbfilename(&mut self, dbfilename: String) {
         self.dbfilename = dbfilename;
     }
 
-    fn set_logfile(&mut self, logfile: String) {
+    pub fn set_logfile(&mut self, logfile: String) {
         self.logfile = logfile;
+    }
+
+    fn set_configfile(&mut self, configfile: String) {
+        self.configfile = configfile;
     }
 
     fn set_loglevel(&mut self, loglevel: String) {
@@ -142,6 +149,10 @@ impl Config {
 
     pub fn get_logfile(&self) -> String {
         self.logfile.to_string()
+    }
+
+    pub fn get_configfile(&self) -> String {
+        self.configfile.to_string()
     }
 }
 

@@ -4,10 +4,8 @@ use std::env;
 
 mod config;
 mod entities;
-mod service;
-mod pubsub;
 mod protocol;
-
+mod service;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let argv: Vec<String> = env::args().collect();

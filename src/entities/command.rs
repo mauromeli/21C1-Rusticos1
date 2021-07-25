@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 #[allow(dead_code)]
+/// Command: Enum usado para representar los comandos que puede ejecutar nuestra base de datos redis.
 pub enum Command {
     // Server
     Ping,
@@ -24,6 +25,11 @@ pub enum Command {
     },
     AddClient,
     RemoveClient,
+    ConfigGet,
+    ConfigSet {
+        parameter: String,
+        value: String,
+    },
 
     // Strings
     Get {
@@ -32,9 +38,6 @@ pub enum Command {
     Set {
         key: String,
         value: String,
-    },
-    Keys {
-        pattern: String,
     },
     Incrby {
         key: String,
@@ -76,10 +79,6 @@ pub enum Command {
     Exists {
         keys: Vec<String>,
     },
-    Rename {
-        key_origin: String,
-        key_destination: String,
-    },
     Expire {
         key: String,
         ttl: Duration,
@@ -88,7 +87,17 @@ pub enum Command {
         key: String,
         ttl: SystemTime,
     },
+    Keys {
+        pattern: String,
+    },
     Persist {
+        key: String,
+    },
+    Rename {
+        key_origin: String,
+        key_destination: String,
+    },
+    Sort {
         key: String,
     },
     Touch {
@@ -175,16 +184,16 @@ pub enum Command {
     },
     Subscribe {
         channels: Vec<String>,
-        //local_address: String,
+        client_id: String,
     },
     Publish {
         channel: String,
         message: String,
     },
     Unsubscribe {
-        channels: Vec<String>, //local_address: String,
+        channels: Vec<String>,
+        client_id: String,
     },
-    Command
 }
 
 impl Command {
@@ -247,7 +256,6 @@ impl Command {
             Command::Subscribe { .. } => "subscribe",
             Command::Publish { .. } => "publish",
             Command::Unsubscribe { .. } => "unsubscribe",
-            Command::Command => "COMMAND",
 
             _ => "",
         }

@@ -1,4 +1,6 @@
 use crate::entities::log_level::LogLevel;
+use crate::service::timestamp_to_string::timestamp_to_string;
+use std::time::SystemTime;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -31,6 +33,8 @@ impl ToString for Log {
         };
 
         level.to_owned()
+            + " - "
+            + &timestamp_to_string(SystemTime::now())
             + " - "
             + &self.file
             + " - "

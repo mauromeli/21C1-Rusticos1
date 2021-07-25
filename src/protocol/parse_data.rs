@@ -1,7 +1,5 @@
-use crate::protocol::decode::{decode, TypeData};
 use crate::entities::redis_element::RedisElement;
-use crate::entities::command::Command::Type;
-use std::any::TypeId;
+use crate::protocol::decode::TypeData;
 use crate::protocol::encode::encode;
 use std::iter::FromIterator;
 
@@ -33,15 +31,9 @@ fn parse_response(redis_element: RedisElement) -> TypeData {
                 Err(_) => TypeData::BulkString(string),
             }
         }
-        RedisElement::List(list) => {
-            parse_list_and_set(list)
-        }
-        RedisElement::Set(set) => {
-            parse_list_and_set(Vec::from_iter(set))
-        }
-        _ => {
-            TypeData::Nil
-        }
+        RedisElement::List(list) => parse_list_and_set(list),
+        RedisElement::Set(set) => parse_list_and_set(Vec::from_iter(set)),
+        _ => TypeData::Nil,
     }
 }
 
@@ -54,8 +46,6 @@ fn parse_list_and_set(vector_re: Vec<String>) -> TypeData {
     TypeData::Array(vector)
 }
 
-
-
 fn parse_array(type_data: TypeData) -> Result<Vec<String>, String> {
     match type_data {
         TypeData::Array(vec) => {
@@ -66,25 +56,15 @@ fn parse_array(type_data: TypeData) -> Result<Vec<String>, String> {
             }
             Ok(vector)
         }
-        _ => {
-            Err("Error comando ingresado".to_string())
-        }
+        _ => Err("Error comando ingresado".to_string()),
     }
 }
 
 fn parse_type_data(type_data: TypeData) -> Result<String, String> {
     match type_data {
-        TypeData::String(string) => {
-            Ok(string)
-        }
-        TypeData::Integer(integer) => {
-            Ok(integer.to_string())
-        }
-        TypeData::BulkString(bulkstring) => {
-            Ok(bulkstring)
-        }
-        _ => {
-            Err("Error tipo de dato".to_string())
-        }
+        TypeData::String(string) => Ok(string),
+        TypeData::Integer(integer) => Ok(integer.to_string()),
+        TypeData::BulkString(bulkstring) => Ok(bulkstring),
+        _ => Err("Error tipo de dato".to_string()),
     }
 }

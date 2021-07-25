@@ -3,6 +3,7 @@ use crate::entities::command::Command;
 use crate::entities::log::Log;
 use crate::entities::log_level::LogLevel;
 use crate::entities::response::Response;
+use crate::protocol::decode::{decode, TypeData};
 use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
@@ -11,23 +12,24 @@ use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::borrow::BorrowMut;
-use crate::protocol::decode::{decode, TypeData};
 
+use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use crate::protocol::parse_data::{parse_command, parse_response_ok, parse_response_error};
 
 static STORE_TIME_SEC: u64 = 120;
 
+type VecHandler = Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)>;
+type DbSender = Sender<(Command, Sender<Response>)>;
+type DbReceiver = Receiver<(Command, Sender<Response>)>;
 
 #[derive(Debug)]
 pub struct Server {
     redis: Redis,
-    config: Config,
     log_sender: Sender<Log>,
+    config: Arc<Mutex<Config>>,
 }
 
 impl Server {
@@ -35,28 +37,29 @@ impl Server {
     pub fn new(config: Config) -> io::Result<Self> {
         let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
-        let redis = Redis::new(log_sender.clone());
+        let config = Arc::new(Mutex::new(config));
+        let logger = Logger::new(log_receiver, Arc::clone(&config));
+        let redis = Redis::new(log_sender.clone(), Arc::clone(&config));
 
-        let logger = Logger::new(log_receiver, config.get_logfile());
         logger.log();
 
         Ok(Self {
             redis,
-            config,
             log_sender,
+            config,
         })
     }
 
     pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
         // load db
         let command = Command::Load {
-            path: self.config.get_dbfilename(),
+            path: self.config.lock().unwrap().get_dbfilename(),
         };
         self.redis.execute(command)?;
 
         // endload db
 
-        let address = "0.0.0.0:".to_owned() + self.config.get_port().as_str();
+        let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();
         let log_sender = self.log_sender.clone();
         log_sender
             .send(Log::new(
@@ -84,15 +87,12 @@ impl Server {
 
     fn server_run(self, address: &str) -> io::Result<()> {
         let listener = TcpListener::bind(address)?;
-        let (db_sender, db_receiver): (
-            Sender<(Command, Sender<Response>)>,
-            Receiver<(Command, Sender<Response>)>,
-        ) = mpsc::channel();
+        let (db_sender, db_receiver): (DbSender, DbReceiver) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
-        let timeout = self.config.get_timeout();
+        let timeout = self.config.lock().unwrap().get_timeout();
 
-        let db_filename = self.config.get_dbfilename();
+        let db_filename = self.config.lock().unwrap().get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
 
         //Todo: Agregar el handler.
@@ -103,7 +103,7 @@ impl Server {
 
         self.db_thread(db_receiver);
 
-        let mut handlers: Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)> = vec![];
+        let mut handlers: VecHandler = vec![];
 
         while let Ok(connection) = listener.accept() {
             //accepter thread
@@ -122,7 +122,6 @@ impl Server {
                 client.set_read_timeout(Option::from(Duration::from_secs(timeout)))?;
             }
             let db_sender_clone: Sender<(Command, Sender<Response>)> = db_sender.clone();
-            //TODO: Handler client. encolar en vector booleano compartido para finalizar hilos.
 
             let flag = Arc::new(AtomicBool::new(true));
             let used_flag = flag.clone();
@@ -132,10 +131,8 @@ impl Server {
             });
             handlers.push((handler, flag));
 
-            let mut handlers_actives: Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)> =
-                vec![];
-            let mut handlers_inactives: Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)> =
-                vec![];
+            let mut handlers_actives: VecHandler = vec![];
+            let mut handlers_inactives: VecHandler = vec![];
             for (handler, used) in handlers {
                 if used.load(Ordering::Relaxed) {
                     handlers_actives.push((handler, used));
@@ -165,20 +162,21 @@ impl Server {
         let client_output: TcpStream = client;
         let mut input = BufReader::new(client_input);
         let mut output = client_output;
-        //let mut lines = input.lines();
+
+        let client_id = output.try_clone()?.local_addr()?.to_string();
 
         //TODO: ver error
         Server::connected_user(&db_sender_clone);
 
-
-        while let Some(line) = LinesIterator::new(&mut input).next() {
+        // iteramos las lineas que recibimos de nuestro cliente
+        'principal: while let Some(line) = LinesIterator::new(&mut input).next() {
             //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
 
             let vector = parse_command(line);
 
-            let command = generate(vector);
+            let command = generate(vector, client_id.clone());
 
             // TODO: Agregar forma de escritura por cada tipo.
             match command {
@@ -193,21 +191,25 @@ impl Server {
 
                     match response {
                         Response::Normal(redis_string) => {
-                            output.write(&parse_response_ok(redis_string))?;
+                            output.write_all(&parse_response_ok(redis_string))?;
                         }
                         Response::Stream(rec) => {
-                            while let Ok(redis_element) = rec.recv() {
-                                output.write(&parse_response_ok(redis_element))?;
+                            'inner: while let Ok(redis_element) = rec.recv() {
+                                if output.write_all(&parse_response_ok(redis_element)).is_err() {
+                                    break 'inner;
+                                }
                             }
+
                             std::mem::drop(rec);
+                            break 'principal;
                         }
                         Response::Error(msg) => {
-                            output.write(&parse_response_error(msg))?;
+                            output.write_all(&parse_response_error(msg))?;
                         }
                     }
                 }
                 _ => {
-                    output.write(&parse_response_error(command.err().unwrap()))?;
+                    output.write_all(&parse_response_error(command.err().unwrap()))?;
                 }
             };
         }
@@ -289,35 +291,33 @@ impl Server {
             client_rcvr
                 .recv()
                 .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "DB sender error"))?;
-
             thread::sleep(Duration::from_secs(STORE_TIME_SEC));
         }
     }
 }
 
-pub struct LinesIterator<'a>{
-    input: &'a mut BufReader<TcpStream>
+pub struct LinesIterator<'a> {
+    input: &'a mut BufReader<TcpStream>,
 }
 
-    impl<'a> LinesIterator<'a> {
-        pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
-            let input = input;
-            Self {input}
-        }
+impl<'a> LinesIterator<'a> {
+    pub fn new(input: &'a mut BufReader<TcpStream>) -> Self {
+        let input = input;
+        Self { input }
     }
+}
 
-    impl Iterator for LinesIterator<'_> {
-        type Item = TypeData;
+impl Iterator for LinesIterator<'_> {
+    type Item = TypeData;
 
-        fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-            let mut buf = String::new();
-            while self.input.read_line(&mut buf).unwrap() != 0 {
-                if let Ok(result) = decode(buf.as_bytes(), 0) {
-                    let (data, _) = result;
-                    return Some(data);
-                }
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        let mut buf = String::new();
+        while self.input.read_line(&mut buf).unwrap() != 0 {
+            if let Ok(result) = decode(buf.as_bytes(), 0) {
+                let (data, _) = result;
+                return Some(data);
             }
-            Some(TypeData::Nil)
         }
+        Some(TypeData::Nil)
     }
-
+}
