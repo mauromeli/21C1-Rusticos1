@@ -110,16 +110,6 @@ pub fn size_ok(bytes: &[u8], pos: usize) -> bool {
 mod test {
     use crate::protocol::decode::{decode, TypeData};
 
-    #[test]
-    fn test_decode() {
-        let bytes = "*1\r\n$7\r\n";
-        let result = decode(bytes.as_bytes(), 0);
-        assert_eq!(result.is_ok(), true);
-        assert_eq!(
-            decode(bytes.as_bytes(), 0).ok().unwrap().0,
-            TypeData::String("OK".to_string())
-        )
-    }
 
     #[test]
     fn test_decode_string() {
@@ -179,14 +169,12 @@ mod test {
     }
 
     #[test]
-    fn test_decode_nil() {
-        let bytes = "!3\r\nfoo\r\n";
-        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0, TypeData::Nil)
-    }
-
-    #[test]
-    fn test_decode_() {
+    fn test_decode_array_bulkstring() {
         let bytes = "*3\r\n$3\r\nset\r\n$5\r\nmykey\r\n$1\r\n1\r\n";
-        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0, TypeData::Nil)
+        let mut vector = Vec::new();
+        vector.push(TypeData::BulkString("set".to_string()));
+        vector.push(TypeData::BulkString("mykey".to_string()));
+        vector.push(TypeData::BulkString("1".to_string()));
+        assert_eq!(decode(bytes.as_bytes(), 0).ok().unwrap().0, TypeData::Array(vector))
     }
 }

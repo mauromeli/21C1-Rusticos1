@@ -2327,7 +2327,7 @@ mod test {
         let key = "key".to_string();
         let getdel = redis.execute(Command::Getdel { key });
 
-        assert!(eq_response(Re::Nil, getdel.unwrap()));
+        assert_eq!(true, getdel.is_err());
     }
 
     #[test]
@@ -2677,12 +2677,12 @@ mod test {
     }
 
     #[test]
-    fn test_sort_empty_key_returns_nil() {
+    fn test_sort_empty_key() {
         let mut redis: Redis = Redis::new_for_test();
 
         let key = "key".to_string();
         let sort = redis.execute(Command::Sort { key });
-        assert!(eq_response(Re::Nil, sort.unwrap()));
+        assert!(eq_response(Re::List(vec![]), sort.unwrap()));
     }
 
     #[test]
