@@ -58,3 +58,49 @@ impl ToString for Log {
             + "\n"
     }
 }
+
+#[allow(unused_imports)]
+mod test {
+    use crate::entities::log::Log;
+    use crate::entities::log_level::LogLevel;
+
+    #[test]
+    fn test_log_to_string() {
+        let log = Log::new(
+            LogLevel::Debug,
+            10,
+            10,
+            "test".to_string(),
+            "mensaje".to_string(),
+        );
+        assert_ne!("".to_string(), log.to_string());
+    }
+
+    #[allow(dead_code)]
+    fn test_get_level() {
+        let log = Log::new(
+            LogLevel::Debug,
+            10,
+            10,
+            "test".to_string(),
+            "mensaje".to_string(),
+        );
+        assert_eq!(3, log.get_level());
+        let log = Log::new(
+            LogLevel::Info,
+            10,
+            10,
+            "test".to_string(),
+            "mensaje".to_string(),
+        );
+        assert_eq!(2, log.get_level());
+        let log = Log::new(
+            LogLevel::Error,
+            10,
+            10,
+            "test".to_string(),
+            "mensaje".to_string(),
+        );
+        assert_eq!(1, log.get_level());
+    }
+}
