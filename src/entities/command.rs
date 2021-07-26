@@ -194,6 +194,7 @@ pub enum Command {
         channels: Vec<String>,
         client_id: String,
     },
+    Command,
 }
 
 impl Command {
@@ -258,7 +259,6 @@ impl Command {
             Command::Subscribe { .. } => "subscribe",
             Command::Publish { .. } => "publish",
             Command::Unsubscribe { .. } => "unsubscribe",
-
             _ => "",
         }
     }

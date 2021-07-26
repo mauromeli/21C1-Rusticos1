@@ -26,7 +26,7 @@ const OUT_OF_RANGE_MSG: &str = "ERR value is not an integer or out of range";
 const VERSION_NUMBER: &str = "0001";
 
 #[derive(Debug)]
-/// Entidad que represeenta la Base de Datos Redis dentro de nuestro modelado.
+/// Entidad que representa la Base de Datos Redis dentro de nuestro modelado.
 pub struct Redis {
     /// Atributo en el cual se guardarán los datos de la DB
     db: TtlHashMap<String, RedisElement>,
@@ -49,8 +49,9 @@ pub struct Redis {
 impl Redis {
     #[allow(dead_code)]
     /// Constructor de la entidad Redis, para su construcción es necesario:
-    /// - un Canal de tipo Sender en el cual se envíen mensajes al Logger.
-    /// - una configuración compartida
+    ///
+    /// * Un canal de tipo `Sender` en el cual se envíen mensajes al Logger.
+    /// * Una configuracion compartida
     pub fn new(log_sender: Sender<Log>, config: Arc<Mutex<Config>>) -> Self {
         let db = TtlHashMap::new();
         let vec_senders: Vec<Sender<Re>> = Vec::new();
@@ -89,7 +90,9 @@ impl Redis {
 
     #[allow(dead_code)]
     /// Metodo utilizado para ejecutar un comando dentro de la Base de datos Redis.
+    ///
     /// Los comandos tienen que estár definidos en el enum `Command`.
+    ///
     /// En caso de error en la ejecución se retornará Err(msg) con el mensaje de error.
     /// En caso de ejecución efectiva del comando se retornará un Response.
     pub fn execute(&mut self, command: Command) -> Result<Response, String> {
@@ -194,17 +197,23 @@ impl Redis {
                 channels,
                 client_id,
             } => Ok(self.unsubscribe_method(channels, client_id)),
+            Command::Command => (Ok(Response::Normal(Re::SimpleString("OK".to_string())))),
         }
     }
 
     /// El comando PUBSUB Es un comando de análisis que permite inspeccionar el estado del sistema Pub/Sub.
+    ///
     /// La forma de este comando es.
+    ///
+    /// # Arguments
+    ///
     /// Los parametros que este puede recibir están definidos en el enum `PubSubParams`, los cuales
     /// pueden ser:
-    /// - Channels: Indica los canales existentes en PubSub.
-    /// - ChannelsWithChannel: Indica si ese canal existe o no.
-    /// - Numsub: retorna una lista vacía
-    /// - NumsubWithChannel: Indica la cantidad de usuarios subscriptos a ese canal.
+    ///
+    /// * `Channels` - Indica los canales existentes en PubSub.
+    /// * `ChannelsWithChannel` - Indica si ese canal existe o no.
+    /// * `Numsub` - retorna una lista vacía
+    /// * `NumsubWithChannel` - Indica la cantidad de usuarios subscriptos a ese canal.
     fn pubsub_method(&mut self, param: PubSubParam) -> Response {
         Response::Normal(match param {
             PubSubParam::Channels => self.channels_method(),
@@ -459,16 +468,19 @@ impl Redis {
 
     /// El comando INFO retorna información y estadísticas sobre el servidor en un formato facil de
     /// parsear por computadores y facil de leer por humanos.
+    ///
+    /// # Arguments
+    ///
     /// Los parametros que este puede recibir están definidos en el enum `InfoParam`, los cuales
     /// pueden ser:
-    /// - ConnectedClients: Indica la cantidad de Clientes connectados en nuestro servidor.
-    /// - Port: Indica el Puerto en el cual está levantado el servidor.
-    /// - ConfigFile: Indica el nombre del archivo de Configuración del servidor.
-    /// - Uptime: Indica el tiempo en el que el servidor está en funcionamiento.
-    /// - ServerTime: Indica la hora del servidor. (UTC-0).
-    /// - ProcessID: Indica el processID del proceso en el SO.
+    ///
+    /// * `ConnectedClients` - Indica la cantidad de Clientes connectados en nuestro servidor.
+    /// * `Port` - Indica el Puerto en el cual está levantado el servidor.
+    /// * `ConfigFile` - Indica el nombre del archivo de Configuración del servidor.
+    /// * `Uptime` - Indica el tiempo en el que el servidor está en funcionamiento.
+    /// * `ServerTime` - Indica la hora del servidor. (UTC-0).
+    /// * `ProcessID` - Indica el processID del proceso en el SO.
     fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
-        //TODO: agregar test
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -627,8 +639,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    /// Devuelve el valor de una clave, si la clave no existe, se retorna el valor especial nil. Se
-    /// retorna un error si el valor almacenado en esa clave no es un string, porque GET maneja
+    /// Devuelve el valor de una clave, si la clave no existe, se retorna el valor especial nil.
+    ///
+    /// Se retorna un error si el valor almacenado en esa clave no es un string, porque GET maneja
     /// solamente strings.
     fn get_method(&mut self, key: String) -> Result<Re, String> {
         let _ = self.log_sender.send(Log::new(
@@ -717,8 +730,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    /// Setea que la clave especificada almacene el valor especificado de tipo string. Si la clave
-    /// contiene un valor previo, la clave es sobreescrita, independientemente del tipo de dato
+    /// Setea que la clave especificada almacene el valor especificado de tipo string.
+    ///
+    /// Si la clave contiene un valor previo, la clave es sobreescrita, independientemente del tipo de dato
     /// contenido (descartando también el valor previo de TTL).
     fn set_method(&mut self, key: String, value: String) -> String {
         let _ = self.log_sender.send(Log::new(
@@ -735,8 +749,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    /// Incrementa el número almacenado en la clave en un incremento. Si la clave no existe, es
-    /// seteado a 0 antes de realizar la operación. Devuelve error si la clave contiene un valor de
+    /// Incrementa el número almacenado en la clave en un incremento.
+    ///
+    /// Si la clave no existe, es seteado a 0 antes de realizar la operación. Devuelve error si la clave contiene un valor de
     /// tipo erróneo o un string que no puede ser representado como entero.
     fn incrby_method(&mut self, key: String, increment: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
@@ -789,7 +804,9 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    /// Retorna el valor de todas las claves especificadas. Para las claves que no contienen valor o
+    /// Retorna el valor de todas las claves especificadas.
+    ///
+    /// Para las claves que no contienen valor o
     /// el valor no es un string, se retorna el tipo especial nil.
     fn mget_method(&mut self, keys: Vec<String>) -> Response {
         let _ = self.log_sender.send(Log::new(
@@ -814,7 +831,8 @@ impl Redis {
     #[allow(dead_code)]
     /// Setea las claves data a sus respectivos valores, reemplazando los valores existentes con los
     /// nuevos valores como SET.
-    /// MSET es atómica, de modo que todas las claves son actualizadas a la vez. No es posible para
+    ///
+    /// `MSET` es atómica, de modo que todas las claves son actualizadas a la vez. No es posible para
     /// los clientes ver que algunas claves del conjunto fueron modificadas, mientras otras no.
     fn mset_method(&mut self, key_values: Vec<(String, String)>) -> Response {
         let _ = self.log_sender.send(Log::new(
@@ -1146,7 +1164,7 @@ impl Redis {
     }
 
     /// Retorna un string que representa el tipo de valor almacenado en una clave. Los tipos que
-    /// puede retornar son: string, list, set (no consideramos los tipos de datos que no se
+    /// puede retornar son: `string`, `list`, `set` (no consideramos los tipos de datos que no se
     /// implementan en el proyecto).
     fn type_method(&mut self, key: String) -> String {
         let _ = self.log_sender.send(Log::new(
@@ -1169,9 +1187,11 @@ impl Redis {
         }
     }
 
-    /// Retorna el elemento de la posición index en la lista almacenada en la clave indicada. El
-    /// índice comienza en 0. Los valores negativos se pueden usar para determinar elementos desde
+    /// Retorna el elemento de la posición index en la lista almacenada en la clave indicada.
+    ///
+    /// El índice comienza en 0. Los valores negativos se pueden usar para determinar elementos desde
     /// el final de la lista: -1 es el último elemento, -2 es el anteúlitmo, y así.
+    ///
     /// Retorna error si el valor de esa clave no es una lista.
     fn lindex_method(&mut self, key: String, index: i32) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
@@ -1214,7 +1234,9 @@ impl Redis {
         }
     }
 
-    /// Retorna el largo dela lista almacenada en la clave. Si la clave no existe, se interpreta
+    /// Retorna el largo dela lista almacenada en la clave.
+    ///
+    /// Si la clave no existe, se interpreta
     /// como lista vacía, retornando 0. Se retorna error si el valor almacenado en la clave no es
     /// una lista.
     fn llen_method(&mut self, key: String) -> Result<Response, String> {
@@ -1245,7 +1267,7 @@ impl Redis {
     }
 
     /// Elimina y retorna el primer elemento de la lista almacenada en la clave. Se puede indicar un
-    /// parámetro adicional count para indicar obtener esa cantidad de elementos.
+    /// parámetro adicional `count` para indicar obtener esa cantidad de elementos.
     fn lpop_method(&mut self, key: String, count: usize) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1300,8 +1322,11 @@ impl Redis {
     }
 
     /// Inserta todos los valores especificados en el inicio de la lista de la clave especificada.
+    ///
     /// Si no existe la clave, se crea inicialmente como una lista vacía para luego aplicar las
-    /// operaciones. Se retorna error si la clave almacena un elemento que no es una lista.
+    /// operaciones.
+    ///
+    /// Se retorna error si la clave almacena un elemento que no es una lista.
     fn lpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
@@ -1390,7 +1415,9 @@ impl Redis {
         }
     }
 
-    /// Retorna los elementos especificados de la lista almacenada en la clave indicada. Los inicios
+    /// Retorna los elementos especificados de la lista almacenada en la clave indicada.
+    ///
+    /// Los inicios
     /// y fin de rango se consideran con el 0 como primer elemento de la lista. Estos valores pueden
     /// ser negativos, indicando que corresponde al final de la lista: -1 es el último elemento.
     fn lrange_method(&mut self, key: String, begin: i32, end: i32) -> Result<Response, String> {
@@ -1443,10 +1470,13 @@ impl Redis {
     }
 
     /// Elimina la primer cantidad count de ocurrencias de elementos de la lista almacenada en la
-    /// clave, igual al elemento indicado por parámetro. El parámetro cantidad influye de esta manera:
-    /// - count > 0: Elimina elementos iguales al indicado comenzando desde el inicio de la lista.
-    /// - count < 0: Elimina elementos iguales al indicado comenzando desde el final de la lista.
-    /// - count = 0: Elimina todos los elementos iguales al indicado.
+    /// clave, igual al elemento indicado por parámetro.
+    ///
+    /// El parámetro cantidad influye de esta manera:
+    ///
+    /// * `count > 0` - Elimina elementos iguales al indicado comenzando desde el inicio de la lista.
+    /// * `count < 0` - Elimina elementos iguales al indicado comenzando desde el final de la lista.
+    /// * `count = 0` - Elimina todos los elementos iguales al indicado.
     fn lrem_method(
         &mut self,
         key: String,
@@ -1526,7 +1556,9 @@ impl Redis {
         (vector, n)
     }
 
-    /// Setea el elemento de la posición index de la lista con el elemento suministrado. Se retorna
+    /// Setea el elemento de la posición index de la lista con el elemento suministrado.
+    ///
+    /// Se retorna
     /// error si se indica un rango inválido.
     fn lset_method(
         &mut self,
@@ -1651,8 +1683,12 @@ impl Redis {
         }
     }
 
-    /// Inserta todos los valores especificados al final de la lista indicada en la clave. Si la
-    /// clave no existe, se crear como una lista vacía antes de realizar la operación. Se retorna
+    /// Inserta todos los valores especificados al final de la lista indicada en la clave.
+    ///
+    /// Si la
+    /// clave no existe, se crear como una lista vacía antes de realizar la operación.
+    ///
+    /// Se retorna
     /// error si el elemento contenido no es una lista.
     fn rpush_method(&mut self, key: String, values: Vec<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
@@ -1727,8 +1763,11 @@ impl Redis {
         }
     }
 
-    /// Agrega el elemento indicado al set de la clave especificada. Si la clave no existe, crea un
+    /// Agrega el elemento indicado al set de la clave especificada.
+    ///
+    /// Si la clave no existe, crea un
     /// set vacío para agregar el valor. Si el valor ya existía en el set, no se realiza agregado.
+    ///
     /// Retorna error si el valor almacenado en la clave no es un set.
     fn sadd_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
@@ -1887,8 +1926,12 @@ impl Redis {
         }
     }
 
-    /// Elimina los miembros especificados del set almacenado en la clave indicada. Si la clave no
-    /// existe, se considera como un set vacío, retornando 0. Retorna error si el valor almacenado
+    /// Elimina los miembros especificados del set almacenado en la clave indicada.
+    ///
+    /// Si la clave no
+    /// existe, se considera como un set vacío, retornando 0.
+    ///
+    /// Retorna error si el valor almacenado
     /// en esa clave no es un set.
     fn srem_method(&mut self, key: String, values: HashSet<String>) -> Result<Response, String> {
         let _ = self.log_sender.send(Log::new(
@@ -1939,9 +1982,10 @@ impl Redis {
 
         let mut vector = vec![];
         for key in self.db.keys() {
-            let re = Regex::new(&*pattern).unwrap();
-            if re.is_match(key) {
-                vector.push(key.to_string());
+            if let Ok(re) = Regex::new(&*pattern) {
+                if re.is_match(key) {
+                    vector.push(key.to_string());
+                }
             }
         }
         vector
@@ -2101,11 +2145,13 @@ impl Redis {
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
+    use crate::entities::info_param::InfoParam;
     use crate::service::redis::TtlHashMap;
     use crate::service::redis::{Re, Redis, Response};
     use std::collections::HashSet;
     use std::fs;
     use std::io::Write;
+    use std::process;
     use std::thread::{self, sleep};
     use std::time::{Duration, SystemTime};
 
@@ -4327,7 +4373,7 @@ mod test {
         let ttl = redis_new.execute(Command::Ttl { key: key2 });
         assert!(eq_response(
             Re::String((expire.as_secs() - 1).to_string()),
-            ttl.unwrap()
+            ttl.unwrap(),
         ));
 
         fs::remove_file("test_store_then_load.rdb").unwrap();
@@ -4426,5 +4472,69 @@ mod test {
 
         assert!(config_set.is_err());
         assert_ne!(1, redis.config.lock().unwrap().get_timeout());
+    }
+
+    #[test]
+    fn test_info_connected_clients_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConnectedClients,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("0".to_string()), info.unwrap()));
+
+        let _ = redis.execute(Command::AddClient);
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConnectedClients,
+        });
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("1".to_string()), info.unwrap()));
+
+        let _ = redis.execute(Command::RemoveClient);
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConnectedClients,
+        });
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("0".to_string()), info.unwrap()));
+    }
+
+    #[test]
+    fn test_info_port_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::Port,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("8080".to_string()), info.unwrap()));
+    }
+
+    #[test]
+    fn test_info_config_file_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConfigFile,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(
+            Re::String(redis.config.lock().unwrap().get_configfile()),
+            info.unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_info_process_id_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ProcessId,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(
+            Re::String(process::id().to_string()),
+            info.unwrap()
+        ));
     }
 }
