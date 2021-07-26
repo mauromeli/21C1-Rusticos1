@@ -78,6 +78,7 @@ pub fn generate(params: Vec<String>, client_id: String) -> Result<Command, Strin
         "subscribe" => generate_subscribe(params, client_id),
         "publish" => generate_publish(params),
         "unsubscribe" => Ok(generate_unsubscribe(params, client_id)),
+        "command" => Ok(Command::Command),
 
         _ => Err("Command not valid".to_string()),
     }

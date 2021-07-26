@@ -197,6 +197,7 @@ impl Redis {
                 channels,
                 client_id,
             } => Ok(self.unsubscribe_method(channels, client_id)),
+            Command::Command => (Ok(Response::Normal(Re::SimpleString("OK".to_string())))),
         }
     }
 
@@ -1981,7 +1982,7 @@ impl Redis {
 
         let mut vector = vec![];
         for key in self.db.keys() {
-            if let Ok(re) = Regex::new(&*pattern){
+            if let Ok(re) = Regex::new(&*pattern) {
                 if re.is_match(key) {
                     vector.push(key.to_string());
                 }
