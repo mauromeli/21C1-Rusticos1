@@ -50,8 +50,9 @@ impl Server {
     pub fn new(config: Config) -> io::Result<Self> {
         let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
+        let loglevel = config.get_loglevel();
         let config = Arc::new(Mutex::new(config));
-        let logger = Logger::new(log_receiver, Arc::clone(&config));
+        let logger = Logger::new(log_receiver, Arc::clone(&config), loglevel);
         let redis = Redis::new(log_sender.clone(), Arc::clone(&config));
 
         logger.log();
@@ -70,7 +71,6 @@ impl Server {
             path: self.config.lock().unwrap().get_dbfilename(),
         };
         let _ = self.redis.execute(command);
-
         // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();

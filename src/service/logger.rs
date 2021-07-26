@@ -7,7 +7,6 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-
 #[derive(Debug)]
 /// Entidad para loggear los eventos que ocurren en el servidor redis.
 pub struct Logger {
@@ -17,16 +16,18 @@ pub struct Logger {
     verbose: u8,
     /// Configuración del servidor compartida.
     config: Arc<Mutex<Config>>,
+    loglevel: u8,
 }
 
 impl Logger {
     #[allow(dead_code)]
     /// Constructor de un nuevo Logger
-    pub fn new(receiver: Receiver<Log>, config: Arc<Mutex<Config>>) -> Self {
+    pub fn new(receiver: Receiver<Log>, config: Arc<Mutex<Config>>, level: u8) -> Self {
         Self {
             receiver,
             verbose: 1,
             config,
+            loglevel: level,
         }
     }
 
@@ -42,12 +43,16 @@ impl Logger {
 
             while let Ok(log) = self.receiver.recv() {
                 if self.verbose == 1 {
-                    println!("{:?}", log.to_string());
+                    println!("{:?}", log.clone().to_string());
                 }
 
-                file.write(log.to_string().as_bytes());
+                let level = log.clone().get_level();
+                if level <= self.loglevel {
+                    file.write(log.to_string().as_bytes());
+                }
             }
             Ok(())
         });
     }
 }
+

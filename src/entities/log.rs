@@ -2,7 +2,7 @@ use crate::entities::log_level::LogLevel;
 use crate::service::timestamp_to_string::timestamp_to_string;
 use std::time::SystemTime;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 /// Log: Struct usado para darle entidad a los datos necesarios para guardar un Log.
 pub struct Log {
@@ -22,6 +22,14 @@ impl Log {
             col,
             file,
             msg,
+        }
+    }
+
+    pub fn get_level(self) -> u8{
+        match self.level {
+            LogLevel::Error => 3,
+            LogLevel::Info => 2,
+            LogLevel::Debug => 1,
         }
     }
 }

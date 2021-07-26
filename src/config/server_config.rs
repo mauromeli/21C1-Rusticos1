@@ -1,4 +1,3 @@
-use crate::entities::log_level::LogLevel;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -22,7 +21,7 @@ pub struct Config {
     /// logfile: un string indicando el nombre del archivo en el cual se grabara el log
     logfile: String,
     /// loglevel: indica el nivel de log a implementar en el server [error, info, debug]
-    loglevel: LogLevel,
+    loglevel: u8,
     /// configfile: guarda en la configuración la ruta del archivo de configuración usado.
     configfile: String,
 }
@@ -37,7 +36,7 @@ impl Config {
             timeout: 0,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
-            loglevel: LogLevel::Debug,
+            loglevel: 3,
             configfile: "file.conf".to_string(),
         }
     }
@@ -137,9 +136,9 @@ impl Config {
 
     fn set_loglevel(&mut self, loglevel: String) {
         match loglevel.to_lowercase().as_str() {
-            "error" => self.loglevel = LogLevel::Error,
-            "info" => self.loglevel = LogLevel::Info,
-            _ => self.loglevel = LogLevel::Debug,
+            "error" => self.loglevel = 1,
+            "info" => self.loglevel = 2,
+            _ => self.loglevel = 3,
         }
     }
 
@@ -165,6 +164,10 @@ impl Config {
 
     pub fn get_configfile(&self) -> String {
         self.configfile.to_string()
+    }
+
+    pub fn get_loglevel(&self) -> u8 {
+        self.loglevel
     }
 }
 
