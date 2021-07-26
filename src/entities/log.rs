@@ -38,6 +38,7 @@ impl ToString for Log {
         level.to_owned()
             + " - "
             + &timestamp_to_string(SystemTime::now())
+            + " UTC"
             + " - "
             + &self.file
             + " - "

@@ -109,7 +109,6 @@ impl Server {
         let db_filename = self.config.lock().unwrap().get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
 
-        //Todo: Agregar el handler.
         let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
             Server::maintenance_thread(db_filename, db_sender_maintenance)?;
             Ok(())
@@ -195,7 +194,6 @@ impl Server {
 
         // iteramos las lineas que recibimos de nuestro cliente
         'principal: while let Some(line) = LinesIterator::new(&mut input).next() {
-            //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
 
