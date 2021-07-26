@@ -1,4 +1,3 @@
-use crate::entities::log_level::LogLevel;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -21,8 +20,8 @@ pub struct Config {
     dbfilename: String,
     /// logfile: un string indicando el nombre del archivo en el cual se grabara el log
     logfile: String,
-    /// loglevel: indica el nivel de log a implementar en el server [error, info, debug]
-    loglevel: LogLevel,
+    /// loglevel: indica el nivel de log a implementar en el server [error:1, info:2, debug:3]
+    loglevel: u8,
     /// configfile: guarda en la configuración la ruta del archivo de configuración usado.
     configfile: String,
 }
@@ -37,7 +36,7 @@ impl Config {
             timeout: 0,
             dbfilename: "dump.rdb".to_string(),
             logfile: "log.log".to_string(),
-            loglevel: LogLevel::Debug,
+            loglevel: 3,
             configfile: "file.conf".to_string(),
         }
     }
@@ -68,7 +67,7 @@ impl Config {
             let parameters = Config::clean_and_parse_lines(tokens);
             let param = parameters[0].clone();
 
-            // Setting the config parameters
+            // Seteo los valores de la configuración∫
             match name.to_lowercase().as_str() {
                 "verbose" => config.set_verbose(param),
                 "port" => config.set_port(param),
@@ -137,9 +136,9 @@ impl Config {
 
     fn set_loglevel(&mut self, loglevel: String) {
         match loglevel.to_lowercase().as_str() {
-            "error" => self.loglevel = LogLevel::Error,
-            "info" => self.loglevel = LogLevel::Info,
-            _ => self.loglevel = LogLevel::Debug,
+            "error" => self.loglevel = 1,
+            "info" => self.loglevel = 2,
+            _ => self.loglevel = 3,
         }
     }
 
@@ -166,6 +165,10 @@ impl Config {
     pub fn get_configfile(&self) -> String {
         self.configfile.to_string()
     }
+
+    pub fn get_loglevel(&self) -> u8 {
+        self.loglevel
+    }
 }
 
 fn is_invalid_line(line: &str) -> bool {
@@ -186,7 +189,7 @@ mod test {
         assert_eq!(0, config.get_timeout());
         assert_eq!("dump.rdb".to_string(), config.get_dbfilename());
         assert_eq!("log.log".to_string(), config.get_logfile());
-        assert_eq!(LogLevel::Debug, config.loglevel);
+        assert_eq!(3, config.loglevel);
     }
 
     #[test]

@@ -7,13 +7,16 @@
 
 ![alt text](https://i.morioh.com/200630/0030829c.jpg)
 
-Equipo - 🦀 Rusticos 1
+# Equipo - 🦀 Rusticos 1
 
 
 ## 🤹 Integrantes
 - 🧑🏻‍💻 Tomás Arrachea
 - 👩🏻‍💻 Sofía Cot
 - 👨🏽‍💻 Mauro Di Pietro
+
+## 🎥 Presentación
+Haga click [aquí](https://bit.ly/3i6ocjH) para ingresar a la presentación
 
 ## 📚 Como usar?
 
@@ -48,7 +51,16 @@ port 2020
 timeout 10
 dbfilename dbnombre.rbd
 logfile loguito.log
+loglevel debug
 ```
+
+El `loglevel` es un parametro electivo para definir el nivel de log que deseamos en nuestro server.
+El mismo puede ser de tipo:
+- Error
+- Info
+- Debug
+
+Por defecto el server va a iniciarse como `Debug`.
 
 
 ## ⛑ Test
