@@ -139,8 +139,9 @@ impl Server {
 
             let flag = Arc::new(AtomicBool::new(true));
             let used_flag = flag.clone();
+            let logger_client = log_sender.clone();
             let handler: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
-                Server::client_handler(client, db_sender_clone, &used_flag)?;
+                Server::client_handler(client, db_sender_clone, logger_client, &used_flag)?;
                 Ok(())
             });
             handlers.push((handler, flag));
@@ -182,6 +183,7 @@ impl Server {
     fn client_handler(
         client: TcpStream,
         db_sender_clone: Sender<(Command, Sender<Response>)>,
+        logger: Sender<Log>,
         used: &AtomicBool,
     ) -> io::Result<()> {
         let client_input: TcpStream = client.try_clone()?;
@@ -233,7 +235,15 @@ impl Server {
                     }
                 }
                 Err(err) => {
-                    println!("error: {:?}", err);
+                    logger.send(Log::new(
+                        LogLevel::Error,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        err.clone(),
+                    )).map_err(|_| {
+                        Error::new(ErrorKind::ConnectionAborted, "Log Sender error")
+                    })?;
                     output.write_all(&parse_response_error(err))?;
                 }
             };

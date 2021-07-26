@@ -20,7 +20,7 @@ pub struct Config {
     dbfilename: String,
     /// logfile: un string indicando el nombre del archivo en el cual se grabara el log
     logfile: String,
-    /// loglevel: indica el nivel de log a implementar en el server [error, info, debug]
+    /// loglevel: indica el nivel de log a implementar en el server [error:1, info:2, debug:3]
     loglevel: u8,
     /// configfile: guarda en la configuración la ruta del archivo de configuración usado.
     configfile: String,
