@@ -1,12 +1,16 @@
 use proyecto_taller_1::run_redis;
+use std::thread::JoinHandle;
+use std::thread;
+
 extern crate redis;
 
 #[test]
 fn test_set_then_get() {
-    run_redis(vec![]).unwrap();
+    let _ = thread::spawn(move || {
+        run_redis(vec![]).unwrap();
+    });
 
-    let client = redis::Client::open("redis://localhost:6379/").unwrap();
-    assert!(false);
+    let client = redis::Client::open("redis://localhost:8080/").unwrap();
     let mut con = client.get_connection().unwrap();
 
     let _set: () = redis::cmd("SET")
