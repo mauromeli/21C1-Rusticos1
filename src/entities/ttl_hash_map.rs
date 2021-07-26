@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 use std::vec::Drain;
 
 #[derive(Debug)]
+/// Estructura para almacenar los pares clave-valor con su expiración, si corresponde. Además maneja los últimos accesos a cada clave.
 pub struct TtlHashMap<K: Eq + Hash, V> {
     store: HashMap<K, V>,
     ttls: HashMap<K, SystemTime>,
@@ -14,6 +15,7 @@ pub struct TtlHashMap<K: Eq + Hash, V> {
 }
 
 impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
+    /// Constructor de un nuevo TtlHashMap
     pub fn new() -> Self {
         TtlHashMap {
             store: HashMap::new(),
@@ -29,7 +31,8 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         }
     }
 
-    /// Actualiza el último acceso a la clave. Devuelve el tiempo transcurrido desde el anterior acceso. Devuelve None si no existe la clave o expiró.
+    /// Actualiza el último acceso a la clave.
+    /// Devuelve el tiempo transcurrido desde el anterior acceso, o None si no existe la clave o expiró.
     pub fn update_last_access(&mut self, key: &K) -> Option<Duration> {
         if !self.contains_key(&key) {
             return None;
@@ -40,6 +43,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
             .map(|value| value.elapsed().unwrap_or_else(|_| Duration::from_secs(0)))
     }
 
+    /// Setea una expiración para la clave a partir de una Duration.
     /// Devuelve None si no existe la clave, y SystemTime::UNIX_EPOCH si era persistente. Sino, devuelve el valor previo de ttl.
     pub fn set_ttl_relative(&mut self, key: K, duration: Duration) -> Option<SystemTime> {
         if !self.contains_key(&key) {
@@ -49,6 +53,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         Some(self.ttls.insert(key, ttl).unwrap_or(SystemTime::UNIX_EPOCH))
     }
 
+    /// Setea una expiración para la clave en un cierto SystemTime.
     /// Devuelve None si no existe la clave, y SystemTime::UNIX_EPOCH si era persistente. Sino, devuelve el valor previo de ttl.
     pub fn set_ttl_absolute(&mut self, key: K, ttl: SystemTime) -> Option<SystemTime> {
         if !self.contains_key(&key) {
@@ -57,7 +62,8 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         Some(self.ttls.insert(key, ttl).unwrap_or(SystemTime::UNIX_EPOCH))
     }
 
-    /// Elimina el time-to-live de la clave, devolviendo el timestamp de expiración. Si no tenía una expiración, devuelve None.
+    /// Elimina la expiración de la clave.
+    /// Devuelve el ttl que tenía. Si no tenía una expiración, devuelve None.
     pub fn delete_ttl(&mut self, key: &K) -> Option<SystemTime> {
         if self.expired(key) {
             self.remove(key);
@@ -66,6 +72,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         self.ttls.remove(key)
     }
 
+    /// Obtiene el tiempo restante de expiración de una clave como Duration.
     /// Devuelve None si no existe la clave, y una duración 0 si existe pero es persistente. Sino, devuelve el ttl.
     pub fn get_ttl(&mut self, key: &K) -> Option<Duration> {
         if !self.contains_key(key) {
@@ -85,13 +92,14 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         self.store.len()
     }
 
-    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+    /// Guarda un par clave-valor.
+    pub fn insert(&mut self, key: K, value: V) {
         self.remove(&key);
         self.last_access.insert(key.clone(), SystemTime::now());
-        self.store.insert(key, value)
+        self.store.insert(key, value);
     }
 
-    /// Devuelve si la clave existe o no, chequeando que no haya expirado. Si expiró, la borra.
+    /// Devuelve si una clave existe o no, chequeando que no haya expirado. Si expiró, la borra.
     pub fn contains_key(&mut self, key: &K) -> bool {
         match self.store.get(key) {
             Some(_value) => {
@@ -105,13 +113,15 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         }
     }
 
-    /// Elimina el par clave-valor, devolviendo ese valor. Si no existía la clave, devuelve None.
+    /// Elimina el par clave-valor.
+    /// Devuelve el valor, y si no existía la clave, devuelve None.
     pub fn remove(&mut self, key: &K) -> Option<V> {
         self.ttls.remove(key);
         self.last_access.remove(key);
         self.store.remove(key)
     }
 
+    /// Devuelve el valor correspondiente a la clave. Si expiró, la borra y devuelve None.
     pub fn get(&mut self, key: &K) -> Option<&V> {
         if self.expired(key) {
             self.remove(key);
@@ -121,6 +131,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         self.store.get(key)
     }
 
+    /// Devuelve una referencia mutable del valor correspondiente a la clave. Si expiró, la borra y devuelve None.
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
         if self.expired(key) {
             self.remove(key);
@@ -130,7 +141,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
         self.store.get_mut(key)
     }
 
-    /// Devuelve las claves, sin chequear que no hayan expirado
+    /// Devuelve todas las claves, sin chequear que no hayan expirado.
     pub fn keys(&self) -> Keys<K, V> {
         self.store.keys()
     }
@@ -147,7 +158,7 @@ const OP_RESIZEDB: u8 = 0xfb;
 const WRONG_ELEMENT_TYPE: u8 = 3;
 
 impl TtlHashMap<String, RedisElement> {
-    /// Devuelve un vector de bytes con el TtlHashMap serializado. Se guardan todos los key-value con su ttl (como Unix Timestamp en segundos).
+    /// Devuelve un vector de bytes con el TtlHashMap serializado según el estandar de REDIS.
     pub fn serialize(&self) -> Vec<u8> {
         let mut s: Vec<u8> = vec![OP_RESIZEDB];
         s.append(&mut TtlHashMap::length_encode(self.store.len()));
