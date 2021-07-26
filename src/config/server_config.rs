@@ -67,7 +67,7 @@ impl Config {
             let parameters = Config::clean_and_parse_lines(tokens);
             let param = parameters[0].clone();
 
-            // Setting the config parameters
+            // Seteo los valores de la configuración∫
             match name.to_lowercase().as_str() {
                 "verbose" => config.set_verbose(param),
                 "port" => config.set_port(param),
@@ -189,7 +189,7 @@ mod test {
         assert_eq!(0, config.get_timeout());
         assert_eq!("dump.rdb".to_string(), config.get_dbfilename());
         assert_eq!("log.log".to_string(), config.get_logfile());
-        assert_eq!(LogLevel::Debug, config.loglevel);
+        assert_eq!(3, config.loglevel);
     }
 
     #[test]
