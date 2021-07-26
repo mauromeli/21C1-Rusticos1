@@ -233,7 +233,6 @@ impl Server {
                     }
                 }
                 Err(err) => {
-                    println!("error: {:?}", err);
                     output.write_all(&parse_response_error(err))?;
                 }
             };
