@@ -235,15 +235,17 @@ impl Server {
                     }
                 }
                 Err(err) => {
-                    logger.send(Log::new(
-                        LogLevel::Error,
-                        line!(),
-                        column!(),
-                        file!().to_string(),
-                        err.clone(),
-                    )).map_err(|_| {
-                        Error::new(ErrorKind::ConnectionAborted, "Log Sender error")
-                    })?;
+                    logger
+                        .send(Log::new(
+                            LogLevel::Error,
+                            line!(),
+                            column!(),
+                            file!().to_string(),
+                            err.clone(),
+                        ))
+                        .map_err(|_| {
+                            Error::new(ErrorKind::ConnectionAborted, "Log Sender error")
+                        })?;
                     output.write_all(&parse_response_error(err))?;
                 }
             };
