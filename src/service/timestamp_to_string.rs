@@ -15,3 +15,14 @@ pub fn timestamp_to_string(time: SystemTime) -> String {
     let secs = secs_offset % 60;
     format!("{:02}:{:02}:{:02}", hs, mins, secs)
 }
+
+#[allow(unused_imports)]
+mod test {
+    use crate::service::timestamp_to_string::timestamp_to_string;
+    use std::time::SystemTime;
+
+    #[test]
+    fn test_timestamp_to_string_not_null() {
+        assert_ne!("".to_string(), timestamp_to_string(SystemTime::now()));
+    }
+}

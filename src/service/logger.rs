@@ -17,22 +17,28 @@ pub struct Logger {
     verbose: u8,
     /// Configuración del servidor compartida.
     config: Arc<Mutex<Config>>,
+    /// Nivel de loggeo que fue seteado
+    loglevel: u8,
+    file: String,
 }
 
 impl Logger {
     #[allow(dead_code)]
     /// Constructor de un nuevo Logger
-    pub fn new(receiver: Receiver<Log>, config: Arc<Mutex<Config>>) -> Self {
+    pub fn new(receiver: Receiver<Log>, config: Arc<Mutex<Config>>, level: u8) -> Self {
+        let file = config.lock().unwrap().get_logfile();
         Self {
             receiver,
             verbose: 1,
             config,
+            loglevel: level,
+            file,
         }
     }
 
     #[allow(unused_must_use)]
     /// Servicio de loggeo
-    pub fn log(self) {
+    pub fn log(mut self) {
         let _: JoinHandle<Result<(), Error>> = thread::spawn(move || {
             let mut file = OpenOptions::new()
                 .write(true)
@@ -41,11 +47,23 @@ impl Logger {
                 .open(self.config.lock().unwrap().get_logfile())?;
 
             while let Ok(log) = self.receiver.recv() {
-                if self.verbose == 1 {
-                    println!("{:?}", log.to_string());
+                if self.file != self.config.lock().unwrap().get_logfile() {
+                    file = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .append(true)
+                        .open(self.config.lock().unwrap().get_logfile())?;
+                    self.file = self.config.lock().unwrap().get_logfile();
                 }
 
-                file.write(log.to_string().as_bytes());
+                if self.verbose == 1 {
+                    println!("{:?}", log.clone().to_string());
+                }
+
+                let level = log.clone().get_level();
+                if level <= self.loglevel {
+                    file.write(log.to_string().as_bytes());
+                }
             }
             Ok(())
         });

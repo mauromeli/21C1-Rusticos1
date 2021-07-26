@@ -50,8 +50,9 @@ impl Server {
     pub fn new(config: Config) -> io::Result<Self> {
         let (log_sender, log_receiver): (Sender<Log>, Receiver<Log>) = mpsc::channel();
 
+        let loglevel = config.get_loglevel();
         let config = Arc::new(Mutex::new(config));
-        let logger = Logger::new(log_receiver, Arc::clone(&config));
+        let logger = Logger::new(log_receiver, Arc::clone(&config), loglevel);
         let redis = Redis::new(log_sender.clone(), Arc::clone(&config));
 
         logger.log();
@@ -70,7 +71,6 @@ impl Server {
             path: self.config.lock().unwrap().get_dbfilename(),
         };
         let _ = self.redis.execute(command);
-
         // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();
@@ -109,7 +109,6 @@ impl Server {
         let db_filename = self.config.lock().unwrap().get_dbfilename();
         let db_sender_maintenance = db_sender.clone();
 
-        //Todo: Agregar el handler.
         let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
             Server::maintenance_thread(db_filename, db_sender_maintenance)?;
             Ok(())
@@ -139,8 +138,9 @@ impl Server {
 
             let flag = Arc::new(AtomicBool::new(true));
             let used_flag = flag.clone();
+            let logger_client = log_sender.clone();
             let handler: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
-                Server::client_handler(client, db_sender_clone, &used_flag)?;
+                Server::client_handler(client, db_sender_clone, logger_client, &used_flag)?;
                 Ok(())
             });
             handlers.push((handler, flag));
@@ -182,6 +182,7 @@ impl Server {
     fn client_handler(
         client: TcpStream,
         db_sender_clone: Sender<(Command, Sender<Response>)>,
+        logger: Sender<Log>,
         used: &AtomicBool,
     ) -> io::Result<()> {
         let client_input: TcpStream = client.try_clone()?;
@@ -195,7 +196,6 @@ impl Server {
 
         // iteramos las lineas que recibimos de nuestro cliente
         'principal: while let Some(line) = LinesIterator::new(&mut input).next() {
-            //TODO: Wrappear esto a una func -> Result
             let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
                 mpsc::channel();
 
@@ -233,6 +233,17 @@ impl Server {
                     }
                 }
                 Err(err) => {
+                    logger
+                        .send(Log::new(
+                            LogLevel::Error,
+                            line!(),
+                            column!(),
+                            file!().to_string(),
+                            err.clone(),
+                        ))
+                        .map_err(|_| {
+                            Error::new(ErrorKind::ConnectionAborted, "Log Sender error")
+                        })?;
                     output.write_all(&parse_response_error(err))?;
                 }
             };

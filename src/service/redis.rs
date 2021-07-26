@@ -480,7 +480,6 @@ impl Redis {
     /// * `ServerTime` - Indica la hora del servidor. (UTC-0).
     /// * `ProcessID` - Indica el processID del proceso en el SO.
     fn info_method(&mut self, param: InfoParam) -> Result<Response, String> {
-        //TODO: agregar test
         let _ = self.log_sender.send(Log::new(
             LogLevel::Debug,
             line!(),
@@ -2145,11 +2144,13 @@ impl Redis {
 #[allow(unused_imports)]
 mod test {
     use crate::entities::command::Command;
+    use crate::entities::info_param::InfoParam;
     use crate::service::redis::TtlHashMap;
     use crate::service::redis::{Re, Redis, Response};
     use std::collections::HashSet;
     use std::fs;
     use std::io::Write;
+    use std::process;
     use std::thread::{self, sleep};
     use std::time::{Duration, SystemTime};
 
@@ -4371,7 +4372,7 @@ mod test {
         let ttl = redis_new.execute(Command::Ttl { key: key2 });
         assert!(eq_response(
             Re::String((expire.as_secs() - 1).to_string()),
-            ttl.unwrap()
+            ttl.unwrap(),
         ));
 
         fs::remove_file("test_store_then_load.rdb").unwrap();
@@ -4470,5 +4471,69 @@ mod test {
 
         assert!(config_set.is_err());
         assert_ne!(1, redis.config.lock().unwrap().get_timeout());
+    }
+
+    #[test]
+    fn test_info_connected_clients_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConnectedClients,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("0".to_string()), info.unwrap()));
+
+        let _ = redis.execute(Command::AddClient);
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConnectedClients,
+        });
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("1".to_string()), info.unwrap()));
+
+        let _ = redis.execute(Command::RemoveClient);
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConnectedClients,
+        });
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("0".to_string()), info.unwrap()));
+    }
+
+    #[test]
+    fn test_info_port_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::Port,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(Re::String("8080".to_string()), info.unwrap()));
+    }
+
+    #[test]
+    fn test_info_config_file_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ConfigFile,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(
+            Re::String(redis.config.lock().unwrap().get_configfile()),
+            info.unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_info_process_id_ok() {
+        let mut redis: Redis = Redis::new_for_test();
+        let info = redis.execute(Command::Info {
+            param: InfoParam::ProcessId,
+        });
+
+        assert!(info.is_ok());
+        assert!(eq_response(
+            Re::String(process::id().to_string()),
+            info.unwrap()
+        ));
     }
 }
