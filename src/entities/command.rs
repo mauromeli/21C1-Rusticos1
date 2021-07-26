@@ -259,7 +259,6 @@ impl Command {
             Command::Subscribe { .. } => "subscribe",
             Command::Publish { .. } => "publish",
             Command::Unsubscribe { .. } => "unsubscribe",
-            Command::Command => "command",
             _ => "",
         }
     }
