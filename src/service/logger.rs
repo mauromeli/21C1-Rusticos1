@@ -16,6 +16,7 @@ pub struct Logger {
     verbose: u8,
     /// Configuración del servidor compartida.
     config: Arc<Mutex<Config>>,
+    /// Nivel de loggeo que fue seteado
     loglevel: u8,
 }
 

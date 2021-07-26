@@ -25,6 +25,7 @@ impl Log {
         }
     }
 
+    /// Retorna el Nivel de loggeo del Log
     pub fn get_level(self) -> u8{
         match self.level {
             LogLevel::Error => 3,
