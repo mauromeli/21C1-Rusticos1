@@ -7,7 +7,7 @@ use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io;
-use std::io::{BufReader, Error, ErrorKind, Write};
+use std::io::{BufReader, Error, ErrorKind, Write, Read};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
@@ -74,6 +74,8 @@ impl Server {
         // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();
+        let address_rest = "0.0.0.0:7878".to_owned();
+
         let log_sender = self.log_sender.clone();
         log_sender
             .send(Log::new(
@@ -115,7 +117,27 @@ impl Server {
         });
 
         self.db_thread(db_receiver);
+        let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
+            Server::accepter_thread(listener, db_sender, log_sender, timeout)?;
+            Ok(())
+        });
 
+        Ok(())
+    }
+
+    fn accepter_rest_thread(listener: TcpListener, db_sender: Sender<(Command, Sender<Response>)>, log_sender: Sender<Log>) -> io::Result<()> {
+        for stream in listener.incoming() {
+            let stream = stream.unwrap();
+            let db_sender_clone = db_sender.clone();
+            let log_sender_clone = log_sender.clone();
+            Server::rest_client_handler(stream, db_sender_clone, log_sender_clone);
+        }
+
+        Ok(())
+    }
+
+    fn accepter_thread(listener: TcpListener, db_sender: Sender<(Command, Sender<Response>)>, log_sender: Sender<Log>, timeout: u64)
+                       -> io::Result<()> {
         let mut handlers: VecHandler = vec![];
 
         while let Ok(connection) = listener.accept() {
@@ -176,6 +198,64 @@ impl Server {
 
         Ok(())
     }
+
+
+    /// Metodo encargado de capturar los eventos de cada petición rest.
+    fn rest_client_handler(
+        mut stream: TcpStream,
+        db_sender_clone: Sender<(Command, Sender<Response>)>,
+        logger: Sender<Log>,
+    ) -> io::Result<()> {
+        let mut buffer = [0; 1024];
+
+        stream.read(&mut buffer).unwrap();
+        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
+            mpsc::channel();
+
+        let vector = vec!["ping".to_string()];//parse_command(line);
+
+        let command = generate(vector, "REST".to_string());
+
+        let err_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
+        these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
+         LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, RENAME, RPOP, RPUSH, SADD, SCARD, SET, SORT, \
+         TTL, TYPE".to_string();
+
+        match command {
+            Ok(Command::Monitor) => stream.write_all(&parse_response_error(err_msg))?,
+            Ok(Command::Publish { .. }) => stream.write_all(&parse_response_error(err_msg))?,
+            Ok(Command::Command) => stream.write_all(&parse_response_error(err_msg))?,
+            Ok(Command::Subscribe { .. }) => stream.write_all(&parse_response_error(err_msg))?,
+            Ok(Command::Unsubscribe { .. }) => stream.write_all(&parse_response_error(err_msg))?,
+            Ok(command) => {
+                db_sender_clone
+                    .send((command, client_sndr))
+                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Db Sender error"))?;
+
+                let response = client_rcvr.recv().map_err(|_| {
+                    Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
+                })?;
+
+                match response {
+                    Response::Normal(redis_string) => {
+                        stream.write_all(&parse_response_ok(redis_string))?;
+                    }
+                    Response::Error(msg) => {
+                        stream.write_all(&parse_response_error(msg))?;
+                    }
+                    _ => println!("no")
+                }
+            }
+            Err(err) => {
+                stream.write_all(&parse_response_error(err))?;
+            }
+        };
+
+        stream.flush().unwrap();
+
+        Ok(())
+    }
+
 
     #[allow(clippy::while_let_on_iterator)]
     /// Metodo encargado de capturar los eventos de cada cliente.
