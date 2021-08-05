@@ -7,7 +7,7 @@ use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io;
-use std::io::{BufReader, Error, ErrorKind, Write, Read};
+use std::io::{BufReader, Error, ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
@@ -66,12 +66,10 @@ impl Server {
 
     /// Methodo del Server para ponerlo operativo.
     pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // load db
         let command = Command::Load {
             path: self.config.lock().unwrap().get_dbfilename(),
         };
         let _ = self.redis.execute(command);
-        // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();
         let address_rest = "0.0.0.0:7878".to_owned();
@@ -87,7 +85,7 @@ impl Server {
             ))
             .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
 
-        self.server_run(&address)?;
+        self.server_run(&address, &address_rest)?;
 
         log_sender
             .send(Log::new(
@@ -101,8 +99,9 @@ impl Server {
         Ok(())
     }
 
-    fn server_run(self, address: &str) -> io::Result<()> {
+    fn server_run(self, address: &str, address_rest: &str) -> io::Result<()> {
         let listener = TcpListener::bind(address)?;
+        let rest_listener = TcpListener::bind(address_rest)?;
         let (db_sender, db_receiver): (DbSender, DbReceiver) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
@@ -117,27 +116,35 @@ impl Server {
         });
 
         self.db_thread(db_receiver);
-        let _: JoinHandle<Result<(), io::Error>> = thread::spawn(move || {
-            Server::accepter_thread(listener, db_sender, log_sender, timeout)?;
+
+        let _ = Server::accepter_rest_thread(rest_listener, db_sender.clone(), log_sender.clone());
+        Server::receive_connections(listener, db_sender, log_sender, timeout)?;
+
+        Ok(())
+    }
+
+    fn accepter_rest_thread(
+        listener: TcpListener,
+        db_sender: Sender<(Command, Sender<Response>)>,
+        log_sender: Sender<Log>,
+    ) -> JoinHandle<Result<(), io::Error>> {
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let stream = stream.unwrap();
+                let db_sender_clone = db_sender.clone();
+                let log_sender_clone = log_sender.clone();
+                Server::rest_client_handler(stream, db_sender_clone, log_sender_clone)?;
+            }
             Ok(())
-        });
-
-        Ok(())
+        })
     }
 
-    fn accepter_rest_thread(listener: TcpListener, db_sender: Sender<(Command, Sender<Response>)>, log_sender: Sender<Log>) -> io::Result<()> {
-        for stream in listener.incoming() {
-            let stream = stream.unwrap();
-            let db_sender_clone = db_sender.clone();
-            let log_sender_clone = log_sender.clone();
-            Server::rest_client_handler(stream, db_sender_clone, log_sender_clone);
-        }
-
-        Ok(())
-    }
-
-    fn accepter_thread(listener: TcpListener, db_sender: Sender<(Command, Sender<Response>)>, log_sender: Sender<Log>, timeout: u64)
-                       -> io::Result<()> {
+    fn receive_connections(
+        listener: TcpListener,
+        db_sender: Sender<(Command, Sender<Response>)>,
+        log_sender: Sender<Log>,
+        timeout: u64,
+    ) -> io::Result<()> {
         let mut handlers: VecHandler = vec![];
 
         while let Ok(connection) = listener.accept() {
@@ -199,7 +206,6 @@ impl Server {
         Ok(())
     }
 
-
     /// Metodo encargado de capturar los eventos de cada petición rest.
     fn rest_client_handler(
         mut stream: TcpStream,
@@ -207,12 +213,10 @@ impl Server {
         logger: Sender<Log>,
     ) -> io::Result<()> {
         let mut buffer = [0; 1024];
-
         stream.read(&mut buffer).unwrap();
-        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) =
-            mpsc::channel();
+        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
-        let vector = vec!["ping".to_string()];//parse_command(line);
+        let vector = vec!["ping".to_string()]; //parse_command(line);
 
         let command = generate(vector, "REST".to_string());
 
@@ -243,7 +247,7 @@ impl Server {
                     Response::Error(msg) => {
                         stream.write_all(&parse_response_error(msg))?;
                     }
-                    _ => println!("no")
+                    _ => println!("no"),
                 }
             }
             Err(err) => {
@@ -255,7 +259,6 @@ impl Server {
 
         Ok(())
     }
-
 
     #[allow(clippy::while_let_on_iterator)]
     /// Metodo encargado de capturar los eventos de cada cliente.
