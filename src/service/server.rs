@@ -130,6 +130,16 @@ impl Server {
     ) -> JoinHandle<Result<(), io::Error>> {
         thread::spawn(move || {
             for stream in listener.incoming() {
+                log_sender
+                    .send(Log::new(
+                        LogLevel::Info,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "=======New Request Received======".to_string(),
+                    ))
+                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
+
                 let stream = stream.unwrap();
                 let db_sender_clone = db_sender.clone();
                 let log_sender_clone = log_sender.clone();
@@ -225,12 +235,13 @@ impl Server {
          LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, RENAME, RPOP, RPUSH, SADD, SCARD, SET, SORT, \
          TTL, TYPE".to_string();
 
+        let mut content;
         match command {
-            Ok(Command::Monitor) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Publish { .. }) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Command) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Subscribe { .. }) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Unsubscribe { .. }) => stream.write_all(&parse_response_error(err_msg))?,
+            Ok(Command::Monitor) => { content = err_msg }
+            Ok(Command::Publish { .. }) => { content = err_msg }
+            Ok(Command::Command) => { content = err_msg }
+            Ok(Command::Subscribe { .. }) => { content = err_msg }
+            Ok(Command::Unsubscribe { .. }) => { content = err_msg }
             Ok(command) => {
                 db_sender_clone
                     .send((command, client_sndr))
@@ -242,19 +253,24 @@ impl Server {
 
                 match response {
                     Response::Normal(redis_string) => {
-                        stream.write_all(&parse_response_ok(redis_string))?;
+                        content = redis_string.to_string();
                     }
-                    Response::Error(msg) => {
-                        stream.write_all(&parse_response_error(msg))?;
-                    }
-                    _ => println!("no"),
+                    Response::Error(msg) => { content = msg }
+                    _ => { content = err_msg }
                 }
             }
             Err(err) => {
-                stream.write_all(&parse_response_error(err))?;
+                content = err
             }
         };
 
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            content.len(),
+            content
+        );
+
+        stream.write(response.as_bytes()).unwrap();
         stream.flush().unwrap();
 
         Ok(())
