@@ -130,7 +130,7 @@ impl Server {
     ) -> JoinHandle<Result<(), io::Error>> {
         thread::spawn(move || {
             for stream in listener.incoming() {
-                let stream = stream.unwrap();
+                let stream = stream?; //REVISAR EL ERROR, puede fallar porque hay demasiadas conexiones, deberia seguir funcionando
                 let db_sender_clone = db_sender.clone();
                 let log_sender_clone = log_sender.clone();
                 Server::rest_client_handler(stream, db_sender_clone, log_sender_clone)?;
@@ -213,51 +213,83 @@ impl Server {
         logger: Sender<Log>,
     ) -> io::Result<()> {
         let mut buffer = [0; 1024];
-        stream.read(&mut buffer).unwrap();
+        stream.read(&mut buffer)?;
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
-        let vector = vec!["ping".to_string()]; //parse_command(line);
-
-        let command = generate(vector, "REST".to_string());
-
-        let err_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
-        these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
-         LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, RENAME, RPOP, RPUSH, SADD, SCARD, SET, SORT, \
-         TTL, TYPE".to_string();
-
-        match command {
-            Ok(Command::Monitor) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Publish { .. }) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Command) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Subscribe { .. }) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(Command::Unsubscribe { .. }) => stream.write_all(&parse_response_error(err_msg))?,
-            Ok(command) => {
-                db_sender_clone
-                    .send((command, client_sndr))
-                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Db Sender error"))?;
-
-                let response = client_rcvr.recv().map_err(|_| {
-                    Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
-                })?;
-
-                match response {
-                    Response::Normal(redis_string) => {
-                        stream.write_all(&parse_response_ok(redis_string))?;
-                    }
-                    Response::Error(msg) => {
-                        stream.write_all(&parse_response_error(msg))?;
-                    }
-                    _ => println!("no"),
-                }
-            }
-            Err(err) => {
-                stream.write_all(&parse_response_error(err))?;
-            }
+        // decode html request -> get / post y command / unknown
+        let (command, status_line, filename) = match parse_command(buffer) {
+            GET => (None, "HTTP/1.1 200 OK", "index.html"),
+            POST(command) => (Some(command), "HTTP/1.1 200 OK", "index.html"),
+            _ => (None, "HTTP/1.1 404 NOT FOUND", "404.html"),
         };
 
-        stream.flush().unwrap();
+        let html = std::fs::read_to_string(filename)?;
+
+        if let Some(command) = command {
+            Server::append_input(&html, command.as_str());
+            match generate(command, "REST".to_string()) {
+                Ok(Command::Monitor) => Server::append_error(&html),
+                Ok(Command::Publish { .. }) => Server::append_error(&html),
+                Ok(Command::Command) => Server::append_error(&html),
+                Ok(Command::Subscribe { .. }) => Server::append_error(&html),
+                Ok(Command::Unsubscribe { .. }) => Server::append_error(&html),
+                Ok(command) => {
+                    db_sender_clone
+                        .send((command, client_sndr))
+                        .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Db Sender error"))?;
+
+                    let response = client_rcvr.recv().map_err(|_| {
+                        Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
+                    })?;
+
+                    match response {
+                        Response::Normal(redis_string) => {
+                            Server::append_response(&html, &redis_string.to_string());
+                        }
+                        Response::Error(msg) => {
+                            Server::append_response(&html, &msg);
+                        }
+                        _ => println!("no"),
+                    }
+                }
+                Err(err) => {
+                    Server::append_response(&html, &err);
+                }
+            }
+        }
+
+        let response = format!(
+            "{}\r\nContent-Length: {}\r\n\r\n{}",
+            status_line,
+            contents.len(),
+            contents
+        );
+
+        stream.write(response.as_bytes())?;
+        stream.flush()?;
 
         Ok(())
+    }
+
+    fn append_error(html: &str) {
+        let error_msg = "<div class=\"line error\">\n<div class=\"nopad\">\n(error) I'm sorry, I don't recognize that command. Please type HELP for one of these commands: DECR, DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, HDEL, HEXISTS, HGET, HGETALL, HINCRBY, HKEYS, HLEN, HMGET, HMSET, HSET, HVALS, INCR, INCRBY, KEYS, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, MSETNX, MULTI, PEXPIRE, RENAME, RENAMENX, RPOP, RPOPLPUSH, RPUSH, SADD, SCARD, SDIFF, SDIFFSTORE, SET, SETEX, SETNX, SINTER, SINTERSTORE, SISMEMBER, SMEMBERS, SMOVE, SORT, SPOP, SRANDMEMBER, SREM, SUNION, SUNIONSTORE, TTL, TYPE, ZADD, ZCARD, ZCOUNT, ZINCRBY, ZRANGE, ZRANGEBYSCORE, ZRANK, ZREM, ZREMRANGEBYSCORE, ZREVRANGE, ZSCORE\n</div>\n</div>\n";
+        html.append(error_msg);
+    }
+
+    fn append_input(html: &str, input: &str) {
+        let command_msg = format!(
+            "<div class=\"line input\">\n<span class=\"prompt\">\n&gt;\n</span>\n<div class=\"nopad\">\n{}\n</div>\n</div>\n",
+            input
+        );
+        html.append(command_msg);
+    }
+
+    fn append_response(html: &str, msg: &str) {
+        let response = format!(
+            "<div class=\"line response\">\n<div class=\"nopad\">\n{}\n</div>\n</div>\n",
+            msg
+        );
+        html.append(response);
     }
 
     #[allow(clippy::while_let_on_iterator)]

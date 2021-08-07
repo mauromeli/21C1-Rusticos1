@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+<style>
+    #header {
+      margin: auto;
+      margin-top: 1em;
+      padding: 0em;
+      padding-top: 0.25em;
+      padding-bottom: 0.25em;
+      border: 5px solid #595540;
+      text-align: center;
+      width: 600px;
+      background-color: #cc8139;
+    }
+    #log {
+      width: 90%;
+      height: 75%;
+      overflow-y: scroll;
+      background-color: #ffefd5;
+      margin: auto;
+      margin-top: -5px;
+      padding: 1em 1em 1em 1em;
+      border: 5px solid #595540;
+      overflow: auto;
+      font-family: monospace;
+      color: #262626;
+      font-size: 1.15em;
+      word-wrap: break-word;
+    }
+    #log .line {
+      margin: 0em 0em 1em 0em;
+      line-height: 1.25em;
+    }
+    #log .input{
+      font-weight: bold;
+      font-size: 0.85em;
+      color: #595540;
+    }
+    #log .response {
+      font-weight: bold;
+      color: #262626;
+    }
+    #log .notification {
+      font-weight: normal;
+      background-color: #262626;
+      color: #cc8139;
+      font-family: sans-serif;
+      font-size: 0.75em;
+      padding: 1em;
+    }
+    #log .error {
+      font-weight: normal;
+      background-color: #8b0000;
+      color: #fff;
+      font-family: sans-serif;
+      font-size: 0.75em;
+      padding: 1em;
+    }
+    #toolbar {
+      width: 750px;
+      margin: auto;
+      padding: 0em;
+      border: 0px;
+      margin-top: -5px;
+      display: none;
+    }
+    #toolbar #input {
+      padding: 0.5em;
+      width: 100%;
+      font-size: 1.5em;
+      background-color: #cc8139;
+      color: #262626;
+      font-family: monospace;
+      border: 5px solid #595540;
+      outline: none;
+      background-image: url(images/prompt.png);
+      background-repeat: no-repeat;
+      padding-left: 45px;
+    }
+</style>
+
+  <head>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <title> Redis </title>
+    <link rel = "icon" href = 
+    "images/favicon.png" 
+    type = "image/x-icon">
+
+  </head>
+  <body style="background-color: #262626;margin: 8px;height: 100%">
+    <div id="header">
+      <img height="50" src="images/try-redis-500x50.png" width="500">
+    </div>
+    <div id="log">
+      <div class="line notification">
+        <p>Welcome to <strong>Try Redis</strong>, a demonstration of the <a href="http://redis.io">Redis</a> database!</p>
+      </div>
+      <!-- probando lineas -->
+      <div class="line input">
+        <div class="nopad">
+          <span class="prompt">
+            &gt; 
+          </span>
+          set 1 2
+        </div>
+      </div>
+      <div class="line respone">
+        <div class="nopad">
+          OK
+        </div>
+      </div>
+      <div class="line error">
+        <div class="nopad">
+        (error) I'm sorry, I don't recognize that command. Please type HELP for one of these commands: DECR, DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, HDEL, HEXISTS, HGET, HGETALL, HINCRBY, HKEYS, HLEN, HMGET, HMSET, HSET, HVALS, INCR, INCRBY, KEYS, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, MSETNX, MULTI, PEXPIRE, RENAME, RENAMENX, RPOP, RPOPLPUSH, RPUSH, SADD, SCARD, SDIFF, SDIFFSTORE, SET, SETEX, SETNX, SINTER, SINTERSTORE, SISMEMBER, SMEMBERS, SMOVE, SORT, SPOP, SRANDMEMBER, SREM, SUNION, SUNIONSTORE, TTL, TYPE, ZADD, ZCARD, ZCOUNT, ZINCRBY, ZRANGE, ZRANGEBYSCORE, ZRANK, ZREM, ZREMRANGEBYSCORE, ZREVRANGE, ZSCORE
+        </div>
+      </div>
+      <!-- fin prueba -->
+    </div>
+    <div id="toolbar" style="display: block;">
+      <form>
+        <input id="input" type="text" name="command" spellcheck="false">
+      </form>
+    </div>
+  </div>
+  </body>
+</html>
