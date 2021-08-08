@@ -16,6 +16,7 @@ use std::thread;
 
 use crate::protocol::lines_iterator::LinesIterator;
 use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
+use crate::protocol::http::parse_request::parse_command_rest;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -226,9 +227,9 @@ impl Server {
         stream.read(&mut buffer).unwrap();
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
-        let vector = vec!["ping".to_string()]; //parse_command(line);
+        let request = parse_command_rest(&buffer);
 
-        let command = generate(vector, "REST".to_string());
+        let command = generate(request, "REST".to_string());
 
         let err_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
         these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
