@@ -24,7 +24,7 @@ pub fn parse_command_rest(data: &[u8]) -> Vec<String> {
         if let Some(index_command) = url.find("command") {
             let command_len = 7;
             let equal = 1;
-            let slice = &url[index_command+command_len+equal ..];
+            let slice = &url[index_command + command_len + equal..];
             let command = slice.split("%20").map(String::from).collect();
             return command;
         } else {
@@ -75,7 +75,8 @@ fn parse_request(data: &[u8]) -> Request {
                     }
                 } else {
                     if current == &b'\r' {
-                        if String::from_utf8(data[header+3..header+4].to_vec()).unwrap() == "\r" {
+                        if String::from_utf8(data[header + 3..header + 4].to_vec()).unwrap() == "\r"
+                        {
                             state = RequestParseState::Headers { is_end: true };
                         } else {
                             headers_value.push(header);
