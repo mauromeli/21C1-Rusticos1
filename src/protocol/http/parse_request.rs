@@ -32,7 +32,7 @@ pub fn parse_command_rest(data: &[u8]) -> HttpMethod {
                 let command_len = 7;
                 let equal = 1;
                 let slice = &body[index_command + command_len + equal..];
-                let command: Vec<String> = slice.split("+").map(String::from).collect();
+                let command: Vec<String> = slice.split('+').map(String::from).collect();
                 HttpMethod::Post(command)
             } else {
                 HttpMethod::Post(vec![])
@@ -74,10 +74,8 @@ fn parse_request(data: &[u8]) -> Request {
             RequestParseState::HttpVersion => {
                 if current == &b'\n' {
                     state = RequestParseState::Headers { is_end: false };
-                } else {
-                    if current != &b'\r' {
-                        http_version = i;
-                    }
+                } else if current != &b'\r' {
+                    http_version = i;
                 }
             }
             RequestParseState::Headers { is_end } => {
@@ -85,23 +83,20 @@ fn parse_request(data: &[u8]) -> Request {
                     if current == &b'\n' {
                         state = RequestParseState::Body;
                     }
-                } else {
-                    if current == &b'\r' {
-                        if String::from_utf8(data[header + 3..header + 4].to_vec()).unwrap() == "\r"
-                        {
-                            state = RequestParseState::Headers { is_end: true };
-                        } else {
-                            headers_value.push(header);
-                            header = 0;
-                        }
-                    } else if current == &b':'
-                        && String::from_utf8(data[i + 1..i + 2].to_vec()).unwrap() == " "
-                    {
-                        headers_key.push(header);
-                        header = 0;
+                } else if current == &b'\r' {
+                    if String::from_utf8(data[header + 3..header + 4].to_vec()).unwrap() == "\r" {
+                        state = RequestParseState::Headers { is_end: true };
                     } else {
-                        header = i;
+                        headers_value.push(header);
+                        header = 0;
                     }
+                } else if current == &b':'
+                    && String::from_utf8(data[i + 1..i + 2].to_vec()).unwrap() == " "
+                {
+                    headers_key.push(header);
+                    header = 0;
+                } else {
+                    header = i;
                 }
             }
             RequestParseState::Body => {

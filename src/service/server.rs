@@ -16,6 +16,7 @@ use std::thread;
 
 use crate::protocol::http::html::Html;
 use crate::protocol::http::parse_request::{parse_command_rest, HttpMethod};
+use crate::protocol::http::parse_response::parse_response_rest;
 use crate::protocol::lines_iterator::LinesIterator;
 use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
 use std::thread::JoinHandle;
@@ -223,7 +224,7 @@ impl Server {
     fn rest_client_handler(
         mut stream: TcpStream,
         db_sender_clone: Sender<(Command, Sender<Response>)>,
-        logger: Sender<Log>,
+        _logger: Sender<Log>,
         html: &mut Html,
     ) -> io::Result<()> {
         let mut buffer = [0; 5024];
@@ -290,13 +291,13 @@ impl Server {
 
                         match response {
                             Response::Normal(redis_string) => {
-                                html.append_response(&redis_string.to_string());
+                                html.append_response(&parse_response_rest(redis_string));
                             }
                             Response::Error(msg) => html.append_error(&msg),
                             Response::Stream(_) => html.append_error(help_msg),
                         }
                     }
-                    Err(err) => html.append_response(&err),
+                    Err(err) => html.append_error(&err),
                 }
                 stream.write_all(
                     format!(
