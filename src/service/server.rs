@@ -14,6 +14,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
+use crate::protocol::http::html::Html;
 use crate::protocol::http::parse_request::parse_command_rest;
 use crate::protocol::lines_iterator::LinesIterator;
 use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
@@ -23,7 +24,6 @@ use std::time::Duration;
 /// Tiempo de ejecución entre un ciclo y el siguiente, en el hilo de Mantenimiento.
 /// Este valor está representado en Segundos.
 static STORE_TIME_SEC: u64 = 120;
-static HTML_LINES: &str = "<!--end-lines-->";
 
 /// Tipo de dato definido para guardar las conecciones de los usuarios y su estado en uso.
 type VecHandler = Vec<(JoinHandle<Result<(), io::Error>>, Arc<AtomicBool>)>;
@@ -131,6 +131,7 @@ impl Server {
         log_sender: Sender<Log>,
     ) -> JoinHandle<Result<(), io::Error>> {
         thread::spawn(move || {
+            let mut html = Html::new()?;
             for stream in listener.incoming() {
                 log_sender
                     .send(Log::new(
@@ -145,7 +146,7 @@ impl Server {
                 let stream = stream.unwrap();
                 let db_sender_clone = db_sender.clone();
                 let log_sender_clone = log_sender.clone();
-                Server::rest_client_handler(stream, db_sender_clone, log_sender_clone)?;
+                Server::rest_client_handler(stream, db_sender_clone, log_sender_clone, &mut html)?;
             }
             Ok(())
         })
@@ -223,16 +224,14 @@ impl Server {
         mut stream: TcpStream,
         db_sender_clone: Sender<(Command, Sender<Response>)>,
         logger: Sender<Log>,
+        html: &mut Html,
     ) -> io::Result<()> {
         let mut buffer = [0; 5024];
         stream.read(&mut buffer)?;
 
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
-        println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
         let request = parse_command_rest(&buffer);
-
-        let mut html = std::fs::read_to_string("index.html")?;
 
         let help_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
         these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
@@ -240,13 +239,13 @@ impl Server {
          TTL, TYPE";
 
         if !request.is_empty() {
-            Server::append_input(&html, &request.join(" "));
-            html = match generate(request, "REST".to_string()) {
-                Ok(Command::Monitor) => Server::append_error(&html, help_msg),
-                Ok(Command::Publish { .. }) => Server::append_error(&html, help_msg),
-                Ok(Command::Command) => Server::append_error(&html, help_msg),
-                Ok(Command::Subscribe { .. }) => Server::append_error(&html, help_msg),
-                Ok(Command::Unsubscribe { .. }) => Server::append_error(&html, help_msg),
+            html.append_input(&request.join(" "));
+            match generate(request, "REST".to_string()) {
+                Ok(Command::Monitor) => html.append_error(help_msg),
+                Ok(Command::Publish { .. }) => html.append_error(help_msg),
+                Ok(Command::Command) => html.append_error(help_msg),
+                Ok(Command::Subscribe { .. }) => html.append_error(help_msg),
+                Ok(Command::Unsubscribe { .. }) => html.append_error(help_msg),
                 Ok(command) => {
                     db_sender_clone
                         .send((command, client_sndr))
@@ -258,50 +257,26 @@ impl Server {
 
                     match response {
                         Response::Normal(redis_string) => {
-                            Server::append_response(&html, &redis_string.to_string())
+                            html.append_response(&redis_string.to_string());
                         }
-                        Response::Error(msg) => Server::append_error(&html, &msg),
-                        Response::Stream(_) => Server::append_error(&html, help_msg),
+                        Response::Error(msg) => html.append_error(&msg),
+                        Response::Stream(_) => html.append_error(help_msg),
                     }
                 }
-                Err(err) => Server::append_response(&html, &err),
+                Err(err) => html.append_response(&err),
             };
         }
 
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            html.len(),
-            html
+            html.get_len(),
+            html.get_index()
         );
 
         stream.write(response.as_bytes())?;
         stream.flush()?;
 
         Ok(())
-    }
-
-    fn append_error(html: &str, msg: &str) -> String {
-        let error_msg = format!(
-            "<div class=\"line error\">\n<div class=\"nopad\">\n(error) {}\n</div>\n</div>\n",
-            msg
-        );
-        html.replace(HTML_LINES, &(error_msg.to_string() + HTML_LINES))
-    }
-
-    fn append_input(html: &str, input: &str) -> String {
-        let command_msg = format!(
-            "<div class=\"line input\">\n<span class=\"prompt\">\n&gt;\n</span>\n<div class=\"nopad\">\n{}\n</div>\n</div>\n",
-            input
-        );
-        html.replace(HTML_LINES, &(command_msg.to_string() + HTML_LINES))
-    }
-
-    fn append_response(html: &str, msg: &str) -> String {
-        let response = format!(
-            "<div class=\"line response\">\n<div class=\"nopad\">\n{}\n</div>\n</div>\n",
-            msg
-        );
-        html.replace(HTML_LINES, &(response + HTML_LINES))
     }
 
     #[allow(clippy::while_let_on_iterator)]
