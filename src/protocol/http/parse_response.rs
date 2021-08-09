@@ -4,7 +4,7 @@ use std::iter::FromIterator;
 const INTEGER: &str = "(integer) ";
 const STRING: &str = "\"";
 const START_LIST: &str = ") \"";
-const END_LIST: &str = "\" \n";
+const END_LIST: &str = "\" <br>";
 const NIL: &str = "(nil)";
 const EMPTY_LIST_SET: &str = "(empty list or set)";
 
