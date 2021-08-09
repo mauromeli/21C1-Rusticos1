@@ -2,6 +2,7 @@ use std::io;
 
 static END_LINES: &str = "<!--end-lines-->";
 static INDEX_FILE: &str = "index.html";
+static ERROR_FILE: &str = "404.html";
 
 /// Html: estructura que representa el código HTML de nuestra página web.
 pub struct Html {
@@ -61,7 +62,11 @@ impl Html {
         self.index.clone()
     }
 
-    pub fn get_len(&self) -> usize {
-        self.index.len()
+    pub fn get_resource(url: &str) -> io::Result<Vec<u8>> {
+        std::fs::read(url)
+    }
+
+    pub fn get_404() -> io::Result<String> {
+        std::fs::read_to_string(ERROR_FILE)
     }
 }

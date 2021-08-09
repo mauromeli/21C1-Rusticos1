@@ -17,21 +17,33 @@ enum RequestParseState {
     Body,
 }
 
-pub fn parse_command_rest(data: &[u8]) -> Vec<String> {
+pub enum HttpMethod {
+    Get(String),
+    Post(Vec<String>),
+    Other(),
+}
+
+pub fn parse_command_rest(data: &[u8]) -> HttpMethod {
     let request = parse_request(data);
-    if request.method == "POST" {
-        let body = request.body;
-        return if let Some(index_command) = body.find("command") {
-            let command_len = 7;
-            let equal = 1;
-            let slice = &body[index_command + command_len + equal..];
-            let command = slice.split("+").map(String::from).collect();
-            command
-        } else {
-            vec![]
+    match request.method.as_str() {
+        "POST" => {
+            let body = request.body;
+            return if let Some(index_command) = body.find("command") {
+                let command_len = 7;
+                let equal = 1;
+                let slice = &body[index_command + command_len + equal..];
+                let command: Vec<String> = slice.split("+").map(String::from).collect();
+                HttpMethod::Post(command)
+            } else {
+                HttpMethod::Post(vec![])
+            };
         }
+        "GET" => {
+            let url = request.url;
+            HttpMethod::Get(url)
+        }
+        _ => HttpMethod::Other(),
     }
-    return vec![];
 }
 
 fn parse_request(data: &[u8]) -> Request {
@@ -82,7 +94,9 @@ fn parse_request(data: &[u8]) -> Request {
                             headers_value.push(header);
                             header = 0;
                         }
-                    } else if current == &b':' && String::from_utf8(data[i+1..i+2].to_vec()).unwrap() == " " {
+                    } else if current == &b':'
+                        && String::from_utf8(data[i + 1..i + 2].to_vec()).unwrap() == " "
+                    {
                         headers_key.push(header);
                         header = 0;
                     } else {

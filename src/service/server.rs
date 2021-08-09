@@ -15,7 +15,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 use crate::protocol::http::html::Html;
-use crate::protocol::http::parse_request::parse_command_rest;
+use crate::protocol::http::parse_request::{parse_command_rest, HttpMethod};
 use crate::protocol::lines_iterator::LinesIterator;
 use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
 use std::thread::JoinHandle;
@@ -231,49 +231,96 @@ impl Server {
 
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
-        let request = parse_command_rest(&buffer);
+        let request: HttpMethod = parse_command_rest(&buffer);
 
         let help_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
         these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
          LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, RENAME, RPOP, RPUSH, SADD, SCARD, SET, SORT, \
          TTL, TYPE";
 
-        if !request.is_empty() {
-            html.append_input(&request.join(" "));
-            match generate(request, "REST".to_string()) {
-                Ok(Command::Monitor) => html.append_error(help_msg),
-                Ok(Command::Publish { .. }) => html.append_error(help_msg),
-                Ok(Command::Command) => html.append_error(help_msg),
-                Ok(Command::Subscribe { .. }) => html.append_error(help_msg),
-                Ok(Command::Unsubscribe { .. }) => html.append_error(help_msg),
-                Ok(command) => {
-                    db_sender_clone
-                        .send((command, client_sndr))
-                        .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Db Sender error"))?;
-
-                    let response = client_rcvr.recv().map_err(|_| {
-                        Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
-                    })?;
-
-                    match response {
-                        Response::Normal(redis_string) => {
-                            html.append_response(&redis_string.to_string());
-                        }
-                        Response::Error(msg) => html.append_error(&msg),
-                        Response::Stream(_) => html.append_error(help_msg),
+        match request {
+            HttpMethod::Get(url) => {
+                if url == "/" {
+                    stream.write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                            html.get_index().len(),
+                            html.get_index()
+                        )
+                        .as_bytes(),
+                    )?;
+                } else {
+                    if let Ok(image) = Html::get_resource(&url.strip_prefix("/").unwrap()) {
+                        stream.write_all(
+                            format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\nContent-Length: {}\r\n\r\n",
+                            image.len(),
+                            )
+                            .as_bytes(),
+                        )?;
+                        stream.write_all(&image)?;
+                    } else {
+                        stream.write_all(
+                            format!(
+                                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                                html.get_index().len(),
+                                html.get_index()
+                            )
+                            .as_bytes(),
+                        )?;
                     }
                 }
-                Err(err) => html.append_response(&err),
-            };
-        }
+            }
+            HttpMethod::Post(command) => {
+                html.append_input(&command.join(" "));
+                match generate(command, "REST".to_string()) {
+                    Ok(Command::Monitor) => html.append_error(help_msg),
+                    Ok(Command::Publish { .. }) => html.append_error(help_msg),
+                    Ok(Command::Command) => html.append_error(help_msg),
+                    Ok(Command::Subscribe { .. }) => html.append_error(help_msg),
+                    Ok(Command::Unsubscribe { .. }) => html.append_error(help_msg),
+                    Ok(command) => {
+                        db_sender_clone.send((command, client_sndr)).map_err(|_| {
+                            Error::new(ErrorKind::ConnectionAborted, "Db Sender error")
+                        })?;
 
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            html.get_len(),
-            html.get_index()
-        );
+                        let response = client_rcvr.recv().map_err(|_| {
+                            Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
+                        })?;
 
-        stream.write(response.as_bytes())?;
+                        match response {
+                            Response::Normal(redis_string) => {
+                                html.append_response(&redis_string.to_string());
+                            }
+                            Response::Error(msg) => html.append_error(&msg),
+                            Response::Stream(_) => html.append_error(help_msg),
+                        }
+                    }
+                    Err(err) => html.append_response(&err),
+                }
+                stream.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        html.get_index().len(),
+                        html.get_index()
+                    )
+                    .as_bytes(),
+                )?;
+            }
+            _ => {
+                if let Ok(file) = Html::get_404() {
+                    stream.write_all(
+                        format!(
+                            "HTTP/1.1 404 Not found\r\nContent-Length: {}\r\n\r\n{}",
+                            file.len(),
+                            file
+                        )
+                        .as_bytes(),
+                    )?;
+                }
+            }
+        };
+
         stream.flush()?;
 
         Ok(())
