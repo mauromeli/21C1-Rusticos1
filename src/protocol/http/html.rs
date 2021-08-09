@@ -23,9 +23,7 @@ impl Html {
             </div>\n",
             msg
         );
-        self.index = self
-            .index
-            .replace(END_LINES, &(error_msg.to_string() + END_LINES));
+        self.index = self.index.replace(END_LINES, &(error_msg + END_LINES));
     }
 
     pub fn append_input(&mut self, input: &str) {
@@ -40,9 +38,7 @@ impl Html {
             </div>\n",
             input
         );
-        self.index = self
-            .index
-            .replace(END_LINES, &(input_msg.to_string() + END_LINES));
+        self.index = self.index.replace(END_LINES, &(input_msg + END_LINES));
     }
 
     pub fn append_response(&mut self, msg: &str) {
