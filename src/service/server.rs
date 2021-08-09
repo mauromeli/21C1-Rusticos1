@@ -229,18 +229,24 @@ impl Server {
 
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
+        println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
         let request = parse_command_rest(&buffer);
 
         let mut html = std::fs::read_to_string("index.html")?;
 
+        let help_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
+        these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
+         LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, RENAME, RPOP, RPUSH, SADD, SCARD, SET, SORT, \
+         TTL, TYPE";
+
         if !request.is_empty() {
             Server::append_input(&html, &request.join(" "));
             html = match generate(request, "REST".to_string()) {
-                Ok(Command::Monitor) => Server::append_error(&html),
-                Ok(Command::Publish { .. }) => Server::append_error(&html),
-                Ok(Command::Command) => Server::append_error(&html),
-                Ok(Command::Subscribe { .. }) => Server::append_error(&html),
-                Ok(Command::Unsubscribe { .. }) => Server::append_error(&html),
+                Ok(Command::Monitor) => Server::append_error(&html, help_msg),
+                Ok(Command::Publish { .. }) => Server::append_error(&html, help_msg),
+                Ok(Command::Command) => Server::append_error(&html, help_msg),
+                Ok(Command::Subscribe { .. }) => Server::append_error(&html, help_msg),
+                Ok(Command::Unsubscribe { .. }) => Server::append_error(&html, help_msg),
                 Ok(command) => {
                     db_sender_clone
                         .send((command, client_sndr))
@@ -254,8 +260,8 @@ impl Server {
                         Response::Normal(redis_string) => {
                             Server::append_response(&html, &redis_string.to_string())
                         }
-                        Response::Error(msg) => Server::append_response(&html, &msg),
-                        Response::Stream(_) => Server::append_error(&html),
+                        Response::Error(msg) => Server::append_error(&html, &msg),
+                        Response::Stream(_) => Server::append_error(&html, help_msg),
                     }
                 }
                 Err(err) => Server::append_response(&html, &err),
@@ -274,8 +280,11 @@ impl Server {
         Ok(())
     }
 
-    fn append_error(html: &str) -> String {
-        let error_msg = "<div class=\"line error\">\n<div class=\"nopad\">\n(error) I'm sorry, I don't recognize that command. Please type HELP for one of these commands: DECR, DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, HDEL, HEXISTS, HGET, HGETALL, HINCRBY, HKEYS, HLEN, HMGET, HMSET, HSET, HVALS, INCR, INCRBY, KEYS, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, MSETNX, MULTI, PEXPIRE, RENAME, RENAMENX, RPOP, RPOPLPUSH, RPUSH, SADD, SCARD, SDIFF, SDIFFSTORE, SET, SETEX, SETNX, SINTER, SINTERSTORE, SISMEMBER, SMEMBERS, SMOVE, SORT, SPOP, SRANDMEMBER, SREM, SUNION, SUNIONSTORE, TTL, TYPE, ZADD, ZCARD, ZCOUNT, ZINCRBY, ZRANGE, ZRANGEBYSCORE, ZRANK, ZREM, ZREMRANGEBYSCORE, ZREVRANGE, ZSCORE\n</div>\n</div>\n";
+    fn append_error(html: &str, msg: &str) -> String {
+        let error_msg = format!(
+            "<div class=\"line error\">\n<div class=\"nopad\">\n(error) {}\n</div>\n</div>\n",
+            msg
+        );
         html.replace(HTML_LINES, &(error_msg.to_string() + HTML_LINES))
     }
 
