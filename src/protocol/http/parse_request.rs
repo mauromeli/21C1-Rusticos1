@@ -21,14 +21,14 @@ pub fn parse_command_rest(data: &[u8]) -> Vec<String> {
     let request = parse_request(data);
     if request.method == "POST" {
         let body = request.body;
-        if let Some(index_command) = body.find("command") {
+        return if let Some(index_command) = body.find("command") {
             let command_len = 7;
             let equal = 1;
             let slice = &body[index_command + command_len + equal..];
             let command = slice.split("+").map(String::from).collect();
-            return command;
+            command
         } else {
-            return vec![];
+            vec![]
         }
     }
     return vec![];
