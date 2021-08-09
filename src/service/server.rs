@@ -227,7 +227,6 @@ impl Server {
         let mut buffer = [0; 5024];
         stream.read(&mut buffer)?;
 
-        println!("{}", String::from_utf8_lossy(&buffer[..]));
         let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
 
         let request = parse_command_rest(&buffer);

@@ -20,12 +20,12 @@ enum RequestParseState {
 pub fn parse_command_rest(data: &[u8]) -> Vec<String> {
     let request = parse_request(data);
     if request.method == "POST" {
-        let url = request.url;
-        if let Some(index_command) = url.find("command") {
+        let body = request.body;
+        if let Some(index_command) = body.find("command") {
             let command_len = 7;
             let equal = 1;
-            let slice = &url[index_command + command_len + equal..];
-            let command = slice.split("%20").map(String::from).collect();
+            let slice = &body[index_command + command_len + equal..];
+            let command = slice.split("+").map(String::from).collect();
             return command;
         } else {
             return vec![];
@@ -118,7 +118,7 @@ fn parse_request(data: &[u8]) -> Request {
         url: url_slice,
         http_version: http_version_slice,
         headers,
-        body: body_slice,
+        body: body_slice.trim_matches(char::from(0)).to_string(),
     }
 }
 
