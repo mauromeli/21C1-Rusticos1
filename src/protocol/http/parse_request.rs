@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct Request<'a> {
+pub struct Request {
     pub method: String,
     pub url: String,
     pub http_version: String,
-    pub headers: HashMap<&'a [u8], &'a [u8]>,
+    pub headers: HashMap<String, String>,
     pub body: String,
 }
 
@@ -81,7 +81,7 @@ fn parse_request(data: &[u8]) -> Request {
                             headers_value.push(header);
                             header = 0;
                         }
-                    } else if current == &b':' {
+                    } else if current == &b':' && String::from_utf8(data[i+1..i+2].to_vec()).unwrap() == " " {
                         headers_key.push(header);
                         header = 0;
                     } else {
@@ -96,28 +96,34 @@ fn parse_request(data: &[u8]) -> Request {
         }
     }
 
-    let method_slice = &data[..=method];
-    let url_slice = &data[method + 2..=url];
-    let http_version_slice = &data[url + 2..=http_version];
+    let method_slice = convert_to_string(&data[..=method]).unwrap();
+    let url_slice = convert_to_string(&data[method + 2..=url]).unwrap();
+    let http_version_slice = convert_to_string(&data[url + 2..=http_version]).unwrap();
 
     let mut headers = HashMap::new();
-    let mut last = http_version + 2;
-    /*
-    falta parte de los headers
-        for (key, value) in headers_key.iter().zip(headers_value) {
-        let key_slice = &data[last..*key];
-        let value_slice = &data[key + 2..value];
-        last = value + 2;
+    let mut last = http_version + 3;
+
+    for (key, value) in headers_key.iter().zip(headers_value) {
+        let key_slice = convert_to_string(&data[last..*key + 1]).unwrap();
+        let value_slice = convert_to_string(&data[key + 3..value + 1]).unwrap();
+        last = value + 3;
         headers.insert(key_slice, value_slice);
     }
-     */
-    let body_slice = &data[body + 2..];
+
+    let body_slice = convert_to_string(&data[body + 2..]).unwrap();
 
     Request {
-        method: String::from_utf8(method_slice.to_vec()).unwrap(),
-        url: String::from_utf8(url_slice.to_vec()).unwrap(),
-        http_version: String::from_utf8(http_version_slice.to_vec()).unwrap(),
-        headers: headers,
-        body: String::from_utf8(body_slice.to_vec()).unwrap(),
+        method: method_slice,
+        url: url_slice,
+        http_version: http_version_slice,
+        headers,
+        body: body_slice,
     }
+}
+
+fn convert_to_string(data: &[u8]) -> Result<String, String> {
+    if let Ok(string) = String::from_utf8(data.to_vec()) {
+        return Ok(string);
+    }
+    Err("Error intentando parsear el request".to_string())
 }
