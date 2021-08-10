@@ -231,8 +231,8 @@ impl Server {
         _logger: Sender<Log>,
         html: &mut Html,
     ) -> io::Result<()> {
-        let mut buffer = [0; 2024];
-        stream.read(&mut buffer)?;
+        let mut buffer = [0; 3024];
+        let _ = stream.read(&mut buffer)?;
 
         let request: HttpMethod = parse_command_rest(&buffer);
 
