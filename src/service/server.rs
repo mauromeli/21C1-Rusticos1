@@ -136,16 +136,6 @@ impl Server {
         thread::spawn(move || {
             let mut html = Html::new()?;
             for stream in listener.incoming() {
-                log_sender
-                    .send(Log::new(
-                        LogLevel::Info,
-                        line!(),
-                        column!(),
-                        file!().to_string(),
-                        "=======New Request Received======".to_string(),
-                    ))
-                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
-
                 let stream = stream.unwrap();
                 let db_sender_clone = db_sender.clone();
                 let log_sender_clone = log_sender.clone();
@@ -213,7 +203,7 @@ impl Server {
                             "Error joining handler".to_string(),
                         ))
                         .map_err(|_| {
-                            Error::new(ErrorKind::ConnectionAborted, "Error joining handler")
+                            Error::new(ErrorKind::ConnectionAborted, "Log Sender error")
                         })?;
                 }
             }
@@ -228,7 +218,7 @@ impl Server {
     fn rest_client_handler(
         mut stream: TcpStream,
         db_sender_clone: Sender<(Command, Sender<Response>)>,
-        _logger: Sender<Log>,
+        logger: Sender<Log>,
         html: &mut Html,
     ) -> io::Result<()> {
         let mut buffer = [0; 3024];
@@ -239,6 +229,16 @@ impl Server {
         match request {
             HttpMethod::Get(url) => Server::get_handler(&mut stream, html, &url)?,
             HttpMethod::Post(command) => {
+                logger
+                    .send(Log::new(
+                        LogLevel::Info,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "=======New Request Received======".to_string(),
+                    ))
+                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
+
                 Server::post_handler(stream, db_sender_clone, command, html)?
             }
             _ => Server::unknown_handler(&mut stream)?,
