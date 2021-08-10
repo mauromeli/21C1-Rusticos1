@@ -1,14 +1,23 @@
 use std::collections::HashMap;
 
+/// Representa el request que envía el browser, utilizando el protocolo HTTP.
 #[derive(Debug)]
 pub struct Request {
+    /// Representa los métodos que utiliza el protocolo HTTP que indica la acción a realizar,
+    /// como por ejemplo: GET, POST, etc.
     pub method: String,
+    /// Representa la URL desde donde se está enviando el request.
     pub url: String,
+    /// Representa el número de versión HTTP.
     pub http_version: String,
+    /// Representa la información adicional que se envía con el request HTTP.
     pub headers: HashMap<String, String>,
+    /// Representa los datos del request HTTP enviado, puede estar vacío.
     pub body: String,
 }
 
+/// Representa el estado del parseo en determinado momento, sirve para saber qué parte
+/// del request se está parseando.
 enum RequestParseState {
     Method,
     Url,
@@ -17,12 +26,24 @@ enum RequestParseState {
     Body,
 }
 
+/// Representa los métodos de un request HTTP, utilizamos solo GET y POST, pero pueden ser otros.
 pub enum HttpMethod {
+    /// Representa el método GET.
     Get(String),
+    /// Representa el método POST.
     Post(Vec<String>),
+    /// Representa otros métodos HTTP, como: DELETE, PUT, etc.
     Other(),
 }
 
+/// Parsea un request HTTP, diferencia segun el metodo HTTP recibido y guarda la informacion
+/// necesaria para procesar.
+///
+/// Retorna un `HttpMethod` que representa el metodo HTTP con la informacion necesaria.
+///
+/// # Arguments
+///
+/// * `data` - Bytes recibidos desde el browser que representan el request HTTP.
 pub fn parse_command_rest(data: &[u8]) -> HttpMethod {
     let request = parse_request(data);
     match request.method.as_str() {
@@ -46,6 +67,13 @@ pub fn parse_command_rest(data: &[u8]) -> HttpMethod {
     }
 }
 
+/// Parsea un request HTTP, convirtiendolo en un objeto `Request`.
+///
+/// Retorna un `Request` que representa el request HTTP, el cual contiene sus partes diferenciadas.
+///
+/// # Arguments
+///
+/// * `data` - Bytes recibidos desde el browser que representan el request HTTP.
 fn parse_request(data: &[u8]) -> Request {
     let mut state = RequestParseState::Method;
     let mut method = 0;
@@ -131,6 +159,14 @@ fn parse_request(data: &[u8]) -> Request {
     }
 }
 
+/// Intenta convertir bytes (`&[u8]`) a `String`.
+///
+/// En caso de que no se pueda convertir, retorna un error representado como `String`.
+/// De otro modo, Retorna un `String` convertido.
+///
+/// # Arguments
+///
+/// * `data` - Bytes a convertir.
 fn convert_to_string(data: &[u8]) -> Result<String, String> {
     if let Ok(string) = String::from_utf8(data.to_vec()) {
         return Ok(string);
