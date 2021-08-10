@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+<style>
+    #header {
+      margin: auto;
+      margin-top: 1em;
+      padding: 0em;
+      padding-top: 0.25em;
+      padding-bottom: 0.25em;
+      border: 5px solid #595540;
+      text-align: center;
+      width: 600px;
+      background-color: #cc8139;
+    }
+    #log {
+      width: 90%;
+      height: 75%;
+      overflow-y: scroll;
+      background-color: #ffefd5;
+      margin: auto;
+      margin-top: -5px;
+      padding: 1em 1em 1em 1em;
+      border: 5px solid #595540;
+      overflow: auto;
+      font-family: monospace;
+      color: #262626;
+      font-size: 1.15em;
+      word-wrap: break-word;
+    }
+    #log .line {
+      margin: 0em 0em 1em 0em;
+      line-height: 1.25em;
+    }
+    #log .notification {
+      font-weight: bold;
+      background-color: #262626;
+      color: #cc8139;
+      font-family: sans-serif;
+      font-size: 1.5;
+      padding: 1em;
+    }
+</style>
+
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <title> Redis </title>
+    <link rel = "icon" href = 
+    "images/favicon.png" 
+    type = "image/x-icon">
+
+  </head>
+  <body style="background-color: #262626;margin: 8px;height: 100%">
+    <div id="header">
+      <img height="50" src="images/try-redis-500x50.png" width="500">
+    </div>
+      <div id="log">
+          <div class="line notification">
+            <p>ERROR 404, NOT FOUND :(</p>
+          </div>
+        <div style="display: flex; flex-direction: column-reverse;">
+        </div>
+    </div>
+  </body>
+</html>

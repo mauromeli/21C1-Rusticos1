@@ -896,7 +896,7 @@ impl Redis {
 
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.remove(&key).is_some() {
+            if self.db.remove(key).is_some() {
                 count += 1;
             }
         }
@@ -960,7 +960,7 @@ impl Redis {
 
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.contains_key(&key) {
+            if self.db.contains_key(key) {
                 count += 1;
             }
         }
@@ -1282,7 +1282,7 @@ impl Redis {
                 Re::List(value) => {
                     let return_value: Vec<String>;
                     let vector_to_save: Vec<String>;
-                    if count == 0 && value.clone().len() != 0 {
+                    if count == 0 && !value.clone().is_empty() {
                         return_value = Vec::from(value.get(..=count).unwrap());
                         vector_to_save = Vec::from(value.get(count + 1..).unwrap());
                     } else {

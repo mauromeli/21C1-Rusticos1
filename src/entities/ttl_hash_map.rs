@@ -34,7 +34,7 @@ impl<K: Clone + Eq + Hash, V> TtlHashMap<K, V> {
     /// Actualiza el último acceso a la clave.
     /// Devuelve el tiempo transcurrido desde el anterior acceso, o None si no existe la clave o expiró.
     pub fn update_last_access(&mut self, key: &K) -> Option<Duration> {
-        if !self.contains_key(&key) {
+        if !self.contains_key(key) {
             return None;
         }
 

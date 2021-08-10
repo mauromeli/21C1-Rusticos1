@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+<style>
+    #header {
+      margin: auto;
+      margin-top: 1em;
+      padding: 0em;
+      padding-top: 0.25em;
+      padding-bottom: 0.25em;
+      border: 5px solid #595540;
+      text-align: center;
+      width: 600px;
+      background-color: #cc8139;
+    }
+    #log {
+      width: 90%;
+      height: 75%;
+      overflow-y: scroll;
+      background-color: #ffefd5;
+      margin: auto;
+      margin-top: -5px;
+      padding: 1em 1em 1em 1em;
+      border: 5px solid #595540;
+      overflow: auto;
+      font-family: monospace;
+      color: #262626;
+      font-size: 1.15em;
+      word-wrap: break-word;
+    }
+    #log .line {
+      margin: 0em 0em 1em 0em;
+      line-height: 1.25em;
+    }
+    #log .input{
+      font-weight: bold;
+      font-size: 0.85em;
+      color: #595540;
+    }
+    #log .response {
+      font-weight: bold;
+      color: #262626;
+    }
+    #log .notification {
+      font-weight: normal;
+      background-color: #262626;
+      color: #cc8139;
+      font-family: sans-serif;
+      font-size: 0.90em;
+      padding: 1em;
+    }
+    #log .error {
+      font-weight: normal;
+      background-color: #8b0000;
+      color: #fff;
+      font-family: sans-serif;
+      font-size: 0.75em;
+      padding: 1em;
+    }
+    #toolbar {
+      width: 750px;
+      margin: auto;
+      padding: 0em;
+      border: 0px;
+      margin-top: -5px;
+      display: none;
+    }
+    #toolbar #input {
+      padding: 0.5em;
+      width: 100%;
+      font-size: 1.5em;
+      background-color: #cc8139;
+      color: #262626;
+      font-family: monospace;
+      border: 5px solid #595540;
+      outline: none;
+      background-image: url(images/prompt.png);
+      background-repeat: no-repeat;
+      padding-left: 45px;
+    }
+</style>
+
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <title> Redis </title>
+    <link rel = "icon" href = 
+    "images/favicon.png" 
+    type = "image/x-icon">
+
+  </head>
+  <body style="background-color: #262626;margin: 8px;height: 100%">
+    <div id="header">
+      <img height="50" src="images/redis-oxidado.png" width="500">
+    </div>
+      <div id="log">
+          <div class="line notification">
+            <p>Bienvenidos a <strong>Redis Oxidado</strong>, una implementación de <a href="http://redis.io">Redis</a> para la materia <a href="https://taller-1-fiuba-rust.github.io">Taller de Programación I</a> de FIUBA, del grupo <strong>Rusticos1</strong>.</p>
+          </div>
+        <div style="display: flex; flex-direction: column-reverse; overflow: auto; height: 80%;">
+
+          <!--start-lines-->
+          <!--end-lines-->
+
+        </div>
+    </div>
+  </div>
+    <div id="toolbar" style="display: block;">
+      <form method=post>
+        <input id="input" type="text" name="command" spellcheck="false">
+      </form>
+    </div>
+  </div>
+  </body>
+</html>

@@ -7,13 +7,16 @@ use crate::service::command_generator::generate;
 use crate::service::logger::Logger;
 use crate::service::redis::Redis;
 use std::io;
-use std::io::{BufReader, Error, ErrorKind, Write};
+use std::io::{BufReader, Error, ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
+use crate::protocol::http::html::Html;
+use crate::protocol::http::parse_request::{parse_command_rest, HttpMethod};
+use crate::protocol::http::parse_response::parse_response_rest;
 use crate::protocol::lines_iterator::LinesIterator;
 use crate::protocol::parse_data::{parse_command, parse_response_error, parse_response_ok};
 use std::thread::JoinHandle;
@@ -66,14 +69,14 @@ impl Server {
 
     /// Methodo del Server para ponerlo operativo.
     pub fn serve(mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // load db
         let command = Command::Load {
             path: self.config.lock().unwrap().get_dbfilename(),
         };
         let _ = self.redis.execute(command);
-        // endload db
 
         let address = "0.0.0.0:".to_owned() + self.config.lock().unwrap().get_port().as_str();
+        let address_rest = "0.0.0.0:7878".to_owned();
+
         let log_sender = self.log_sender.clone();
         log_sender
             .send(Log::new(
@@ -85,7 +88,7 @@ impl Server {
             ))
             .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
 
-        self.server_run(&address)?;
+        self.server_run(&address, &address_rest)?;
 
         log_sender
             .send(Log::new(
@@ -99,8 +102,9 @@ impl Server {
         Ok(())
     }
 
-    fn server_run(self, address: &str) -> io::Result<()> {
+    fn server_run(self, address: &str, address_rest: &str) -> io::Result<()> {
         let listener = TcpListener::bind(address)?;
+        let rest_listener = TcpListener::bind(address_rest)?;
         let (db_sender, db_receiver): (DbSender, DbReceiver) = mpsc::channel();
 
         let log_sender = self.log_sender.clone();
@@ -116,6 +120,39 @@ impl Server {
 
         self.db_thread(db_receiver);
 
+        let _ = Server::accepter_rest_thread(rest_listener, db_sender.clone(), log_sender.clone());
+        Server::receive_connections(listener, db_sender, log_sender, timeout)?;
+
+        Ok(())
+    }
+
+    /// Metodo encargado de capturar cada request rest y enviarlo al metodo correspondiente para que
+    /// sea atendido.
+    fn accepter_rest_thread(
+        listener: TcpListener,
+        db_sender: Sender<(Command, Sender<Response>)>,
+        log_sender: Sender<Log>,
+    ) -> JoinHandle<Result<(), io::Error>> {
+        thread::spawn(move || {
+            let mut html = Html::new()?;
+            for stream in listener.incoming() {
+                let stream = stream.unwrap();
+                let db_sender_clone = db_sender.clone();
+                let log_sender_clone = log_sender.clone();
+                Server::rest_client_handler(stream, db_sender_clone, log_sender_clone, &mut html)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Metodo encargado de capturar cada request de redis y enviarlo al metodo correspondiente para
+    /// que sea atendido.
+    fn receive_connections(
+        listener: TcpListener,
+        db_sender: Sender<(Command, Sender<Response>)>,
+        log_sender: Sender<Log>,
+        timeout: u64,
+    ) -> io::Result<()> {
         let mut handlers: VecHandler = vec![];
 
         while let Ok(connection) = listener.accept() {
@@ -166,7 +203,7 @@ impl Server {
                             "Error joining handler".to_string(),
                         ))
                         .map_err(|_| {
-                            Error::new(ErrorKind::ConnectionAborted, "Error joining handler")
+                            Error::new(ErrorKind::ConnectionAborted, "Log Sender error")
                         })?;
                 }
             }
@@ -174,6 +211,133 @@ impl Server {
             handlers = handlers_actives;
         }
 
+        Ok(())
+    }
+
+    /// Metodo encargado de capturar los eventos de cada petición rest.
+    fn rest_client_handler(
+        mut stream: TcpStream,
+        db_sender_clone: Sender<(Command, Sender<Response>)>,
+        logger: Sender<Log>,
+        html: &mut Html,
+    ) -> io::Result<()> {
+        let mut buffer = [0; 3024];
+        let _ = stream.read(&mut buffer)?;
+
+        let request: HttpMethod = parse_command_rest(&buffer);
+
+        match request {
+            HttpMethod::Get(url) => Server::get_handler(&mut stream, html, &url)?,
+            HttpMethod::Post(command) => {
+                logger
+                    .send(Log::new(
+                        LogLevel::Info,
+                        line!(),
+                        column!(),
+                        file!().to_string(),
+                        "=======New Request Received======".to_string(),
+                    ))
+                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Log Sender error"))?;
+
+                Server::post_handler(stream, db_sender_clone, command, html)?
+            }
+            _ => Server::unknown_handler(&mut stream)?,
+        };
+        Ok(())
+    }
+
+    fn post_handler(
+        mut stream: TcpStream,
+        db_sender_clone: Sender<(Command, Sender<Response>)>,
+        command: Vec<String>,
+        html: &mut Html,
+    ) -> io::Result<()> {
+        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
+        let help_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
+        these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
+         LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, RENAME, RPOP, RPUSH, SADD, SCARD, SET, SORT, \
+         TTL, TYPE";
+
+        html.append_input(&command.join(" "));
+        match generate(command, "REST".to_string()) {
+            Ok(Command::Monitor) => html.append_error(help_msg),
+            Ok(Command::Publish { .. }) => html.append_error(help_msg),
+            Ok(Command::Command) => html.append_error(help_msg),
+            Ok(Command::Subscribe { .. }) => html.append_error(help_msg),
+            Ok(Command::Unsubscribe { .. }) => html.append_error(help_msg),
+            Ok(command) => {
+                db_sender_clone
+                    .send((command, client_sndr))
+                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Db Sender error"))?;
+
+                let response = client_rcvr.recv().map_err(|_| {
+                    Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
+                })?;
+
+                match response {
+                    Response::Normal(redis_string) => {
+                        html.append_response(&parse_response_rest(redis_string));
+                    }
+                    Response::Error(msg) => html.append_error(&msg),
+                    Response::Stream(_) => html.append_error(help_msg),
+                }
+            }
+            Err(err) => html.append_error(&err),
+        }
+        stream.write_all(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                html.get_index().len(),
+                html.get_index()
+            )
+            .as_bytes(),
+        )?;
+        stream.flush()?;
+
+        Ok(())
+    }
+
+    fn get_handler(stream: &mut TcpStream, html: &mut Html, url: &str) -> io::Result<()> {
+        if let Some(url_stripped) = url.strip_prefix('/') {
+            if let Ok(image) = Html::get_resource(url_stripped) {
+                stream.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\nContent-Length: {}\r\n\r\n",
+                        image.len(),
+                    )
+                    .as_bytes(),
+                )?;
+                stream.write_all(&image)?;
+                stream.flush()?;
+            } else {
+                stream.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        html.get_index().len(),
+                        html.get_index()
+                    )
+                    .as_bytes(),
+                )?;
+                stream.flush()?;
+            }
+        } else {
+            Server::unknown_handler(stream)?;
+        }
+        Ok(())
+    }
+
+    fn unknown_handler(stream: &mut TcpStream) -> io::Result<()> {
+        if let Ok(file) = Html::get_404() {
+            stream.write_all(
+                format!(
+                    "HTTP/1.1 404 Not found\r\nContent-Length: {}\r\n\r\n{}",
+                    file.len(),
+                    file
+                )
+                .as_bytes(),
+            )?;
+            stream.flush()?;
+        }
         Ok(())
     }
 
