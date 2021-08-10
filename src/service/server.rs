@@ -126,6 +126,8 @@ impl Server {
         Ok(())
     }
 
+    /// Metodo encargado de capturar cada request rest y enviarlo al metodo correspondiente para que
+    /// sea atendido.
     fn accepter_rest_thread(
         listener: TcpListener,
         db_sender: Sender<(Command, Sender<Response>)>,
@@ -153,6 +155,8 @@ impl Server {
         })
     }
 
+    /// Metodo encargado de capturar cada request de redis y enviarlo al metodo correspondiente para
+    /// que sea atendido.
     fn receive_connections(
         listener: TcpListener,
         db_sender: Sender<(Command, Sender<Response>)>,
