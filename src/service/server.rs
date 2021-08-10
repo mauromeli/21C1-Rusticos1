@@ -241,36 +241,7 @@ impl Server {
 
         match request {
             HttpMethod::Get(url) => {
-                if url == "/" {
-                    stream.write_all(
-                        format!(
-                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                            html.get_index().len(),
-                            html.get_index()
-                        )
-                        .as_bytes(),
-                    )?;
-                } else {
-                    if let Ok(image) = Html::get_resource(&url.strip_prefix("/").unwrap()) {
-                        stream.write_all(
-                            format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\nContent-Length: {}\r\n\r\n",
-                            image.len(),
-                            )
-                            .as_bytes(),
-                        )?;
-                        stream.write_all(&image)?;
-                    } else {
-                        stream.write_all(
-                            format!(
-                                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                                html.get_index().len(),
-                                html.get_index()
-                            )
-                            .as_bytes(),
-                        )?;
-                    }
-                }
+                Server::get_handler(&mut stream, html, &url)?
             }
             HttpMethod::Post(command) => {
                 html.append_input(&command.join(" "));
@@ -305,7 +276,7 @@ impl Server {
                         html.get_index().len(),
                         html.get_index()
                     )
-                    .as_bytes(),
+                        .as_bytes(),
                 )?;
             }
             _ => {
@@ -316,7 +287,7 @@ impl Server {
                             file.len(),
                             file
                         )
-                        .as_bytes(),
+                            .as_bytes(),
                     )?;
                 }
             }
@@ -324,6 +295,40 @@ impl Server {
 
         stream.flush()?;
 
+        Ok(())
+    }
+
+    fn get_handler(stream: &mut TcpStream, html: &mut Html, url: &String) -> io::Result<()> {
+        if url == "/" {
+            stream.write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                    html.get_index().len(),
+                    html.get_index()
+                )
+                    .as_bytes(),
+            )?;
+        } else {
+            if let Ok(image) = Html::get_resource(&url.strip_prefix("/").unwrap()) {
+                stream.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\nContent-Length: {}\r\n\r\n",
+                        image.len(),
+                    )
+                        .as_bytes(),
+                )?;
+                stream.write_all(&image)?;
+            } else {
+                stream.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                        html.get_index().len(),
+                        html.get_index()
+                    )
+                        .as_bytes(),
+                )?;
+            }
+        }
         Ok(())
     }
 
