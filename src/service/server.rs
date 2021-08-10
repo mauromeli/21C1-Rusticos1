@@ -298,8 +298,8 @@ impl Server {
     }
 
     fn get_handler(stream: &mut TcpStream, html: &mut Html, url: &str) -> io::Result<()> {
-        if let Some(url_stripped) = url.strip_prefix("/") {
-            if let Ok(image) = Html::get_resource(&url_stripped) {
+        if let Some(url_stripped) = url.strip_prefix('/') {
+            if let Ok(image) = Html::get_resource(url_stripped) {
                 stream.write_all(
                     format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\nContent-Length: {}\r\n\r\n",

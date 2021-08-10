@@ -61,7 +61,7 @@ impl From<&str> for RedisElement {
             RedisElement::Nil
         } else if s.starts_with('{') && s.ends_with('}') {
             let mut set: HashSet<String> = HashSet::new();
-            let s = s.strip_prefix("{").unwrap().strip_suffix("}").unwrap();
+            let s = s.strip_prefix('{').unwrap().strip_suffix('}').unwrap();
 
             for element in s.split(" - ") {
                 set.insert(element.to_string());
@@ -69,7 +69,7 @@ impl From<&str> for RedisElement {
             RedisElement::Set(set)
         } else if s.starts_with('[') && s.ends_with(']') {
             let mut list: Vec<String> = Vec::new();
-            let s = s.strip_prefix("[").unwrap().strip_suffix("]").unwrap();
+            let s = s.strip_prefix('[').unwrap().strip_suffix(']').unwrap();
 
             for element in s.split(" - ") {
                 list.push(element.to_string());

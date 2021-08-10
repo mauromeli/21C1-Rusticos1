@@ -896,7 +896,7 @@ impl Redis {
 
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.remove(&key).is_some() {
+            if self.db.remove(key).is_some() {
                 count += 1;
             }
         }
@@ -960,7 +960,7 @@ impl Redis {
 
         let mut count = 0;
         for key in keys.iter() {
-            if self.db.contains_key(&key) {
+            if self.db.contains_key(key) {
                 count += 1;
             }
         }
