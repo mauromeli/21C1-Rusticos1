@@ -241,7 +241,7 @@ impl Server {
             HttpMethod::Post(command) => {
                 Server::post_handler(stream, db_sender_clone, command, html)?
             }
-            _ => Server::unknow_handler(&mut stream)?,
+            _ => Server::unknown_handler(&mut stream)?,
         };
         Ok(())
     }
@@ -321,12 +321,12 @@ impl Server {
                 stream.flush()?;
             }
         } else {
-            Server::unknow_handler(stream)?;
+            Server::unknown_handler(stream)?;
         }
         Ok(())
     }
 
-    fn unknow_handler(stream: &mut TcpStream) -> io::Result<()> {
+    fn unknown_handler(stream: &mut TcpStream) -> io::Result<()> {
         if let Ok(file) = Html::get_404() {
             stream.write_all(
                 format!(
