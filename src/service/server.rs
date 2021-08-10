@@ -225,6 +225,7 @@ impl Server {
     }
 
     /// Metodo encargado de capturar los eventos de cada petición rest.
+    #[allow(clippy::unused_io_amount)]
     fn rest_client_handler(
         mut stream: TcpStream,
         db_sender_clone: Sender<(Command, Sender<Response>)>,
