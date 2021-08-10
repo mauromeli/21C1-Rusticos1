@@ -3,7 +3,7 @@
 
 [![Maintenance](https://img.shields.io/badge/maintained%3F-yes-green.svg)](https://GitHub.com/Naereen/StrapDown.js/graphs/commit-activity)
 ![technology Rust](https://img.shields.io/badge/technology-rust-blue.svg)
-![3.0.1](https://img.shields.io/badge/version-1.0.0-red.svg)
+![3.0.1](https://img.shields.io/badge/version-1.1.0-red.svg)
 
 ![alt text](https://i.morioh.com/200630/0030829c.jpg)
 
