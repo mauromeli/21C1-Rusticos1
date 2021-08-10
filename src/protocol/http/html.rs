@@ -1,6 +1,6 @@
 use std::io;
 
-static END_LINES: &str = "<!--end-lines-->";
+static START_LINES: &str = "<!--start-lines-->";
 static INDEX_FILE: &str = "index.html";
 static ERROR_FILE: &str = "404.html";
 
@@ -24,7 +24,9 @@ impl Html {
             </div>\n",
             msg
         );
-        self.index = self.index.replace(END_LINES, &(error_msg + END_LINES));
+        self.index = self
+            .index
+            .replace(START_LINES, &(START_LINES.to_owned() + &error_msg));
     }
 
     pub fn append_input(&mut self, input: &str) {
@@ -39,7 +41,9 @@ impl Html {
             </div>\n",
             input
         );
-        self.index = self.index.replace(END_LINES, &(input_msg + END_LINES));
+        self.index = self
+            .index
+            .replace(START_LINES, &(START_LINES.to_owned() + &input_msg));
     }
 
     pub fn append_response(&mut self, msg: &str) {
@@ -51,7 +55,9 @@ impl Html {
             </div>\n",
             msg
         );
-        self.index = self.index.replace(END_LINES, &(response + END_LINES));
+        self.index = self
+            .index
+            .replace(START_LINES, &(START_LINES.to_owned() + &response));
     }
 
     pub fn get_index(&self) -> String {

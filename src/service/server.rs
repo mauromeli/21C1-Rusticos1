@@ -126,6 +126,8 @@ impl Server {
         Ok(())
     }
 
+    /// Metodo encargado de capturar cada request rest y enviarlo al metodo correspondiente para que
+    /// sea atendido.
     fn accepter_rest_thread(
         listener: TcpListener,
         db_sender: Sender<(Command, Sender<Response>)>,
@@ -153,6 +155,8 @@ impl Server {
         })
     }
 
+    /// Metodo encargado de capturar cada request de redis y enviarlo al metodo correspondiente para
+    /// que sea atendido.
     fn receive_connections(
         listener: TcpListener,
         db_sender: Sender<(Command, Sender<Response>)>,
@@ -227,97 +231,84 @@ impl Server {
         _logger: Sender<Log>,
         html: &mut Html,
     ) -> io::Result<()> {
-        let mut buffer = [0; 5024];
-        stream.read(&mut buffer)?;
-
-        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
+        let mut buffer = [0; 3024];
+        let _ = stream.read(&mut buffer)?;
 
         let request: HttpMethod = parse_command_rest(&buffer);
 
+        match request {
+            HttpMethod::Get(url) => Server::get_handler(&mut stream, html, &url)?,
+            HttpMethod::Post(command) => {
+                Server::post_handler(stream, db_sender_clone, command, html)?
+            }
+            _ => Server::unknow_handler(&mut stream)?,
+        };
+        Ok(())
+    }
+
+    fn post_handler(
+        mut stream: TcpStream,
+        db_sender_clone: Sender<(Command, Sender<Response>)>,
+        command: Vec<String>,
+        html: &mut Html,
+    ) -> io::Result<()> {
+        let (client_sndr, client_rcvr): (Sender<Response>, Receiver<Response>) = mpsc::channel();
         let help_msg = "I'm sorry, I don't recognize that command. Please type HELP for one of \
         these commands: DECRBY, DEL, EXISTS, EXPIRE, GET, GETSET, INCRBY, KEYS, LINDEX, LLEN, LPOP, \
          LPUSH, LRANGE, LREM, LSET, LTRIM, MGET, MSET, RENAME, RPOP, RPUSH, SADD, SCARD, SET, SORT, \
          TTL, TYPE";
 
-        match request {
-            HttpMethod::Get(url) => {
-                Server::get_handler(&mut stream, html, &url)?
-            }
-            HttpMethod::Post(command) => {
-                html.append_input(&command.join(" "));
-                match generate(command, "REST".to_string()) {
-                    Ok(Command::Monitor) => html.append_error(help_msg),
-                    Ok(Command::Publish { .. }) => html.append_error(help_msg),
-                    Ok(Command::Command) => html.append_error(help_msg),
-                    Ok(Command::Subscribe { .. }) => html.append_error(help_msg),
-                    Ok(Command::Unsubscribe { .. }) => html.append_error(help_msg),
-                    Ok(command) => {
-                        db_sender_clone.send((command, client_sndr)).map_err(|_| {
-                            Error::new(ErrorKind::ConnectionAborted, "Db Sender error")
-                        })?;
+        html.append_input(&command.join(" "));
+        match generate(command, "REST".to_string()) {
+            Ok(Command::Monitor) => html.append_error(help_msg),
+            Ok(Command::Publish { .. }) => html.append_error(help_msg),
+            Ok(Command::Command) => html.append_error(help_msg),
+            Ok(Command::Subscribe { .. }) => html.append_error(help_msg),
+            Ok(Command::Unsubscribe { .. }) => html.append_error(help_msg),
+            Ok(command) => {
+                db_sender_clone
+                    .send((command, client_sndr))
+                    .map_err(|_| Error::new(ErrorKind::ConnectionAborted, "Db Sender error"))?;
 
-                        let response = client_rcvr.recv().map_err(|_| {
-                            Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
-                        })?;
+                let response = client_rcvr.recv().map_err(|_| {
+                    Error::new(ErrorKind::ConnectionAborted, "Client receiver error")
+                })?;
 
-                        match response {
-                            Response::Normal(redis_string) => {
-                                html.append_response(&parse_response_rest(redis_string));
-                            }
-                            Response::Error(msg) => html.append_error(&msg),
-                            Response::Stream(_) => html.append_error(help_msg),
-                        }
+                match response {
+                    Response::Normal(redis_string) => {
+                        html.append_response(&parse_response_rest(redis_string));
                     }
-                    Err(err) => html.append_error(&err),
-                }
-                stream.write_all(
-                    format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                        html.get_index().len(),
-                        html.get_index()
-                    )
-                        .as_bytes(),
-                )?;
-            }
-            _ => {
-                if let Ok(file) = Html::get_404() {
-                    stream.write_all(
-                        format!(
-                            "HTTP/1.1 404 Not found\r\nContent-Length: {}\r\n\r\n{}",
-                            file.len(),
-                            file
-                        )
-                            .as_bytes(),
-                    )?;
+                    Response::Error(msg) => html.append_error(&msg),
+                    Response::Stream(_) => html.append_error(help_msg),
                 }
             }
-        };
-
+            Err(err) => html.append_error(&err),
+        }
+        stream.write_all(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                html.get_index().len(),
+                html.get_index()
+            )
+            .as_bytes(),
+        )?;
         stream.flush()?;
 
         Ok(())
     }
 
-    fn get_handler(stream: &mut TcpStream, html: &mut Html, url: &String) -> io::Result<()> {
-        if url == "/" {
-            stream.write_all(
-                format!(
-                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-                    html.get_index().len(),
-                    html.get_index()
-                )
-                    .as_bytes(),
-            )?;
-        } else {
-            if let Ok(image) = Html::get_resource(&url.strip_prefix("/").unwrap()) {
+    fn get_handler(stream: &mut TcpStream, html: &mut Html, url: &str) -> io::Result<()> {
+        if let Some(url_stripped) = url.strip_prefix("/") {
+            if let Ok(image) = Html::get_resource(&url_stripped) {
                 stream.write_all(
                     format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\nContent-Length: {}\r\n\r\n",
                         image.len(),
                     )
-                        .as_bytes(),
+                    .as_bytes(),
                 )?;
                 stream.write_all(&image)?;
+                stream.flush()?;
             } else {
                 stream.write_all(
                     format!(
@@ -325,9 +316,27 @@ impl Server {
                         html.get_index().len(),
                         html.get_index()
                     )
-                        .as_bytes(),
+                    .as_bytes(),
                 )?;
+                stream.flush()?;
             }
+        } else {
+            Server::unknow_handler(stream)?;
+        }
+        Ok(())
+    }
+
+    fn unknow_handler(stream: &mut TcpStream) -> io::Result<()> {
+        if let Ok(file) = Html::get_404() {
+            stream.write_all(
+                format!(
+                    "HTTP/1.1 404 Not found\r\nContent-Length: {}\r\n\r\n{}",
+                    file.len(),
+                    file
+                )
+                .as_bytes(),
+            )?;
+            stream.flush()?;
         }
         Ok(())
     }
